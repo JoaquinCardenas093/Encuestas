@@ -9,7 +9,10 @@ from pptx.util import Emu
 
 from .data_extractor import extract_chart_data
 from .layout_engine import compute_layout
-from .models import Analysis, Chart, ProjectState, Slide
+from .layout_matcher import match_layout
+from .models import Analysis, Chart, ProjectState, Slide, LayoutBank
+from .config import get_layout_bank_path
+import json as _json
 
 
 CHART_TYPE_MAP = {
@@ -23,6 +26,16 @@ CHART_TYPE_MAP = {
     "AREA": XL_CHART_TYPE.AREA,
     "RADAR": XL_CHART_TYPE.RADAR,
 }
+
+
+def _load_bank() -> LayoutBank:
+    p = get_layout_bank_path()
+    if not p.exists():
+        return LayoutBank()
+    try:
+        return LayoutBank.model_validate(_json.loads(p.read_text(encoding="utf-8")))
+    except Exception:
+        return LayoutBank()
 
 PLACEHOLDER_RE = re.compile(r"@(\w+)")
 
@@ -113,14 +126,16 @@ def _append_shell(prs, src_xml: bytes, slide_def: Slide, state: ProjectState, fr
     n_q_an = sum(1 for a in slide_def.analyses if a.scope == "question")
     has_slide_an = any(a.scope == "slide" for a in slide_def.analyses)
 
-    layout = compute_layout(
+    layout_result = match_layout(
+        bank=_load_bank(),
         n_charts=len(slide_def.charts),
         chart_types=[c.chart_type for c in slide_def.charts],
-        n_chart_analyses=n_chart_an,
-        n_question_analyses=n_q_an,
-        has_slide_analysis=has_slide_an,
+        n_chart_an=n_chart_an,
+        n_q_an=n_q_an,
+        has_slide_an=has_slide_an,
         free_area=free_area,
     )
+    layout = {"elements": layout_result["elements"]}
 
     # Insert charts and analysis textboxes per layout elements
     for el in layout["elements"]:
