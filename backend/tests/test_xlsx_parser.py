@@ -1,0 +1,32 @@
+from aurum_encuestas.xlsx_parser import parse_xlsx
+from aurum_encuestas.errors import XlsxParseError
+import pytest
+
+
+def test_parse_detects_sample_size(valid_xlsx_path):
+    db = parse_xlsx(str(valid_xlsx_path))
+    assert db.sample_size == 500
+
+
+def test_parse_detects_breakdowns(valid_xlsx_path):
+    db = parse_xlsx(str(valid_xlsx_path))
+    ids = [b.id for b in db.breakdowns]
+    assert "general" in ids
+    assert "sexo" in ids
+    assert "edad" in ids
+    assert "nse" in ids
+    assert "punto" in ids
+
+
+def test_parse_breakdown_sexo_categories(valid_xlsx_path):
+    db = parse_xlsx(str(valid_xlsx_path))
+    sexo = next(b for b in db.breakdowns if b.id == "sexo")
+    assert "Hombre" in sexo.categories
+    assert "Mujer" in sexo.categories
+
+
+def test_parse_invalid_file_raises(tmp_path):
+    bad = tmp_path / "bad.xlsx"
+    bad.write_bytes(b"not an xlsx")
+    with pytest.raises(XlsxParseError):
+        parse_xlsx(str(bad))
