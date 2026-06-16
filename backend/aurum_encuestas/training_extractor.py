@@ -71,8 +71,15 @@ def _is_bottom(shape, slide_height: int) -> bool:
 
 
 _REVERSE_CHART_MAP = {
-    5: "PIE", 4: "DOUGHNUT", 57: "BAR_CLUSTERED", 51: "COLUMN_CLUSTERED",
-    58: "BAR_STACKED", 52: "COLUMN_STACKED", 4: "LINE", 1: "AREA", -4151: "RADAR",
+    5: "PIE",
+    -4120: "DONUT",
+    57: "BAR",
+    51: "COLUMN",
+    58: "BAR_STACKED",
+    52: "COLUMN_STACKED",
+    4: "LINE",
+    1: "AREA",
+    -4151: "RADAR",
 }
 
 
