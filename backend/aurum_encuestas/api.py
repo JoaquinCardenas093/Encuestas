@@ -72,6 +72,7 @@ class SaveProjectRequest(BaseModel):
 async def save_project_endpoint(req: SaveProjectRequest):
     state = ProjectState.model_validate(req.state)
     save_project(state, req.path)
+    add_recent(req.path, state.project_name)
     return {"saved": True, "path": req.path}
 
 
@@ -131,7 +132,7 @@ async def generate_analysis_endpoint(req: GenerateAnalysisRequest):
 import shutil
 import json as _json
 
-from .config import get_training_dir, get_layout_bank_path
+from .config import get_training_dir, get_layout_bank_path, add_recent, load_recents
 from .training_extractor import build_bank_from_pptxs, extract_layouts_from_pptx
 from datetime import UTC, datetime
 
@@ -213,3 +214,8 @@ async def suggest_layout_endpoint(req: SuggestLayoutRequest):
         has_slide_an=req.has_slide_an,
         free_area=req.free_area,
     )
+
+
+@app.get("/api/recents")
+async def recents_endpoint():
+    return {"recents": load_recents()}

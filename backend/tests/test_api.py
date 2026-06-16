@@ -234,3 +234,16 @@ def test_suggest_layout_endpoint(mock_sug):
     r = client.post("/api/suggest-layout", json=payload)
     assert r.status_code == 200
     assert r.json()["source"] == "ai"
+
+
+def test_recents_add_and_list(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    # save a project (should auto-add to recents)
+    proj = {"version": 1, "project_name": "P1", "inputs": {"db_path": "./x", "template_path": "./y", "font_override": None}, "slides": []}
+    save_path = str(tmp_path / "p1.aurum.json")
+    client.post("/api/save-project", json={"path": save_path, "state": proj})
+
+    r = client.get("/api/recents")
+    assert r.status_code == 200
+    recs = r.json()["recents"]
+    assert any(rec["path"] == save_path for rec in recs)
