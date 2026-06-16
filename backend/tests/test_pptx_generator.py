@@ -81,3 +81,28 @@ def test_build_pptx_with_analysis_text(tmp_path, valid_xlsx_path, valid_template
     prs = Presentation(str(out))
     texts = [sh.text_frame.text for sh in prs.slides[1].shapes if sh.has_text_frame]
     assert any("Análisis XYZ" in t for t in texts)
+
+
+def test_build_pptx_applies_font_override(tmp_path, valid_xlsx_path, valid_template_path):
+    state = _state(
+        [
+            Slide(id="s1", type="separator", title="Sec"),
+            Slide(id="s2", type="shell", title="Sec",
+                  analyses=[Analysis(id="a1", scope="slide", target_id=None, text="X", ai_generated=False, edited=True)]),
+        ],
+        valid_xlsx_path, valid_template_path,
+    )
+    state.inputs.font_override = "Roboto"
+    out = tmp_path / "out.pptx"
+    build_pptx(state, str(out))
+
+    prs = Presentation(str(out))
+    fonts = []
+    for sh in prs.slides[1].shapes:
+        if sh.has_text_frame:
+            for para in sh.text_frame.paragraphs:
+                for run in para.runs:
+                    if run.font.name:
+                        fonts.append(run.font.name)
+    # at least one analysis textbox should have Roboto
+    assert "Roboto" in fonts

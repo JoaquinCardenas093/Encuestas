@@ -148,16 +148,16 @@ def _append_shell(prs, src_xml: bytes, slide_def: Slide, state: ProjectState, fr
             i = int(role.split("_")[2])
             chart_analyses = [a for a in slide_def.analyses if a.scope == "chart"]
             if i < len(chart_analyses):
-                _add_textbox(slide, chart_analyses[i].text, el)
+                _add_textbox(slide, chart_analyses[i].text, el, state.inputs.font_override)
         elif role.startswith("question_analysis_"):
             i = int(role.split("_")[2])
             q_analyses = [a for a in slide_def.analyses if a.scope == "question"]
             if i < len(q_analyses):
-                _add_textbox(slide, q_analyses[i].text, el)
+                _add_textbox(slide, q_analyses[i].text, el, state.inputs.font_override)
         elif role == "slide_analysis":
             slide_an = next((a for a in slide_def.analyses if a.scope == "slide"), None)
             if slide_an:
-                _add_textbox(slide, slide_an.text, el)
+                _add_textbox(slide, slide_an.text, el, state.inputs.font_override)
 
 
 def _add_chart(slide, chart_def: Chart, state: ProjectState, el: dict) -> None:
@@ -184,11 +184,15 @@ def _add_chart(slide, chart_def: Chart, state: ProjectState, el: dict) -> None:
     slide.shapes.add_chart(chart_type_xl, Emu(el["x"]), Emu(el["y"]), Emu(el["cx"]), Emu(el["cy"]), cd)
 
 
-def _add_textbox(slide, text: str, el: dict) -> None:
+def _add_textbox(slide, text: str, el: dict, font_name: str | None = None) -> None:
     tb = slide.shapes.add_textbox(Emu(el["x"]), Emu(el["y"]), Emu(el["cx"]), Emu(el["cy"]))
     tf = tb.text_frame
     tf.text = text
     tf.word_wrap = True
+    if font_name:
+        for para in tf.paragraphs:
+            for run in para.runs:
+                run.font.name = font_name
 
 
 def _substitute_placeholders(slide, mapping: dict[str, str]) -> None:
