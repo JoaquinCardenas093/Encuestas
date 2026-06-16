@@ -48,3 +48,49 @@ describe("project store", () => {
     expect(slides[1].title).toBe("Sección A")
   })
 })
+
+describe("store chart operations", () => {
+  beforeEach(() => {
+    useProjectStore.setState({ state: null })
+    useProjectStore.getState().setNewProject({ name: "T", db_path: "./x", template_path: "./y" })
+    useProjectStore.getState().addSeparator("Sec")
+    useProjectStore.getState().addShell()
+  })
+
+  it("addChart appends one chart", () => {
+    const shellId = useProjectStore.getState().state!.slides[1].id
+    useProjectStore.getState().addCharts(shellId, "q1", ["general"], "PIE", false)
+    const shell = useProjectStore.getState().state!.slides[1]
+    expect(shell.charts.length).toBe(1)
+    expect(shell.charts[0].chart_type).toBe("PIE")
+  })
+
+  it("addCharts multi-select breakdowns creates N charts", () => {
+    const shellId = useProjectStore.getState().state!.slides[1].id
+    useProjectStore.getState().addCharts(shellId, "q1", ["general", "sexo", "edad"], "BAR", false)
+    const shell = useProjectStore.getState().state!.slides[1]
+    expect(shell.charts.length).toBe(3)
+    expect(shell.charts.every((c) => c.chart_type === "BAR")).toBe(true)
+  })
+
+  it("updateChartType changes one chart", () => {
+    const shellId = useProjectStore.getState().state!.slides[1].id
+    useProjectStore.getState().addCharts(shellId, "q1", ["general", "sexo"], "PIE", false)
+    const chart0 = useProjectStore.getState().state!.slides[1].charts[0]
+    useProjectStore.getState().updateChartType(shellId, chart0.id, "BAR")
+    const updated = useProjectStore.getState().state!.slides[1].charts[0]
+    expect(updated.chart_type).toBe("BAR")
+  })
+
+  it("resetSlide clears charts and analyses", () => {
+    const shellId = useProjectStore.getState().state!.slides[1].id
+    useProjectStore.getState().addCharts(shellId, "q1", ["general"], "PIE", false)
+    useProjectStore.getState().resetSlide(shellId)
+    expect(useProjectStore.getState().state!.slides[1].charts).toEqual([])
+  })
+
+  it("resetAll empties slides", () => {
+    useProjectStore.getState().resetAll()
+    expect(useProjectStore.getState().state!.slides).toEqual([])
+  })
+})

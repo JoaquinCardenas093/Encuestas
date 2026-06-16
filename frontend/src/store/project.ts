@@ -29,6 +29,12 @@ interface Store {
   reorderSlide(fromIdx: number, toIdx: number): void
   removeSlide(slideId: string): void
   updateSeparatorTitle(slideId: string, title: string): void
+
+  addCharts(slideId: string, questionId: string, breakdownIds: string[], chartType: import("../types").ChartType, multiSeries: boolean): void
+  removeChart(slideId: string, chartId: string): void
+  updateChartType(slideId: string, chartId: string, chartType: import("../types").ChartType): void
+  resetSlide(slideId: string): void
+  resetAll(): void
 }
 
 function applyTitleInheritance(slides: Slide[]): Slide[] {
@@ -114,6 +120,61 @@ export const useProjectStore = create<Store>()(
             ),
           },
         })
+      },
+
+      addCharts(slideId, questionId, breakdownIds, chartType, multiSeries) {
+        const s = get().state
+        if (!s) return
+        const slides = s.slides.map((sl) => {
+          if (sl.id !== slideId) return sl
+          const newCharts = breakdownIds.map((bid) => ({
+            id: uid("ch"),
+            question_id: questionId,
+            breakdown_id: bid,
+            chart_type: chartType,
+            multi_series: multiSeries,
+          }))
+          return { ...sl, charts: [...sl.charts, ...newCharts] }
+        })
+        set({ state: { ...s, slides } })
+      },
+
+      removeChart(slideId, chartId) {
+        const s = get().state
+        if (!s) return
+        const slides = s.slides.map((sl) =>
+          sl.id !== slideId ? sl : { ...sl, charts: sl.charts.filter((c) => c.id !== chartId) },
+        )
+        set({ state: { ...s, slides } })
+      },
+
+      updateChartType(slideId, chartId, chartType) {
+        const s = get().state
+        if (!s) return
+        const slides = s.slides.map((sl) =>
+          sl.id !== slideId
+            ? sl
+            : {
+                ...sl,
+                charts: sl.charts.map((c) => (c.id === chartId ? { ...c, chart_type: chartType } : c)),
+              },
+        )
+        set({ state: { ...s, slides } })
+      },
+
+      resetSlide(slideId) {
+        const s = get().state
+        if (!s) return
+        const slides = s.slides.map((sl) =>
+          sl.id !== slideId ? sl : { ...sl, charts: [], analyses: [] },
+        )
+        set({ state: { ...s, slides } })
+      },
+
+      resetAll() {
+        const s = get().state
+        if (!s) return
+        set({ state: { ...s, slides: [] } })
       },
     }),
     {
