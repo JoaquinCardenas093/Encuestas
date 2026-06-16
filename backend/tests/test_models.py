@@ -1,4 +1,4 @@
-from aurum_encuestas.models import Question, Breakdown, ParsedDB, Slide, Chart, Analysis, ProjectState
+from aurum_encuestas.models import Analysis, Breakdown, Chart, ParsedDB, ProjectState, Question, Slide
 
 
 def test_question_basic():

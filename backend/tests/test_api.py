@@ -2,7 +2,6 @@ from fastapi.testclient import TestClient
 
 from aurum_encuestas.api import app
 
-
 client = TestClient(app)
 
 

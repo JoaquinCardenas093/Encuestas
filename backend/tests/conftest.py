@@ -3,7 +3,7 @@
 import pytest
 from openpyxl import Workbook
 from pptx import Presentation
-from pptx.util import Inches, Pt, Emu
+from pptx.util import Inches
 
 
 @pytest.fixture

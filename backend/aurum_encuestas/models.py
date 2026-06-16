@@ -1,4 +1,5 @@
-from typing import Literal, Optional
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 ChartType = Literal[
@@ -49,7 +50,7 @@ class Chart(BaseModel):
 class Analysis(BaseModel):
     id: str
     scope: AnalysisScope
-    target_id: Optional[str] = None
+    target_id: str | None = None
     text: str
     ai_generated: bool = False
     edited: bool = False
@@ -58,26 +59,26 @@ class Analysis(BaseModel):
 class Slide(BaseModel):
     id: str
     type: SlideType
-    title: Optional[str] = None
+    title: str | None = None
     charts: list[Chart] = []
     analyses: list[Analysis] = []
-    auto_notes: Optional[str] = None
+    auto_notes: str | None = None
 
 
 class ProjectInputs(BaseModel):
     db_path: str
     template_path: str
-    font_override: Optional[str] = None
+    font_override: str | None = None
 
 
 class ProjectState(BaseModel):
     version: int = 1
     app_name: str = "AurumEncuestas"
     project_name: str
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
+    created_at: str | None = None
+    updated_at: str | None = None
     inputs: ProjectInputs
-    parsed_db: Optional[ParsedDB] = None
+    parsed_db: ParsedDB | None = None
     slides: list[Slide] = []
     history: dict = Field(default_factory=lambda: {"past": [], "future": []})
 
@@ -87,4 +88,4 @@ class TemplateInfo(BaseModel):
     separator_slide_index: int
     free_area: dict
     placeholders: list[str]
-    default_font: Optional[str] = None
+    default_font: str | None = None

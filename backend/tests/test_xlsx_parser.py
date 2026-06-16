@@ -1,6 +1,7 @@
-from aurum_encuestas.xlsx_parser import parse_xlsx
-from aurum_encuestas.errors import XlsxParseError
 import pytest
+
+from aurum_encuestas.errors import XlsxParseError
+from aurum_encuestas.xlsx_parser import parse_xlsx
 
 
 def test_parse_detects_sample_size(valid_xlsx_path):

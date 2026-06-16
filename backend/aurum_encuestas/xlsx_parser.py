@@ -1,11 +1,11 @@
 import re
 from zipfile import BadZipFile
+
 from openpyxl import load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
 
 from .errors import XlsxParseError
-from .models import ParsedDB, Breakdown, Question
-
+from .models import Breakdown, ParsedDB, Question
 
 BREAKDOWN_ID_MAP = {
     "rango de edad": "edad",

@@ -6,7 +6,6 @@ from pptx import Presentation
 from .errors import TemplateInvalidError
 from .models import TemplateInfo
 
-
 PLACEHOLDER_RE = re.compile(r"@\w+")
 
 
@@ -57,11 +56,6 @@ def _compute_free_area(slide, slide_w_emu: int, slide_h_emu: int) -> dict:
     if not slide.shapes:
         return {"x": 0, "y": 0, "cx": slide_w_emu, "cy": slide_h_emu}
 
-    shapes_bottom = max((sh.top or 0) + (sh.height or 0) for sh in slide.shapes if sh.top is not None)
-    shapes_top = min(sh.top for sh in slide.shapes if sh.top is not None)
-
-    # heuristic: free area is between top-most shape's bottom and bottom-most shape's top
-    # if multiple shapes: use the middle gap
     tops_bottoms = []
     for sh in slide.shapes:
         if sh.top is None or sh.height is None:

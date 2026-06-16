@@ -1,16 +1,15 @@
 import tempfile
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from .errors import AurumError, ProjectIOError, TemplateInvalidError, XlsxParseError
+from .errors import AurumError
 from .models import ProjectState
 from .pptx_template import load_template
 from .project_store import load_project, save_project
 from .xlsx_parser import parse_xlsx
-
 
 app = FastAPI(title="AurumEncuestas API", version="0.1.0")
 

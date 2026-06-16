@@ -1,6 +1,7 @@
-from aurum_encuestas.pptx_template import load_template
-from aurum_encuestas.errors import TemplateInvalidError
 import pytest
+
+from aurum_encuestas.errors import TemplateInvalidError
+from aurum_encuestas.pptx_template import load_template
 
 
 def test_load_valid_template(valid_template_path):
