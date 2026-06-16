@@ -158,3 +158,32 @@ class TestExportPptx:
         from pathlib import Path
         assert Path(out_path).exists()
         assert Path(out_path).stat().st_size > 0
+
+
+from unittest.mock import patch
+
+
+@patch("aurum_encuestas.api.generate_analysis")
+def test_generate_analysis_endpoint(mock_gen):
+    mock_gen.return_value = "El 50% respondió Sí."
+    payload = {
+        "scope": "chart",
+        "context": {
+            "section_title": "X", "question_text": "?", "options": ["Sí", "No"],
+            "breakdown_label": "General",
+            "data": {"Total": {"Sí": {"count": 50, "pct": 0.5}}},
+        },
+    }
+    r = client.post("/api/generate-analysis", json=payload)
+    assert r.status_code == 200
+    assert "Sí" in r.json()["text"]
+
+
+@patch("aurum_encuestas.api.generate_analysis")
+def test_generate_analysis_returns_fallback_on_error(mock_gen):
+    from aurum_encuestas.errors import LLMError
+    mock_gen.side_effect = LLMError("API down")
+    payload = {"scope": "chart", "context": {"section_title": "x", "question_text": "y", "options": [], "breakdown_label": "z", "data": {}}}
+    r = client.post("/api/generate-analysis", json=payload)
+    assert r.status_code == 200
+    assert "[Análisis no disponible" in r.json()["text"]

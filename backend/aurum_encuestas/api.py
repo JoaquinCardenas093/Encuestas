@@ -109,3 +109,20 @@ async def export_pptx_endpoint(req: ExportPptxRequest):
     state = ProjectState.model_validate(req.state)
     build_pptx(state, req.out_path)
     return {"exported": True, "path": req.out_path}
+
+
+from .llm_client import generate_analysis
+
+
+class GenerateAnalysisRequest(BaseModel):
+    scope: str
+    context: dict
+
+
+@app.post("/api/generate-analysis")
+async def generate_analysis_endpoint(req: GenerateAnalysisRequest):
+    try:
+        text = generate_analysis(req.scope, req.context)
+        return {"text": text, "fallback": False}
+    except Exception:
+        return {"text": "[Análisis no disponible — editar manualmente]", "fallback": True}
