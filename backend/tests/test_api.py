@@ -70,9 +70,10 @@ class TestPreviewSlide:
             import pytest
             pytest.skip("LibreOffice not installed")
 
-        from aurum_encuestas.pptx_generator import build_pptx
-        from aurum_encuestas.models import ProjectState, Slide
         import tempfile
+
+        from aurum_encuestas.models import ProjectState, Slide
+        from aurum_encuestas.pptx_generator import build_pptx
 
         # Create a minimal project state
         state = ProjectState(

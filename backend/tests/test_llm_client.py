@@ -2,8 +2,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from aurum_encuestas.llm_client import generate_analysis
 from aurum_encuestas.errors import LLMError
+from aurum_encuestas.llm_client import generate_analysis
 
 
 @patch("aurum_encuestas.llm_client._client")

@@ -1,8 +1,8 @@
-import base64
 import shutil
-import pytest
-from aurum_encuestas.render_service import render_slide_to_png, _PLACEHOLDER_PNG
 
+import pytest
+
+from aurum_encuestas.render_service import _PLACEHOLDER_PNG, render_slide_to_png
 
 HAS_LIBREOFFICE = shutil.which("soffice") is not None
 

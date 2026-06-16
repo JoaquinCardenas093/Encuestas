@@ -129,12 +129,11 @@ async def generate_analysis_endpoint(req: GenerateAnalysisRequest):
         return {"text": "[Análisis no disponible — editar manualmente]", "fallback": True}
 
 
-import shutil
 import json as _json
-
-from .config import get_training_dir, get_layout_bank_path, add_recent, load_recents
-from .training_extractor import build_bank_from_pptxs, extract_layouts_from_pptx
 from datetime import UTC, datetime
+
+from .config import add_recent, get_layout_bank_path, get_training_dir, load_recents
+from .training_extractor import build_bank_from_pptxs, extract_layouts_from_pptx
 
 
 def _save_bank() -> dict:

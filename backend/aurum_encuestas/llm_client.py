@@ -1,12 +1,10 @@
 import json
 import os
-from typing import Optional
 
 from anthropic import Anthropic, APIStatusError
 from dotenv import load_dotenv
 
 from .errors import LLMError
-
 
 load_dotenv()
 
@@ -28,14 +26,14 @@ Idioma: español neutral. Longitud máxima: 4 oraciones.
 """
 
 
-def _build_client() -> Optional[Anthropic]:
+def _build_client() -> Anthropic | None:
     key = os.environ.get("ANTHROPIC_API_KEY")
     if not key:
         return None
     return Anthropic(api_key=key)
 
 
-_client: Optional[Anthropic] = _build_client()
+_client: Anthropic | None = _build_client()
 
 
 def generate_analysis(scope: str, context: dict) -> str:

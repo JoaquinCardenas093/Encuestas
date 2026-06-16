@@ -1,6 +1,5 @@
 from aurum_encuestas.layout_engine import compute_layout
 
-
 FREE_AREA = {"x": 600000, "y": 1200000, "cx": 11000000, "cy": 5000000}
 
 

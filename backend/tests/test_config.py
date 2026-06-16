@@ -1,9 +1,11 @@
-from pathlib import Path
 
-import pytest
 
 from aurum_encuestas.config import (
-    AurumConfig, get_aurum_dir, get_training_dir, get_layout_bank_path, load_recents, add_recent,
+    add_recent,
+    get_aurum_dir,
+    get_layout_bank_path,
+    get_training_dir,
+    load_recents,
 )
 
 

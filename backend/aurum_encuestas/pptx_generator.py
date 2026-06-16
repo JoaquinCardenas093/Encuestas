@@ -1,3 +1,4 @@
+import json as _json
 import re
 from copy import deepcopy
 
@@ -7,13 +8,10 @@ from pptx.chart.data import CategoryChartData
 from pptx.enum.chart import XL_CHART_TYPE
 from pptx.util import Emu
 
-from .data_extractor import extract_chart_data
-from .layout_engine import compute_layout
-from .layout_matcher import match_layout
-from .models import Analysis, Chart, ProjectState, Slide, LayoutBank
 from .config import get_layout_bank_path
-import json as _json
-
+from .data_extractor import extract_chart_data
+from .layout_matcher import match_layout
+from .models import Chart, LayoutBank, ProjectState, Slide
 
 CHART_TYPE_MAP = {
     "PIE": XL_CHART_TYPE.PIE,

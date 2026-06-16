@@ -1,8 +1,16 @@
-from aurum_encuestas.pptx_generator import build_pptx
-from aurum_encuestas.models import (
-    ProjectState, ProjectInputs, Slide, Chart, Analysis, ParsedDB, Question, Breakdown,
-)
 from pptx import Presentation
+
+from aurum_encuestas.models import (
+    Analysis,
+    Breakdown,
+    Chart,
+    ParsedDB,
+    ProjectInputs,
+    ProjectState,
+    Question,
+    Slide,
+)
+from aurum_encuestas.pptx_generator import build_pptx
 
 
 def _state(slides, valid_xlsx_path, valid_template_path):
