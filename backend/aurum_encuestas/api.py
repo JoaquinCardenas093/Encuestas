@@ -2,8 +2,10 @@ import base64
 import tempfile
 from pathlib import Path
 
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File, Request, UploadFile
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from .errors import AurumError
@@ -26,8 +28,20 @@ app.add_middleware(
 
 @app.exception_handler(AurumError)
 async def handle_aurum_error(request, exc: AurumError):
-    from fastapi.responses import JSONResponse
     return JSONResponse(status_code=exc.status, content={"code": exc.code, "message": str(exc)})
+
+
+@app.exception_handler(RequestValidationError)
+async def handle_validation_error(request: Request, exc: RequestValidationError):
+    print(f"[VALIDATION 422] {request.method} {request.url.path}")
+    print(f"  errors: {exc.errors()}")
+    try:
+        body = await request.body()
+        snippet = body[:2000].decode("utf-8", errors="replace")
+        print(f"  body[:2000]: {snippet}")
+    except Exception as e:
+        print(f"  body read failed: {e}")
+    return JSONResponse(status_code=422, content={"code": "validation_error", "detail": exc.errors()})
 
 
 @app.get("/api/health")
@@ -87,29 +101,36 @@ async def load_project_endpoint(req: LoadProjectRequest):
 
 
 class PreviewSlideRequest(BaseModel):
-    pptx_path: str
+    state: dict
     slide_index: int = 0
 
 
 @app.post("/api/preview-slide")
 async def preview_slide_endpoint(req: PreviewSlideRequest):
-    """Render a PPTX slide to PNG and return as base64."""
-    png_bytes = render_slide_to_png(req.pptx_path, req.slide_index)
-    png_base64 = base64.b64encode(png_bytes).decode("utf-8")
-    return {"png_base64": png_base64}
+    """Build pptx in-memory from project state, render specified slide as base64 PNG."""
+    state = ProjectState.model_validate(req.state)
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pptx") as tmp:
+        tmp_path = tmp.name
+    try:
+        build_pptx(state, tmp_path)
+        png_bytes = render_slide_to_png(tmp_path, slide_index=req.slide_index)
+        return {"png_base64": base64.b64encode(png_bytes).decode("utf-8")}
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)
 
 
 class ExportPptxRequest(BaseModel):
     state: dict
-    out_path: str
+    path: str
 
 
 @app.post("/api/export-pptx")
 async def export_pptx_endpoint(req: ExportPptxRequest):
-    """Build and export a PPTX file from ProjectState."""
+    """Build and export a PPTX file from ProjectState to the given path."""
     state = ProjectState.model_validate(req.state)
-    build_pptx(state, req.out_path)
-    return {"exported": True, "path": req.out_path}
+    build_pptx(state, req.path)
+    size = Path(req.path).stat().st_size if Path(req.path).exists() else 0
+    return {"exported": True, "path": req.path, "size": size}
 
 
 from .llm_client import generate_analysis
