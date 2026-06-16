@@ -37,35 +37,33 @@ def compute_layout(
     chart_an_h = int(chart_area_h * CHART_ANALYSIS_HEIGHT_RATIO) if has_chart_an else 0
     grid_h = chart_area_h - chart_an_h
 
-    if n_charts == 0:
-        return {"elements": elements, "fallback_used": True}
+    if n_charts > 0:
+        rows, cols = GRID[n_charts]
+        cell_w = (canvas_w - PADDING * (cols - 1)) // cols
+        cell_h = (grid_h - PADDING * (rows - 1)) // rows
 
-    rows, cols = GRID[n_charts]
-    cell_w = (canvas_w - PADDING * (cols - 1)) // cols
-    cell_h = (grid_h - PADDING * (rows - 1)) // rows
+        for i in range(n_charts):
+            r = i // cols
+            c = i % cols
+            x = canvas_x + c * (cell_w + PADDING)
+            y = canvas_y + r * (cell_h + PADDING)
+            elements.append({
+                "role": f"chart_{i}",
+                "x": x, "y": y, "cx": cell_w, "cy": cell_h,
+                "chart_type": chart_types[i] if i < len(chart_types) else "BAR",
+            })
 
-    for i in range(n_charts):
-        r = i // cols
-        c = i % cols
-        x = canvas_x + c * (cell_w + PADDING)
-        y = canvas_y + r * (cell_h + PADDING)
-        elements.append({
-            "role": f"chart_{i}",
-            "x": x, "y": y, "cx": cell_w, "cy": cell_h,
-            "chart_type": chart_types[i] if i < len(chart_types) else "BAR",
-        })
-
-    # Chart analyses placed below each chart (max one per chart for now)
-    for i in range(min(n_chart_analyses, n_charts)):
-        chart_el = elements[i]
-        elements.append({
-            "role": f"chart_analysis_{i}",
-            "x": chart_el["x"],
-            "y": chart_el["y"] + chart_el["cy"] + PADDING // 2,
-            "cx": chart_el["cx"],
-            "cy": chart_an_h - PADDING,
-            "anchor_chart": i,
-        })
+        # Chart analyses placed below each chart (max one per chart for now)
+        for i in range(min(n_chart_analyses, n_charts)):
+            chart_el = elements[i]
+            elements.append({
+                "role": f"chart_analysis_{i}",
+                "x": chart_el["x"],
+                "y": chart_el["y"] + chart_el["cy"] + PADDING // 2,
+                "cx": chart_el["cx"],
+                "cy": chart_an_h - PADDING,
+                "anchor_chart": i,
+            })
 
     # Question analyses placed at bottom of chart area
     for i in range(n_question_analyses):
