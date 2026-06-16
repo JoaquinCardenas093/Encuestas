@@ -49,3 +49,19 @@ export async function loadProject(path: string): Promise<ProjectState> {
     body: JSON.stringify({ path }),
   })
 }
+
+export async function previewSlide(state: ProjectState, slideIndex: number): Promise<{ png_base64: string }> {
+  return request("/preview-slide", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ state, slide_index: slideIndex }),
+  })
+}
+
+export async function exportPptx(state: ProjectState, path: string): Promise<{ exported: boolean; path: string; size: number }> {
+  return request("/export-pptx", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ state, path }),
+  })
+}
