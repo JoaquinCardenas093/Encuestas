@@ -46,3 +46,14 @@ def test_parse_question_confidence(valid_xlsx_path):
     db = parse_xlsx(str(valid_xlsx_path))
     q1 = db.questions[0]
     assert q1.confidence >= 0.9  # $pN.label marker = high confidence
+
+
+def test_parse_detects_three_column_blocks(valid_xlsx_path):
+    db = parse_xlsx(str(valid_xlsx_path))
+    blocks = db.data_blocks
+    assert "counts_cols" in blocks
+    assert "pct_row_cols" in blocks
+    # counts block starts at col 3
+    assert blocks["counts_cols"][0] == 3
+    # second block detected
+    assert blocks["pct_row_cols"][0] >= 19
