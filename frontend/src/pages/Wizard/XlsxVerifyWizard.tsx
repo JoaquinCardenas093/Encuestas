@@ -95,7 +95,11 @@ export default function XlsxVerifyWizard({ onConfirm }: Props) {
       </section>
 
       <div className="flex justify-end gap-2">
-        <button className="px-4 py-2 text-sm rounded bg-neutral-700 hover:bg-neutral-600">Editar mapping manual</button>
+        <button
+          disabled
+          title="Próximamente — usá el xlsx con la convención esperada"
+          className="px-4 py-2 text-sm rounded bg-neutral-800 text-neutral-500 cursor-not-allowed"
+        >Editar mapping manual (próximamente)</button>
         <button onClick={handleConfirm} className="px-4 py-2 text-sm rounded bg-accent text-neutral-900 font-semibold">Confirmar</button>
       </div>
     </div>
