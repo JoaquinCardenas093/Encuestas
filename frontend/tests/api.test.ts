@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach, vi } from "vitest"
 import * as api from "../src/api/client"
 import type { ParsedDB, TemplateInfo } from "../src/types"
 
-const mockFetch = global.fetch as ReturnType<typeof vi.fn>
+const mockFetch = globalThis.fetch as ReturnType<typeof vi.fn>
 
 describe("API client", () => {
   beforeEach(() => {
