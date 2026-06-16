@@ -38,21 +38,77 @@ def _load_bank() -> LayoutBank:
 PLACEHOLDER_RE = re.compile(r"@(\w+)")
 
 
+def _slide_has_placeholder(slide, marker: str) -> bool:
+    for sh in slide.shapes:
+        if sh.has_text_frame and marker in (sh.text_frame.text or ""):
+            return True
+    return False
+
+
+def _detect_shell_separator_indices(prs) -> tuple[int, int]:
+    """Heuristic: shell = slide with @Notas placeholder. Separator = the other one.
+    Fallback to (0, 1) if both/neither has @Notas."""
+    has_notas = [_slide_has_placeholder(s, "@Notas") for s in prs.slides[:2]]
+    if has_notas[0] and not has_notas[1]:
+        return 0, 1
+    if has_notas[1] and not has_notas[0]:
+        return 1, 0
+    return 0, 1
+
+
+def _duplicate_slide(prs, src_slide):
+    """Add a new slide at end of presentation, cloning all shapes AND rels from src_slide.
+    Preserves images (pic elements need their image rels copied too)."""
+    new_slide = prs.slides.add_slide(src_slide.slide_layout)
+    # remove placeholders created by layout
+    for sp in list(new_slide.shapes):
+        sp._element.getparent().remove(sp._element)
+    # copy each shape XML
+    for shape in src_slide.shapes:
+        new_el = deepcopy(shape._element)
+        new_slide.shapes._spTree.append(new_el)
+    # copy rels (images, charts, etc.) — except notesSlide
+    for rel in src_slide.part.rels.values():
+        if "notesSlide" in rel.reltype:
+            continue
+        if rel.is_external:
+            new_slide.part.rels.get_or_add_ext_rel(rel.reltype, rel.target_ref)
+        else:
+            new_slide.part.relate_to(rel.target_part, rel.reltype)
+    return new_slide
+
+
 def build_pptx(state: ProjectState, out_path: str) -> None:
-    """Build final pptx. Opens template, removes its 2 slides, then for each slide in state
-    clones the appropriate source slide (shell or separator), substitutes placeholders, inserts shapes."""
+    """Build final pptx. Open template, detect which slide is shell vs separator by @Notas
+    placeholder, duplicate appropriate source per user slide (preserving image rels),
+    substitute placeholders, insert charts, then remove the template originals."""
     template_path = state.inputs.template_path
     prs = Presentation(template_path)
 
-    # Cache source XMLs
-    shell_src_xml = etree.tostring(prs.slides[0]._element)
-    separator_src_xml = etree.tostring(prs.slides[1]._element)
-    shell_rels = list(prs.slides[0].part.rels.values())
+    shell_idx, sep_idx = _detect_shell_separator_indices(prs)
+    shell_src = prs.slides[shell_idx]
+    separator_src = prs.slides[sep_idx]
 
-    # Remove template's 2 slides properly (drop rels so parts don't dupe-write to zip)
+    # Compute free_area from shell src before any mutation
+    from .pptx_template import _compute_free_area
+    free_area = _compute_free_area(shell_src, prs.slide_width, prs.slide_height)
+
+    sep_counter = 0
+    for slide_def in state.slides:
+        if slide_def.type == "separator":
+            sep_counter += 1
+            new_slide = _duplicate_slide(prs, separator_src)
+            _substitute_placeholders(new_slide, {"@Titulo": f"{sep_counter}. {slide_def.title or ''}", "@Notas": ""})
+        else:
+            new_slide = _duplicate_slide(prs, shell_src)
+            notes_text = slide_def.auto_notes or f"Respuesta única. Número de observaciones: {state.parsed_db.sample_size if state.parsed_db else 500}."
+            _substitute_placeholders(new_slide, {"@Titulo": slide_def.title or "", "@Notas": notes_text})
+            _add_slide_content(new_slide, slide_def, state, free_area)
+
+    # Remove the 2 template source slides (they're at positions 0 and 1)
     xml_slides = prs.slides._sldIdLst
-    slides_to_remove = list(xml_slides)
-    for sld in slides_to_remove:
+    to_remove = [xml_slides[0], xml_slides[1]] if len(xml_slides) >= 2 else list(xml_slides)
+    for sld in to_remove:
         rId = sld.rId
         try:
             prs.part.drop_rel(rId)
@@ -60,71 +116,11 @@ def build_pptx(state: ProjectState, out_path: str) -> None:
             pass
         xml_slides.remove(sld)
 
-    # Compute free_area from original shell slide (before remove)
-    from .pptx_template import _compute_free_area
-    free_area = _compute_free_area(
-        Presentation(template_path).slides[0],
-        prs.slide_width, prs.slide_height,
-    )
-
-    sep_counter = 0
-    for idx, slide_def in enumerate(state.slides):
-        if slide_def.type == "separator":
-            sep_counter += 1
-            _append_separator(prs, separator_src_xml, slide_def.title, sep_counter)
-        else:
-            _append_shell(prs, shell_src_xml, slide_def, state, free_area)
-
     prs.save(out_path)
 
 
-def _append_separator(prs, src_xml: bytes, title: str | None, counter: int) -> None:
-    slide_layout = prs.slide_layouts[6]
-    slide = prs.slides.add_slide(slide_layout)
-    # Clear default placeholders
-    for sp in list(slide.shapes):
-        sp_el = sp._element
-        sp_el.getparent().remove(sp_el)
-    # Append shapes from src
-    src_tree = etree.fromstring(src_xml)
-    src_spTree = src_tree.find(".//{http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing}spTree") or \
-                  src_tree.find(".//{http://schemas.openxmlformats.org/presentationml/2006/main}spTree")
-    if src_spTree is None:
-        # Try generic
-        for child in src_tree.iter():
-            if child.tag.endswith("}spTree"):
-                src_spTree = child
-                break
-    if src_spTree is not None:
-        for child in list(src_spTree):
-            if child.tag.endswith("}sp") or child.tag.endswith("}pic") or child.tag.endswith("}cxnSp"):
-                slide.shapes._spTree.append(deepcopy(child))
-
-    _substitute_placeholders(slide, {"@Titulo": f"{counter}. {title or ''}", "@Notas": ""})
-
-
-def _append_shell(prs, src_xml: bytes, slide_def: Slide, state: ProjectState, free_area: dict) -> None:
-    slide_layout = prs.slide_layouts[6]
-    slide = prs.slides.add_slide(slide_layout)
-    for sp in list(slide.shapes):
-        sp_el = sp._element
-        sp_el.getparent().remove(sp_el)
-
-    src_tree = etree.fromstring(src_xml)
-    src_spTree = None
-    for child in src_tree.iter():
-        if child.tag.endswith("}spTree"):
-            src_spTree = child
-            break
-    if src_spTree is not None:
-        for child in list(src_spTree):
-            if child.tag.endswith("}sp") or child.tag.endswith("}pic") or child.tag.endswith("}cxnSp"):
-                slide.shapes._spTree.append(deepcopy(child))
-
-    notes_text = slide_def.auto_notes or f"Respuesta única. Número de observaciones: {state.parsed_db.sample_size if state.parsed_db else 500}."
-    _substitute_placeholders(slide, {"@Titulo": slide_def.title or "", "@Notas": notes_text})
-
-    # Compute layout for this slide
+def _add_slide_content(slide, slide_def: Slide, state: ProjectState, free_area: dict) -> None:
+    """Add charts + analyses to a shell slide per layout matcher."""
     n_chart_an = sum(1 for a in slide_def.analyses if a.scope == "chart")
     n_q_an = sum(1 for a in slide_def.analyses if a.scope == "question")
     has_slide_an = any(a.scope == "slide" for a in slide_def.analyses)
