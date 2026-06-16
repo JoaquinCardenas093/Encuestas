@@ -2,6 +2,7 @@ import { useState } from "react"
 import { useSearchParams } from "react-router-dom"
 import { useProjectStore } from "../../store/project"
 import { useAutoSave } from "../../hooks/useAutoSave"
+import { useKeyboardShortcuts } from "../../hooks/useKeyboardShortcuts"
 import XlsxVerifyWizard from "../Wizard/XlsxVerifyWizard"
 import SlideRail from "./SlideRail"
 import Preview from "./Preview"
@@ -14,7 +15,23 @@ export default function EditorPage() {
   const slides = useProjectStore((s) => s.state?.slides ?? [])
   const [selectedId, setSelectedId] = useState<string | null>(slides[0]?.id ?? null)
 
+  const state = useProjectStore((s) => s.state)
+  const addShell = useProjectStore((s) => s.addShell)
+  const hasSeparator = state?.slides.some((sl) => sl.type === "separator")
+
   useAutoSave(5000)
+
+  useKeyboardShortcuts({
+    "Cmd+s": async () => {
+      const cur = useProjectStore.getState().state
+      const path = useProjectStore.getState().projectPath
+      if (cur && path) {
+        const api = await import("../../api/client")
+        await api.saveProject(path, cur)
+      }
+    },
+    "Cmd+n": () => { if (hasSeparator) addShell() },
+  })
 
   // when slides list changes, pick first if none selected
   if (!selectedId && slides.length > 0) {
