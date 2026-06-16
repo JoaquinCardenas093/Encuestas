@@ -49,10 +49,15 @@ def build_pptx(state: ProjectState, out_path: str) -> None:
     separator_src_xml = etree.tostring(prs.slides[1]._element)
     shell_rels = list(prs.slides[0].part.rels.values())
 
-    # Remove template's 2 slides
+    # Remove template's 2 slides properly (drop rels so parts don't dupe-write to zip)
     xml_slides = prs.slides._sldIdLst
-    slides_list = list(xml_slides)
-    for sld in slides_list:
+    slides_to_remove = list(xml_slides)
+    for sld in slides_to_remove:
+        rId = sld.rId
+        try:
+            prs.part.drop_rel(rId)
+        except Exception:
+            pass
         xml_slides.remove(sld)
 
     # Compute free_area from original shell slide (before remove)
