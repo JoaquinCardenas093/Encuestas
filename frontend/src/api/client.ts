@@ -65,3 +65,19 @@ export async function exportPptx(state: ProjectState, path: string): Promise<{ e
     body: JSON.stringify({ state, path }),
   })
 }
+
+export interface GenerateAnalysisContext {
+  section_title: string
+  question_text: string
+  options: string[]
+  breakdown_label: string
+  data: Record<string, Record<string, { count: number; pct: number | null }>>
+}
+
+export async function generateAnalysis(scope: "slide" | "question" | "chart", context: GenerateAnalysisContext): Promise<{ text: string; fallback: boolean }> {
+  return request("/generate-analysis", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ scope, context }),
+  })
+}
