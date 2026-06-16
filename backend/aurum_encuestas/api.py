@@ -1,3 +1,4 @@
+import base64
 import tempfile
 from pathlib import Path
 
@@ -7,8 +8,10 @@ from pydantic import BaseModel
 
 from .errors import AurumError
 from .models import ProjectState
+from .pptx_generator import build_pptx
 from .pptx_template import load_template
 from .project_store import load_project, save_project
+from .render_service import render_slide_to_png
 from .xlsx_parser import parse_xlsx
 
 app = FastAPI(title="AurumEncuestas API", version="0.1.0")
@@ -80,3 +83,29 @@ class LoadProjectRequest(BaseModel):
 async def load_project_endpoint(req: LoadProjectRequest):
     state = load_project(req.path)
     return state.model_dump()
+
+
+class PreviewSlideRequest(BaseModel):
+    pptx_path: str
+    slide_index: int = 0
+
+
+@app.post("/api/preview-slide")
+async def preview_slide_endpoint(req: PreviewSlideRequest):
+    """Render a PPTX slide to PNG and return as base64."""
+    png_bytes = render_slide_to_png(req.pptx_path, req.slide_index)
+    png_base64 = base64.b64encode(png_bytes).decode("utf-8")
+    return {"png_base64": png_base64}
+
+
+class ExportPptxRequest(BaseModel):
+    state: dict
+    out_path: str
+
+
+@app.post("/api/export-pptx")
+async def export_pptx_endpoint(req: ExportPptxRequest):
+    """Build and export a PPTX file from ProjectState."""
+    state = ProjectState.model_validate(req.state)
+    build_pptx(state, req.out_path)
+    return {"exported": True, "path": req.out_path}

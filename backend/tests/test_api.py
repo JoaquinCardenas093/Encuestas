@@ -58,3 +58,103 @@ def test_save_load_project_endpoints(tmp_path):
     r2 = client.post("/api/load-project", json={"path": out})
     assert r2.status_code == 200
     assert r2.json()["project_name"] == "Test"
+
+
+class TestPreviewSlide:
+    """Tests for /api/preview-slide endpoint"""
+
+    def test_preview_slide_returns_base64_png(self, valid_template_path, valid_xlsx_path):
+        """preview-slide endpoint returns base64-encoded PNG if LibreOffice available."""
+        import shutil
+        if not shutil.which("soffice"):
+            import pytest
+            pytest.skip("LibreOffice not installed")
+
+        from aurum_encuestas.pptx_generator import build_pptx
+        from aurum_encuestas.models import ProjectState, Slide
+        import tempfile
+
+        # Create a minimal project state
+        state = ProjectState(
+            version=1,
+            project_name="Test",
+            inputs={"db_path": str(valid_xlsx_path), "template_path": str(valid_template_path), "font_override": None},
+            slides=[
+                Slide(
+                    id="slide_0",
+                    type="separator",
+                    title="Test Slide",
+                )
+            ],
+        )
+
+        # Build PPTX
+        with tempfile.NamedTemporaryFile(suffix=".pptx", delete=False) as f:
+            pptx_path = f.name
+        build_pptx(state, pptx_path)
+
+        # Test preview endpoint
+        req = {
+            "pptx_path": pptx_path,
+            "slide_index": 0,
+        }
+        r = client.post("/api/preview-slide", json=req)
+        assert r.status_code == 200
+        body = r.json()
+        assert "png_base64" in body
+        # Should start with data URL prefix or just base64
+        assert isinstance(body["png_base64"], str)
+        assert len(body["png_base64"]) > 0
+
+    def test_preview_slide_returns_placeholder_without_libreoffice(self):
+        """preview-slide returns base64 placeholder PNG if LibreOffice unavailable."""
+        import shutil
+        if shutil.which("soffice"):
+            import pytest
+            pytest.skip("LibreOffice is installed")
+
+        req = {
+            "pptx_path": "/nonexistent.pptx",
+            "slide_index": 0,
+        }
+        r = client.post("/api/preview-slide", json=req)
+        assert r.status_code == 200
+        body = r.json()
+        assert "png_base64" in body
+        assert isinstance(body["png_base64"], str)
+
+
+class TestExportPptx:
+    """Tests for /api/export-pptx endpoint"""
+
+    def test_export_pptx_writes_file(self, valid_template_path, valid_xlsx_path, tmp_path):
+        """export-pptx endpoint writes PPTX file to disk."""
+
+        state_dict = {
+            "version": 1,
+            "project_name": "Export Test",
+            "inputs": {"db_path": str(valid_xlsx_path), "template_path": str(valid_template_path), "font_override": None},
+            "slides": [
+                {
+                    "id": "slide_0",
+                    "type": "separator",
+                    "title": "Export Test Slide",
+                }
+            ],
+        }
+
+        out_path = str(tmp_path / "exported.pptx")
+        req = {
+            "state": state_dict,
+            "out_path": out_path,
+        }
+        r = client.post("/api/export-pptx", json=req)
+        assert r.status_code == 200
+        body = r.json()
+        assert body["exported"] == True
+        assert body["path"] == out_path
+
+        # Verify file was written
+        from pathlib import Path
+        assert Path(out_path).exists()
+        assert Path(out_path).stat().st_size > 0
