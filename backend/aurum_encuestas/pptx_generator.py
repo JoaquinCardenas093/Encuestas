@@ -48,10 +48,14 @@ def _slide_has_placeholder(slide, marker: str) -> bool:
 def _detect_shell_separator_indices(prs) -> tuple[int, int]:
     """Heuristic: shell = slide with @Notas placeholder. Separator = the other one.
     Fallback to (0, 1) if both/neither has @Notas."""
-    has_notas = [_slide_has_placeholder(s, "@Notas") for s in prs.slides[:2]]
-    if has_notas[0] and not has_notas[1]:
+    slides_list = list(prs.slides)
+    if len(slides_list) < 2:
         return 0, 1
-    if has_notas[1] and not has_notas[0]:
+    has_notas_0 = _slide_has_placeholder(slides_list[0], "@Notas")
+    has_notas_1 = _slide_has_placeholder(slides_list[1], "@Notas")
+    if has_notas_0 and not has_notas_1:
+        return 0, 1
+    if has_notas_1 and not has_notas_0:
         return 1, 0
     return 0, 1
 
