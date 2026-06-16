@@ -34,3 +34,6 @@ lint: lint-backend
 
 dev-all:
 	@echo "Run 'make dev-backend' and 'make dev-frontend' in separate terminals"
+
+e2e:
+	cd e2e && npm test
