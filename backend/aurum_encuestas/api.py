@@ -57,24 +57,35 @@ async def _save_upload_tmp(file: UploadFile, suffix: str) -> str:
     return tmp.name
 
 
+def _persist_upload(file_bytes: bytes, original_name: str) -> str:
+    """Save uploaded file to ~/.aurum/uploads/ keyed by filename. Returns absolute path."""
+    from .config import get_aurum_dir
+    uploads_dir = get_aurum_dir() / "uploads"
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = Path(original_name).name  # strip any path component
+    dest = uploads_dir / safe_name
+    dest.write_bytes(file_bytes)
+    return str(dest.resolve())
+
+
 @app.post("/api/parse-xlsx")
 async def parse_xlsx_endpoint(file: UploadFile = File(...)):
-    path = await _save_upload_tmp(file, ".xlsx")
-    try:
-        db = parse_xlsx(path)
-        return db.model_dump()
-    finally:
-        Path(path).unlink(missing_ok=True)
+    contents = await file.read()
+    persisted_path = _persist_upload(contents, file.filename or "uploaded.xlsx")
+    db = parse_xlsx(persisted_path)
+    result = db.model_dump()
+    result["persisted_path"] = persisted_path
+    return result
 
 
 @app.post("/api/parse-template")
 async def parse_template_endpoint(file: UploadFile = File(...)):
-    path = await _save_upload_tmp(file, ".pptx")
-    try:
-        info = load_template(path)
-        return info.model_dump()
-    finally:
-        Path(path).unlink(missing_ok=True)
+    contents = await file.read()
+    persisted_path = _persist_upload(contents, file.filename or "template.pptx")
+    info = load_template(persisted_path)
+    result = info.model_dump()
+    result["persisted_path"] = persisted_path
+    return result
 
 
 class SaveProjectRequest(BaseModel):

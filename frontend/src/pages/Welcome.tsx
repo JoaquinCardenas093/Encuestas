@@ -24,10 +24,12 @@ export default function Welcome() {
       xlsxUpload.upload(dbFile),
       tplUpload.upload(tplFile),
     ])
+    const dbPersisted = (db as { persisted_path?: string }).persisted_path || `./${dbFile.name}`
+    const tplPersisted = (tpl as { persisted_path?: string }).persisted_path || `./${tplFile.name}`
     setNewProject({
       name: projectName,
-      db_path: `./${dbFile.name}`,
-      template_path: `./${tplFile.name}`,
+      db_path: dbPersisted,
+      template_path: tplPersisted,
     })
     setParsedDb(db)
     setTemplateInfo(tpl)
