@@ -189,3 +189,27 @@ async def training_bank():
     if not p.exists():
         return {"layouts": [], "source_pptxs": []}
     return _json.loads(p.read_text())
+
+
+from .llm_client import suggest_layout
+
+
+class SuggestLayoutRequest(BaseModel):
+    n_charts: int
+    chart_types: list[str]
+    n_chart_an: int = 0
+    n_q_an: int = 0
+    has_slide_an: bool = False
+    free_area: dict
+
+
+@app.post("/api/suggest-layout")
+async def suggest_layout_endpoint(req: SuggestLayoutRequest):
+    return suggest_layout(
+        n_charts=req.n_charts,
+        chart_types=req.chart_types,
+        n_chart_an=req.n_chart_an,
+        n_q_an=req.n_q_an,
+        has_slide_an=req.has_slide_an,
+        free_area=req.free_area,
+    )

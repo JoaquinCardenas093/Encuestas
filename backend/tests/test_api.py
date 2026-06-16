@@ -221,3 +221,16 @@ def test_training_delete(tmp_path, monkeypatch, training_pptx_path):
     r2 = client.get("/api/training/list")
     files = [p["filename"] for p in r2.json()["pptxs"]]
     assert "removeme.pptx" not in files
+
+
+@patch("aurum_encuestas.api.suggest_layout")
+def test_suggest_layout_endpoint(mock_sug):
+    mock_sug.return_value = {"source": "ai", "elements": [{"role": "chart_0", "x": 100, "y": 100, "cx": 1000, "cy": 1000}]}
+    payload = {
+        "n_charts": 1, "chart_types": ["PIE"],
+        "n_chart_an": 0, "n_q_an": 0, "has_slide_an": False,
+        "free_area": {"x": 0, "y": 0, "cx": 12000000, "cy": 7000000},
+    }
+    r = client.post("/api/suggest-layout", json=payload)
+    assert r.status_code == 200
+    assert r.json()["source"] == "ai"
