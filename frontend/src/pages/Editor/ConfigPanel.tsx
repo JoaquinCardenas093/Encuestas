@@ -2,6 +2,7 @@ import { useState } from "react"
 import { Plus, Trash2 } from "lucide-react"
 import { useProjectStore } from "../../store/project"
 import AddChartModal from "./modals/AddChartModal"
+import AddAnalysisModal from "./modals/AddAnalysisModal"
 import type { ChartType } from "../../types"
 
 const CHART_TYPES: ChartType[] = [
@@ -27,7 +28,10 @@ export default function ConfigPanel({ slideId }: Props) {
   const removeChart = useProjectStore((s) => s.removeChart)
   const updateChartType = useProjectStore((s) => s.updateChartType)
   const updateSeparatorTitle = useProjectStore((s) => s.updateSeparatorTitle)
+  const addAnalysis = useProjectStore((s) => s.addAnalysis)
+  const removeAnalysis = useProjectStore((s) => s.removeAnalysis)
   const [chartModalOpen, setChartModalOpen] = useState(false)
+  const [analysisModalOpen, setAnalysisModalOpen] = useState(false)
 
   const slide = state?.slides.find((s) => s.id === slideId)
   if (!slide) {
@@ -95,6 +99,35 @@ export default function ConfigPanel({ slideId }: Props) {
               addCharts(slide.id, r.questionId, r.breakdownIds, r.chartType, r.multiSeries)
             }
             db={parsedDb}
+          />
+
+          <h4 className="text-xs uppercase text-neutral-500 mt-4 mb-2">Análisis ({slide.analyses.length})</h4>
+          {slide.analyses.map((a) => (
+            <div key={a.id} className="bg-neutral-800 border border-neutral-700 rounded p-2 mb-2 flex items-start gap-2">
+              <span className={`text-xs px-1.5 rounded font-semibold ${
+                a.scope === "slide" ? "bg-accent text-neutral-900" :
+                a.scope === "question" ? "bg-green-500 text-neutral-900" :
+                "bg-blue-400 text-neutral-900"
+              }`}>{a.scope.slice(0, 4).toUpperCase()}</span>
+              <span className="text-xs flex-1 line-clamp-2">{a.text}</span>
+              <button onClick={() => removeAnalysis(slide.id, a.id)} className="text-neutral-500 hover:text-red-400">
+                <Trash2 size={12} />
+              </button>
+            </div>
+          ))}
+          <button
+            onClick={() => setAnalysisModalOpen(true)}
+            className="w-full text-xs bg-transparent border border-dashed border-neutral-600 rounded py-1.5 flex items-center justify-center gap-1 text-neutral-400 hover:text-neutral-200"
+          >
+            <Plus size={12} /> Análisis
+          </button>
+
+          <AddAnalysisModal
+            open={analysisModalOpen}
+            slide={slide}
+            db={parsedDb}
+            onClose={() => setAnalysisModalOpen(false)}
+            onAdd={(a) => addAnalysis(slide.id, a)}
           />
         </>
       )}
