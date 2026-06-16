@@ -11,7 +11,7 @@ interface Props {
 export default function ExportModal({ open, onClose }: Props) {
   const state = useProjectStore((s) => s.state)
   const [name, setName] = useState(`AurumEncuestas_${new Date().toISOString().replace(/[:.]/g, "").slice(0, 13)}.pptx`)
-  const [folder, setFolder] = useState(`${(typeof globalThis !== "undefined" && (globalThis as any).os) ? "" : ""}/Users/${typeof globalThis !== "undefined" ? "" : ""}/Downloads`.replace("//", "/"))
+  const [folder, setFolder] = useState("~/Downloads")
   const [autoOpen, setAutoOpen] = useState(true)
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<string | null>(null)

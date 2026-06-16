@@ -139,9 +139,11 @@ class ExportPptxRequest(BaseModel):
 async def export_pptx_endpoint(req: ExportPptxRequest):
     """Build and export a PPTX file from ProjectState to the given path."""
     state = ProjectState.model_validate(req.state)
-    build_pptx(state, req.path)
-    size = Path(req.path).stat().st_size if Path(req.path).exists() else 0
-    return {"exported": True, "path": req.path, "size": size}
+    expanded = str(Path(req.path).expanduser())
+    Path(expanded).parent.mkdir(parents=True, exist_ok=True)
+    build_pptx(state, expanded)
+    size = Path(expanded).stat().st_size if Path(expanded).exists() else 0
+    return {"exported": True, "path": expanded, "size": size}
 
 
 from .llm_client import generate_analysis
