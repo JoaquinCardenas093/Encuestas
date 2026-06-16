@@ -35,6 +35,10 @@ interface Store {
   updateChartType(slideId: string, chartId: string, chartType: import("../types").ChartType): void
   resetSlide(slideId: string): void
   resetAll(): void
+
+  addAnalysis(slideId: string, analysis: Omit<import("../types").Analysis, "id">): void
+  removeAnalysis(slideId: string, analysisId: string): void
+  updateAnalysisText(slideId: string, analysisId: string, text: string): void
 }
 
 function applyTitleInheritance(slides: Slide[]): Slide[] {
@@ -175,6 +179,37 @@ export const useProjectStore = create<Store>()(
         const s = get().state
         if (!s) return
         set({ state: { ...s, slides: [] } })
+      },
+
+      addAnalysis(slideId, analysis) {
+        const s = get().state
+        if (!s) return
+        const newAnalysis = { ...analysis, id: uid("an") }
+        const slides = s.slides.map((sl) =>
+          sl.id !== slideId ? sl : { ...sl, analyses: [...sl.analyses, newAnalysis] },
+        )
+        set({ state: { ...s, slides } })
+      },
+
+      removeAnalysis(slideId, analysisId) {
+        const s = get().state
+        if (!s) return
+        const slides = s.slides.map((sl) =>
+          sl.id !== slideId ? sl : { ...sl, analyses: sl.analyses.filter((a) => a.id !== analysisId) },
+        )
+        set({ state: { ...s, slides } })
+      },
+
+      updateAnalysisText(slideId, analysisId, text) {
+        const s = get().state
+        if (!s) return
+        const slides = s.slides.map((sl) =>
+          sl.id !== slideId ? sl : {
+            ...sl,
+            analyses: sl.analyses.map((a) => (a.id === analysisId ? { ...a, text, edited: true } : a)),
+          },
+        )
+        set({ state: { ...s, slides } })
       },
     }),
     {

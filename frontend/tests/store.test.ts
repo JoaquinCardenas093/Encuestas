@@ -94,3 +94,36 @@ describe("store chart operations", () => {
     expect(useProjectStore.getState().state!.slides).toEqual([])
   })
 })
+
+describe("store analysis operations", () => {
+  beforeEach(() => {
+    useProjectStore.setState({ state: null })
+    useProjectStore.getState().setNewProject({ name: "T", db_path: "./x", template_path: "./y" })
+    useProjectStore.getState().addSeparator("Sec")
+    useProjectStore.getState().addShell()
+  })
+
+  it("addAnalysis appends to slide.analyses", () => {
+    const shellId = useProjectStore.getState().state!.slides[1].id
+    useProjectStore.getState().addAnalysis(shellId, { scope: "slide", target_id: null, text: "Test", ai_generated: true, edited: false })
+    expect(useProjectStore.getState().state!.slides[1].analyses.length).toBe(1)
+  })
+
+  it("removeAnalysis removes by id", () => {
+    const shellId = useProjectStore.getState().state!.slides[1].id
+    useProjectStore.getState().addAnalysis(shellId, { scope: "slide", target_id: null, text: "X", ai_generated: true, edited: false })
+    const aid = useProjectStore.getState().state!.slides[1].analyses[0].id
+    useProjectStore.getState().removeAnalysis(shellId, aid)
+    expect(useProjectStore.getState().state!.slides[1].analyses.length).toBe(0)
+  })
+
+  it("updateAnalysisText changes text and marks edited", () => {
+    const shellId = useProjectStore.getState().state!.slides[1].id
+    useProjectStore.getState().addAnalysis(shellId, { scope: "slide", target_id: null, text: "X", ai_generated: true, edited: false })
+    const aid = useProjectStore.getState().state!.slides[1].analyses[0].id
+    useProjectStore.getState().updateAnalysisText(shellId, aid, "Nuevo")
+    const a = useProjectStore.getState().state!.slides[1].analyses[0]
+    expect(a.text).toBe("Nuevo")
+    expect(a.edited).toBe(true)
+  })
+})
