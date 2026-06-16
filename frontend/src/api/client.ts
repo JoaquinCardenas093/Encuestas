@@ -81,3 +81,20 @@ export async function generateAnalysis(scope: "slide" | "question" | "chart", co
     body: JSON.stringify({ scope, context }),
   })
 }
+
+export interface SuggestLayoutRequest {
+  n_charts: number
+  chart_types: string[]
+  n_chart_an: number
+  n_q_an: number
+  has_slide_an: boolean
+  free_area: { x: number; y: number; cx: number; cy: number }
+}
+
+export async function suggestLayout(req: SuggestLayoutRequest): Promise<{ source: string; layout_id: string | null; elements: any[] }> {
+  return request("/suggest-layout", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+  })
+}

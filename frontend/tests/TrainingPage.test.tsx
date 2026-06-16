@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { render, screen, waitFor } from "@testing-library/react"
 import TrainingPage from "../src/pages/Training/TrainingPage"
 

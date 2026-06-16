@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { Plus, Trash2 } from "lucide-react"
 import { useProjectStore } from "../../store/project"
+import * as api from "../../api/client"
 import AddChartModal from "./modals/AddChartModal"
 import AddAnalysisModal from "./modals/AddAnalysisModal"
 import type { ChartType } from "../../types"
@@ -129,6 +130,24 @@ export default function ConfigPanel({ slideId }: Props) {
             onClose={() => setAnalysisModalOpen(false)}
             onAdd={(a) => addAnalysis(slide.id, a)}
           />
+          <button
+            onClick={async () => {
+              const free_area = { x: 600000, y: 1200000, cx: 11000000, cy: 5000000 }
+              const r = await api.suggestLayout({
+                n_charts: slide.charts.length,
+                chart_types: slide.charts.map((c) => c.chart_type),
+                n_chart_an: slide.analyses.filter((a) => a.scope === "chart").length,
+                n_q_an: slide.analyses.filter((a) => a.scope === "question").length,
+                has_slide_an: slide.analyses.some((a) => a.scope === "slide"),
+                free_area,
+              })
+              alert(`AI suggest source: ${r.source}. (Vista previa requiere agregar este layout al state — feature v2.)`)
+            }}
+            className="w-full mt-3 text-xs bg-gradient-to-r from-purple-700 to-violet-700 text-white py-2 rounded font-semibold"
+          >
+            ✨ AI sugiere layout
+          </button>
+          <p className="text-[10px] text-neutral-500 mt-1 italic">Layout actual: heurística A (default)</p>
         </>
       )}
     </aside>
