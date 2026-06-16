@@ -39,6 +39,7 @@ export default function XlsxVerifyWizard({ onConfirm }: Props) {
   }
 
   return (
+    <div className="h-full overflow-y-auto">
     <div className="max-w-2xl mx-auto p-6 text-neutral-100">
       <h2 className="text-lg font-semibold mb-1">Verificación de datos detectados</h2>
       <p className="text-sm text-neutral-400 mb-6">Revisá lo detectado por la heurística. 1 click para confirmar.</p>
@@ -97,6 +98,7 @@ export default function XlsxVerifyWizard({ onConfirm }: Props) {
         <button className="px-4 py-2 text-sm rounded bg-neutral-700 hover:bg-neutral-600">Editar mapping manual</button>
         <button onClick={handleConfirm} className="px-4 py-2 text-sm rounded bg-accent text-neutral-900 font-semibold">Confirmar</button>
       </div>
+    </div>
     </div>
   )
 }
