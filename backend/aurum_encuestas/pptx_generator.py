@@ -45,9 +45,20 @@ def _slide_has_placeholder(slide, marker: str) -> bool:
     return False
 
 
+def _titulo_y(slide) -> int:
+    """Return the Y (EMU) of the textbox containing @Titulo. -1 if not found."""
+    for sh in slide.shapes:
+        if sh.has_text_frame and "@Titulo" in (sh.text_frame.text or ""):
+            return sh.top or 0
+    return -1
+
+
 def _detect_shell_separator_indices(prs) -> tuple[int, int]:
-    """Heuristic: shell = slide with @Notas placeholder. Separator = the other one.
-    Fallback to (0, 1) if both/neither has @Notas."""
+    """Heuristics ordered by reliability:
+    1. If only one slide has @Notas → that's shell.
+    2. Else: shell = slide whose @Titulo textbox is highest (smallest Y); separator = the other.
+    3. Fallback: (0, 1).
+    """
     slides_list = list(prs.slides)
     if len(slides_list) < 2:
         return 0, 1
@@ -57,28 +68,42 @@ def _detect_shell_separator_indices(prs) -> tuple[int, int]:
         return 0, 1
     if has_notas_1 and not has_notas_0:
         return 1, 0
+    y0 = _titulo_y(slides_list[0])
+    y1 = _titulo_y(slides_list[1])
+    if y0 >= 0 and y1 >= 0 and y0 != y1:
+        return (0, 1) if y0 < y1 else (1, 0)
     return 0, 1
 
 
 def _duplicate_slide(prs, src_slide):
     """Add a new slide at end of presentation, cloning all shapes AND rels from src_slide.
-    Preserves images (pic elements need their image rels copied too)."""
+    Image rels (and other r:embed/r:link references) get NEW rIds in the destination part,
+    so we must rewrite the rId attributes inside the copied shape XML to match."""
     new_slide = prs.slides.add_slide(src_slide.slide_layout)
     # remove placeholders created by layout
     for sp in list(new_slide.shapes):
         sp._element.getparent().remove(sp._element)
-    # copy each shape XML
-    for shape in src_slide.shapes:
-        new_el = deepcopy(shape._element)
-        new_slide.shapes._spTree.append(new_el)
-    # copy rels (images, charts, etc.) — except notesSlide
+
+    # Build map old_rId → new_rId by re-creating rels on new slide (skip notesSlide + slideLayout)
+    rid_map: dict[str, str] = {}
     for rel in src_slide.part.rels.values():
-        if "notesSlide" in rel.reltype:
+        if "notesSlide" in rel.reltype or "slideLayout" in rel.reltype:
             continue
         if rel.is_external:
-            new_slide.part.rels.get_or_add_ext_rel(rel.reltype, rel.target_ref)
+            new_rid = new_slide.part.relate_to(rel.target_ref, rel.reltype, is_external=True)
         else:
-            new_slide.part.relate_to(rel.target_part, rel.reltype)
+            new_rid = new_slide.part.relate_to(rel.target_part, rel.reltype)
+        rid_map[rel.rId] = new_rid
+
+    # Copy each shape XML, remapping rIds where they appear as attribute values
+    for shape in src_slide.shapes:
+        xml_str = etree.tostring(shape._element, encoding="unicode")
+        # Sort by length descending to avoid partial substring collisions (rId10 vs rId1)
+        for old_rid in sorted(rid_map.keys(), key=len, reverse=True):
+            xml_str = xml_str.replace(f'"{old_rid}"', f'"{rid_map[old_rid]}"')
+        new_el = etree.fromstring(xml_str)
+        new_slide.shapes._spTree.append(new_el)
+
     return new_slide
 
 
