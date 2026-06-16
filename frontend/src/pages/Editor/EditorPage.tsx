@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useSearchParams } from "react-router-dom"
 import { useProjectStore } from "../../store/project"
+import { useAutoSave } from "../../hooks/useAutoSave"
 import XlsxVerifyWizard from "../Wizard/XlsxVerifyWizard"
 import SlideRail from "./SlideRail"
 import Preview from "./Preview"
@@ -12,6 +13,8 @@ export default function EditorPage() {
   const showWizard = params.get("wizard") === "1"
   const slides = useProjectStore((s) => s.state?.slides ?? [])
   const [selectedId, setSelectedId] = useState<string | null>(slides[0]?.id ?? null)
+
+  useAutoSave(5000)
 
   // when slides list changes, pick first if none selected
   if (!selectedId && slides.length > 0) {
