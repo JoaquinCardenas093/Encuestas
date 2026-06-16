@@ -1,4 +1,4 @@
-.PHONY: dev test lint backend-install frontend-install install
+.PHONY: dev test lint backend-install install
 
 install: backend-install
 

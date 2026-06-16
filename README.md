@@ -20,4 +20,4 @@ Backend en http://localhost:8000. Docs en http://localhost:8000/docs.
 
 ## Env
 
-Copiar `.env.example` a `backend/.env` y completar `ANTHROPIC_API_KEY`.
+Para usar análisis con AI (M4+): copiá `.env.example` a `backend/.env` y completá `ANTHROPIC_API_KEY`. Sin esto, la app funciona pero los análisis devuelven texto fallback editable.
