@@ -127,3 +127,28 @@ def invalid_template_no_titulo(tmp_path):
     out = tmp_path / "invalid_no_titulo.pptx"
     prs.save(out)
     return out
+
+
+from pptx.chart.data import CategoryChartData
+from pptx.enum.chart import XL_CHART_TYPE
+
+
+@pytest.fixture
+def training_pptx_path(tmp_path):
+    """Synthesize a PPT with 1 chart slide for training extraction tests."""
+    prs = Presentation()
+    prs.slide_width = Inches(13.33)
+    prs.slide_height = Inches(7.5)
+    blank = prs.slide_layouts[6]
+
+    s = prs.slides.add_slide(blank)
+    cd = CategoryChartData()
+    cd.categories = ["Sí", "No"]
+    cd.add_series("Total", [80, 20])
+    s.shapes.add_chart(XL_CHART_TYPE.PIE, Inches(2), Inches(2), Inches(4), Inches(4), cd)
+    tb = s.shapes.add_textbox(Inches(0.5), Inches(6.5), Inches(8), Inches(0.5))
+    tb.text_frame.text = "Análisis: el 80% respondió Sí."
+
+    out = tmp_path / "training.pptx"
+    prs.save(out)
+    return out

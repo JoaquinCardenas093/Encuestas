@@ -89,3 +89,37 @@ class TemplateInfo(BaseModel):
     free_area: dict
     placeholders: list[str]
     default_font: str | None = None
+
+
+class LayoutElement(BaseModel):
+    role: str
+    x: int
+    y: int
+    cx: int
+    cy: int
+    chart_type: ChartType | None = None
+    anchor_chart: int | None = None
+
+
+class LearnedLayout(BaseModel):
+    id: str
+    signature: str
+    source: str
+    free_area: dict
+    elements: list[LayoutElement]
+    chart_style: dict = {}
+    text_style: dict = {}
+
+
+class LayoutBank(BaseModel):
+    extracted_at: str | None = None
+    source_pptxs: list[str] = []
+    layouts: list[LearnedLayout] = []
+
+
+class TrainingPPT(BaseModel):
+    filename: str
+    added_at: str
+    layouts_extracted: int
+    status: str = "ok"  # ok | error | pending
+    error: str | None = None
