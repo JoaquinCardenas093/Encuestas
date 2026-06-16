@@ -30,3 +30,19 @@ def test_parse_invalid_file_raises(tmp_path):
     bad.write_bytes(b"not an xlsx")
     with pytest.raises(XlsxParseError):
         parse_xlsx(str(bad))
+
+
+def test_parse_detects_questions(valid_xlsx_path):
+    db = parse_xlsx(str(valid_xlsx_path))
+    assert len(db.questions) >= 1
+    q1 = db.questions[0]
+    assert q1.code == "P1"
+    assert q1.text  # non-empty
+    assert "Sí" in q1.options
+    assert "No" in q1.options
+
+
+def test_parse_question_confidence(valid_xlsx_path):
+    db = parse_xlsx(str(valid_xlsx_path))
+    q1 = db.questions[0]
+    assert q1.confidence >= 0.9  # $pN.label marker = high confidence
