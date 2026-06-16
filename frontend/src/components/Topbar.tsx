@@ -1,12 +1,15 @@
+import { useState } from "react"
 import { Link, NavLink } from "react-router-dom"
 import { useProjectStore } from "../store/project"
 import { Pill } from "./Pills"
+import ExportModal from "../pages/Editor/modals/ExportModal"
 
 export default function Topbar() {
   const state = useProjectStore((s) => s.state)
   const dbName = state ? state.inputs.db_path.split("/").pop() : null
   const tplName = state ? state.inputs.template_path.split("/").pop() : null
   const font = state?.inputs.font_override
+  const [exportOpen, setExportOpen] = useState(false)
 
   const tabClass = ({ isActive }: { isActive: boolean }) =>
     `px-3 py-1 rounded text-sm ${isActive ? "bg-neutral-700 text-white" : "text-neutral-300 hover:bg-neutral-800"}`
@@ -24,6 +27,12 @@ export default function Topbar() {
         {tplName && <Pill label="Template" value={tplName} ok />}
         {font && <Pill label="Font" value={font} />}
       </div>
+      <button
+        onClick={() => setExportOpen(true)}
+        disabled={!state}
+        className="ml-2 px-3 py-1 text-sm rounded bg-accent text-neutral-900 font-semibold disabled:opacity-40"
+      >Exportar PPTX</button>
+      <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} />
     </header>
   )
 }
