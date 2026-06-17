@@ -89,54 +89,70 @@ def _is_bottom(shape, slide_height: int) -> bool:
 
 
 def _extract_chart_style(chart) -> dict:
-    """Extract visual properties from a chart: series colors, has data labels, legend, font.
+    """Extract visual properties from a chart: series/dPt colors only, data labels, legend, font.
 
-    Returns: {colors: [hex...], has_data_labels: bool, legend: "right"|"bottom"|None,
-              font: str|None, font_size: int|None}
+    Returns: {colors: [hex...], has_data_labels: bool, show_percent: bool, show_value: bool,
+              show_cat_name: bool, legend: "r"|"b"|None, font: str|None, font_size: int|None}
     """
     style = {
         "colors": [],
         "has_data_labels": False,
+        "show_percent": False,
+        "show_value": False,
+        "show_cat_name": False,
         "legend": None,
         "font": None,
         "font_size": None,
     }
     try:
         chart_xml = chart._chartSpace
-        # Series fill colors — look in c:ser/c:spPr/a:solidFill/a:srgbClr@val
-        # For pie charts, dPt (data points) carry individual colors
-        for srgb in chart_xml.iter(f"{{{NS_A}}}srgbClr"):
-            val = srgb.get("val")
-            parent_tag = srgb.getparent().tag if srgb.getparent() is not None else ""
-            # only collect from solidFill children
-            if "solidFill" in parent_tag and val and val.upper() not in style["colors"]:
-                style["colors"].append(val.upper())
-            if len(style["colors"]) >= 12:
-                break
+
+        # Strict color extraction: only from c:ser/c:spPr/a:solidFill or c:dPt/c:spPr/a:solidFill
+        # Iterate series elements
+        for ser in chart_xml.iter(f"{{{NS_C}}}ser"):
+            # series-level fill
+            for spPr in ser.findall(f"{{{NS_C}}}spPr"):
+                for srgb in spPr.iter(f"{{{NS_A}}}srgbClr"):
+                    parent_tag = srgb.getparent().tag if srgb.getparent() is not None else ""
+                    if "solidFill" in parent_tag:
+                        val = srgb.get("val")
+                        if val and val.upper() not in style["colors"]:
+                            style["colors"].append(val.upper())
+                        break
+            # data point fills (used for PIE/DONUT)
+            for dpt in ser.findall(f"{{{NS_C}}}dPt"):
+                for srgb in dpt.iter(f"{{{NS_A}}}srgbClr"):
+                    parent_tag = srgb.getparent().tag if srgb.getparent() is not None else ""
+                    if "solidFill" in parent_tag:
+                        val = srgb.get("val")
+                        if val and val.upper() not in style["colors"]:
+                            style["colors"].append(val.upper())
+                        break
 
         # Legend position
         legend = chart_xml.find(f".//{{{NS_C}}}legend")
         if legend is not None:
             pos_el = legend.find(f"{{{NS_C}}}legendPos")
-            style["legend"] = pos_el.get("val") if pos_el is not None else "right"
+            style["legend"] = pos_el.get("val") if pos_el is not None else "r"
 
-        # Data labels presence
-        dlbls = chart_xml.find(f".//{{{NS_C}}}dLbls")
+        # Data labels — chart-level dLbls
+        dlbls = chart_xml.find(f".//{{{NS_C}}}plotArea//{{{NS_C}}}dLbls")
         if dlbls is not None:
-            show = dlbls.find(f"{{{NS_C}}}showVal")
-            show_pct = dlbls.find(f"{{{NS_C}}}showPercent")
-            style["has_data_labels"] = bool(
-                (show is not None and show.get("val", "1") != "0")
-                or (show_pct is not None and show_pct.get("val", "1") != "0")
-            )
+            def _flag(name):
+                el = dlbls.find(f"{{{NS_C}}}{name}")
+                return el is not None and el.get("val", "1") != "0"
+            style["show_value"] = _flag("showVal")
+            style["show_percent"] = _flag("showPercent")
+            style["show_cat_name"] = _flag("showCatName")
+            style["has_data_labels"] = style["show_value"] or style["show_percent"] or style["show_cat_name"]
 
-        # Default font — txPr at chart-level
+        # Font from chart's txPr
         latin = chart_xml.find(f".//{{{NS_C}}}txPr//{{{NS_A}}}latin")
         if latin is not None:
             style["font"] = latin.get("typeface")
         rpr = chart_xml.find(f".//{{{NS_C}}}txPr//{{{NS_A}}}defRPr")
         if rpr is not None and rpr.get("sz"):
-            style["font_size"] = int(rpr.get("sz")) // 100  # EMU sz → pt
+            style["font_size"] = int(rpr.get("sz")) // 100
     except Exception:
         pass
     return style

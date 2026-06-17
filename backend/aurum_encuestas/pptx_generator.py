@@ -164,6 +164,7 @@ def _add_slide_content(slide, slide_def: Slide, state: ProjectState, free_area: 
         free_area=free_area,
     )
     layout = {"elements": layout_result["elements"]}
+    layout_chart_style = layout_result.get("chart_style") or {}
 
     # Insert charts and analysis textboxes per layout elements
     for el in layout["elements"]:
@@ -171,7 +172,8 @@ def _add_slide_content(slide, slide_def: Slide, state: ProjectState, free_area: 
         if role.startswith("chart_") and not role.startswith("chart_analysis"):
             i = int(role.split("_")[1])
             chart_def = slide_def.charts[i]
-            _add_chart(slide, chart_def, state, el)
+            specific_style = layout_chart_style.get(f"chart_{i}")
+            _add_chart(slide, chart_def, state, el, specific_style)
         elif role.startswith("chart_analysis_"):
             i = int(role.split("_")[2])
             chart_analyses = [a for a in slide_def.analyses if a.scope == "chart"]
@@ -188,7 +190,7 @@ def _add_slide_content(slide, slide_def: Slide, state: ProjectState, free_area: 
                 _add_textbox(slide, slide_an.text, el, state.inputs.font_override)
 
 
-def _add_chart(slide, chart_def: Chart, state: ProjectState, el: dict) -> None:
+def _add_chart(slide, chart_def: Chart, state: ProjectState, el: dict, specific_style: dict | None = None) -> None:
     data = extract_chart_data(state.inputs.db_path, _find_question(state, chart_def.question_id),
                               chart_def.breakdown_id, state.parsed_db.data_blocks if state.parsed_db else {})
     cd = CategoryChartData()
@@ -210,17 +212,13 @@ def _add_chart(slide, chart_def: Chart, state: ProjectState, el: dict) -> None:
 
     chart_type_xl = CHART_TYPE_MAP.get(chart_def.chart_type, XL_CHART_TYPE.BAR_CLUSTERED)
     chart_shape = slide.shapes.add_chart(chart_type_xl, Emu(el["x"]), Emu(el["y"]), Emu(el["cx"]), Emu(el["cy"]), cd)
-    _apply_training_style(chart_shape.chart, chart_def.chart_type)
+    _apply_training_style(chart_shape.chart, chart_def.chart_type, specific_style)
 
 
-def _apply_training_style(chart, chart_type: str) -> None:
-    """Apply colors / font / data labels / legend from training bank to a fresh chart."""
-    from .training_extractor import aggregate_chart_style_by_type
-    bank = _load_bank()
-    if not bank.layouts:
-        return
-    style_by_type = aggregate_chart_style_by_type(bank)
-    style = style_by_type.get(chart_type) or style_by_type.get("BAR") or {}
+def _apply_training_style(chart, chart_type: str, specific_style: dict | None = None) -> None:
+    """Apply colors / font / data labels / legend from training to a fresh chart.
+    If specific_style provided (from a matched layout), use it. Else: skip styling (defaults)."""
+    style = specific_style or {}
     if not style:
         return
 
@@ -292,16 +290,21 @@ def _apply_training_style(chart, chart_type: str) -> None:
     except Exception:
         pass
 
-    # Data labels
+    # Data labels — use extracted flags so format matches training (e.g., Sí 91.6% vs 458; 92%)
     try:
         if has_dl:
             for plot in chart.plots:
                 plot.has_data_labels = True
                 dl = plot.data_labels
-                if chart_type in ("PIE", "DONUT"):
-                    dl.show_percentage = True
-                else:
-                    dl.show_value = True
+                dl.show_value = bool(style.get("show_value"))
+                dl.show_percentage = bool(style.get("show_percent"))
+                dl.show_category_name = bool(style.get("show_cat_name"))
+                # if extractor didn't capture any flag, default to percent for pie/donut
+                if not any([style.get("show_value"), style.get("show_percent"), style.get("show_cat_name")]):
+                    if chart_type in ("PIE", "DONUT"):
+                        dl.show_percentage = True
+                    else:
+                        dl.show_value = True
     except Exception:
         pass
 
