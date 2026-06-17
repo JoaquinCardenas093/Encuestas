@@ -198,16 +198,29 @@ def _add_chart(slide, chart_def: Chart, state: ProjectState, el: dict, specific_
     options = _find_question(state, chart_def.question_id).options
     cd.categories = options
 
+    def _value(cell: dict) -> float:
+        """Prefer percentage (×100), fallback to count if pct missing."""
+        pct = cell.get("pct")
+        if pct is not None:
+            try:
+                return round(float(pct) * 100, 2)
+            except (TypeError, ValueError):
+                pass
+        try:
+            return float(cell.get("count") or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
     if not chart_def.multi_series:
-        # Sum across breakdown cats → single series "Total"
-        series = []
-        for opt in options:
-            total = sum((data[cat].get(opt, {}).get("count", 0) or 0) for cat in data)
-            series.append(total)
+        # Use General (single-cat) breakdown when present; else first breakdown
+        primary_cat = next((c for c in data if c.lower() in ("total", "general")), None)
+        if primary_cat is None and data:
+            primary_cat = next(iter(data))
+        series = [_value(data.get(primary_cat, {}).get(opt, {})) for opt in options] if primary_cat else [0.0] * len(options)
         cd.add_series("Total", series)
     else:
         for cat in data:
-            values = [data[cat].get(opt, {}).get("count", 0) or 0 for opt in options]
+            values = [_value(data[cat].get(opt, {})) for opt in options]
             cd.add_series(cat, values)
 
     chart_type_xl = CHART_TYPE_MAP.get(chart_def.chart_type, XL_CHART_TYPE.BAR_CLUSTERED)

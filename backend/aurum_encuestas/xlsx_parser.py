@@ -152,23 +152,74 @@ def _detect_questions(ws) -> list[Question]:
 
 
 def _detect_data_blocks(ws) -> dict:
-    """Find up to 3 column blocks. Each block starts at a column where row2 == 'General' and row3 has Total counts.
+    """Detect up to 3 column blocks by scanning value types in the first question row.
 
-    Block 1: counts (integer values > 1)
-    Block 2: %row (values 0-1)
-    Block 3: %col (values 0-1)
+    A "counts" block has integers > 1. A "%" block has decimals 0-1.
+    Blocks are separated by ≥1 empty/text column.
+
+    Returns: {counts_cols: [start, end], pct_row_cols: [start, end], pct_col_cols: [start, end]}
     """
-    row2 = {c.column: (c.value or "") for c in ws[2]}
-    general_cols = [col for col, v in sorted(row2.items()) if str(v).strip() == "General"]
+    # Find first question row (col A has a marker like $pN.label or text ending in ?)
+    q_row = None
+    for row in range(3, ws.max_row + 1):
+        a_val = ws.cell(row, 1).value
+        if a_val and (QMARKER_RE.match(str(a_val).strip()) or str(a_val).strip().endswith("?")):
+            q_row = row
+            break
+    if q_row is None:
+        return {"counts_cols": [3, 17], "pct_row_cols": [21, 35], "pct_col_cols": [41, 55]}
 
-    blocks = []
-    for i, start_col in enumerate(general_cols):
-        end_col = general_cols[i + 1] - 3 if i + 1 < len(general_cols) else start_col + 14
-        blocks.append((start_col, end_col))
+    # Classify each numeric column by value at q_row (or sum of next 2 rows if q_row is question header without data)
+    def _classify(col: int) -> str:
+        # try q_row, q_row+1, q_row+2 — take first numeric
+        for r in (q_row, q_row + 1, q_row + 2):
+            v = ws.cell(r, col).value
+            if v is None or isinstance(v, str):
+                continue
+            try:
+                fv = float(v)
+            except (TypeError, ValueError):
+                continue
+            if 0 < fv <= 1.0:
+                return "pct"
+            if fv > 1:
+                return "count"
+        return "empty"
 
-    counts = blocks[0] if len(blocks) >= 1 else (3, 17)
-    pct_row = blocks[1] if len(blocks) >= 2 else (counts[1] + 4, counts[1] + 18)
-    pct_col = blocks[2] if len(blocks) >= 3 else (pct_row[1] + 4, pct_row[1] + 18)
+    # Walk columns from 3 onward, group contiguous same-type runs (allowing single empty gaps)
+    max_col = ws.max_column
+    blocks: list[tuple[int, int, str]] = []  # (start, end, kind)
+    current_start = None
+    current_kind = None
+    prev_kind = "empty"
+    for col in range(3, max_col + 1):
+        k = _classify(col)
+        if k == "empty":
+            # close current block if any
+            if current_start is not None:
+                blocks.append((current_start, col - 1, current_kind))
+                current_start = None
+                current_kind = None
+            prev_kind = "empty"
+            continue
+        if current_start is None:
+            current_start = col
+            current_kind = k
+        elif k != current_kind:
+            blocks.append((current_start, col - 1, current_kind))
+            current_start = col
+            current_kind = k
+        prev_kind = k
+    if current_start is not None:
+        blocks.append((current_start, max_col, current_kind))
+
+    # Pick the first count block + up to 2 pct blocks
+    count_blocks = [b for b in blocks if b[2] == "count"]
+    pct_blocks = [b for b in blocks if b[2] == "pct"]
+
+    counts = (count_blocks[0][0], count_blocks[0][1]) if count_blocks else (3, 17)
+    pct_row = (pct_blocks[0][0], pct_blocks[0][1]) if len(pct_blocks) >= 1 else (counts[1] + 4, counts[1] + 18)
+    pct_col = (pct_blocks[1][0], pct_blocks[1][1]) if len(pct_blocks) >= 2 else (pct_row[1] + 4, pct_row[1] + 18)
 
     return {
         "counts_cols": [counts[0], counts[1]],
