@@ -209,7 +209,101 @@ def _add_chart(slide, chart_def: Chart, state: ProjectState, el: dict) -> None:
             cd.add_series(cat, values)
 
     chart_type_xl = CHART_TYPE_MAP.get(chart_def.chart_type, XL_CHART_TYPE.BAR_CLUSTERED)
-    slide.shapes.add_chart(chart_type_xl, Emu(el["x"]), Emu(el["y"]), Emu(el["cx"]), Emu(el["cy"]), cd)
+    chart_shape = slide.shapes.add_chart(chart_type_xl, Emu(el["x"]), Emu(el["y"]), Emu(el["cx"]), Emu(el["cy"]), cd)
+    _apply_training_style(chart_shape.chart, chart_def.chart_type)
+
+
+def _apply_training_style(chart, chart_type: str) -> None:
+    """Apply colors / font / data labels / legend from training bank to a fresh chart."""
+    from .training_extractor import aggregate_chart_style_by_type
+    bank = _load_bank()
+    if not bank.layouts:
+        return
+    style_by_type = aggregate_chart_style_by_type(bank)
+    style = style_by_type.get(chart_type) or style_by_type.get("BAR") or {}
+    if not style:
+        return
+
+    from pptx.dml.color import RGBColor
+    from pptx.enum.chart import XL_LEGEND_POSITION
+    from pptx.util import Pt
+
+    colors = style.get("colors") or []
+    font_name = style.get("font")
+    font_size = style.get("font_size")
+    legend_pos = style.get("legend")
+    has_dl = style.get("has_data_labels")
+
+    # Series colors
+    if colors:
+        try:
+            for plot in chart.plots:
+                series_list = list(plot.series)
+                if chart_type in ("PIE", "DONUT") and series_list:
+                    # pie: each data point gets a color
+                    ser = series_list[0]
+                    pts = list(ser.points)
+                    for i, pt in enumerate(pts):
+                        c = colors[i % len(colors)]
+                        try:
+                            fill = pt.format.fill
+                            fill.solid()
+                            fill.fore_color.rgb = RGBColor.from_string(c)
+                        except Exception:
+                            pass
+                else:
+                    for i, ser in enumerate(series_list):
+                        c = colors[i % len(colors)]
+                        try:
+                            fill = ser.format.fill
+                            fill.solid()
+                            fill.fore_color.rgb = RGBColor.from_string(c)
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+
+    # Font + size on chart-level text
+    try:
+        if font_name:
+            chart.font.name = font_name
+        if font_size:
+            chart.font.size = Pt(font_size)
+    except Exception:
+        pass
+
+    # Legend
+    try:
+        if legend_pos:
+            chart.has_legend = True
+            pos_map = {
+                "r": XL_LEGEND_POSITION.RIGHT,
+                "right": XL_LEGEND_POSITION.RIGHT,
+                "l": XL_LEGEND_POSITION.LEFT,
+                "left": XL_LEGEND_POSITION.LEFT,
+                "t": XL_LEGEND_POSITION.TOP,
+                "top": XL_LEGEND_POSITION.TOP,
+                "b": XL_LEGEND_POSITION.BOTTOM,
+                "bottom": XL_LEGEND_POSITION.BOTTOM,
+                "tr": XL_LEGEND_POSITION.CORNER,
+            }
+            chart.legend.position = pos_map.get(str(legend_pos).lower(), XL_LEGEND_POSITION.RIGHT)
+            chart.legend.include_in_layout = False
+    except Exception:
+        pass
+
+    # Data labels
+    try:
+        if has_dl:
+            for plot in chart.plots:
+                plot.has_data_labels = True
+                dl = plot.data_labels
+                if chart_type in ("PIE", "DONUT"):
+                    dl.show_percentage = True
+                else:
+                    dl.show_value = True
+    except Exception:
+        pass
 
 
 def _add_textbox(slide, text: str, el: dict, font_name: str | None = None) -> None:

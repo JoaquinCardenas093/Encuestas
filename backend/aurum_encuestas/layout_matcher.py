@@ -17,10 +17,32 @@ def match_layout(
     Returns: {"source": "bank"|"heuristic", "layout_id": ..., "elements": [...]}.
     """
     sig = signature_for_slide(n_charts, chart_types, n_chart_an, n_q_an, has_slide_an)
+    # Tier 1: exact signature match
     for lay in bank.layouts:
         if lay.signature == sig:
             return {
-                "source": "bank",
+                "source": "bank_exact",
+                "layout_id": lay.id,
+                "elements": [e.model_dump() for e in lay.elements],
+            }
+
+    # Tier 2: loose — match by chart count + types (ignore analyses counts)
+    sorted_types = ",".join(sorted(chart_types))
+    for lay in bank.layouts:
+        parts = lay.signature.split("|")
+        if len(parts) >= 2 and parts[0] == str(n_charts) and parts[1] == sorted_types:
+            return {
+                "source": "bank_loose_types",
+                "layout_id": lay.id,
+                "elements": [e.model_dump() for e in lay.elements],
+            }
+
+    # Tier 3: looser — match by chart count only
+    for lay in bank.layouts:
+        parts = lay.signature.split("|")
+        if parts and parts[0] == str(n_charts):
+            return {
+                "source": "bank_loose_count",
                 "layout_id": lay.id,
                 "elements": [e.model_dump() for e in lay.elements],
             }
