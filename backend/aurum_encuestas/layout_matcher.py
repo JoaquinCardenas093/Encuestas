@@ -25,24 +25,38 @@ def match_layout(
             "text_style": dict(lay.text_style or {}),
         }
 
-    sig = signature_for_slide(n_charts, chart_types, n_chart_an, n_q_an, has_slide_an)
-    # Tier 1: exact signature match
-    for lay in bank.layouts:
-        if lay.signature == sig:
-            return _pack(lay, "bank_exact")
+    def _style_richness(lay) -> int:
+        """Sum of color counts across all chart_styles. Higher = richer style."""
+        return sum(len(s.get("colors", []) or []) for s in (lay.chart_style or {}).values())
 
-    # Tier 2: loose — match by chart count + types (ignore analyses counts)
+    sig = signature_for_slide(n_charts, chart_types, n_chart_an, n_q_an, has_slide_an)
     sorted_types = ",".join(sorted(chart_types))
+
+    # Tier 1: exact signature match (pick richest)
+    exact = [lay for lay in bank.layouts if lay.signature == sig]
+    if exact:
+        best = max(exact, key=_style_richness)
+        return _pack(best, "bank_exact")
+
+    # Tier 2: loose — match by chart count + types (pick richest)
+    loose_types = []
     for lay in bank.layouts:
         parts = lay.signature.split("|")
         if len(parts) >= 2 and parts[0] == str(n_charts) and parts[1] == sorted_types:
-            return _pack(lay, "bank_loose_types")
+            loose_types.append(lay)
+    if loose_types:
+        best = max(loose_types, key=_style_richness)
+        return _pack(best, "bank_loose_types")
 
-    # Tier 3: looser — match by chart count only
+    # Tier 3: looser — match by chart count only (pick richest)
+    loose_count = []
     for lay in bank.layouts:
         parts = lay.signature.split("|")
         if parts and parts[0] == str(n_charts):
-            return _pack(lay, "bank_loose_count")
+            loose_count.append(lay)
+    if loose_count:
+        best = max(loose_count, key=_style_richness)
+        return _pack(best, "bank_loose_count")
 
     fallback = compute_layout(
         n_charts=n_charts,
