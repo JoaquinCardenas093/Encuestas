@@ -88,6 +88,61 @@ def _is_bottom(shape, slide_height: int) -> bool:
     return top > slide_height * 0.7
 
 
+_SCHEME_FALLBACK = {
+    "accent1": "5B9BD5", "accent2": "ED7D31", "accent3": "A5A5A5",
+    "accent4": "FFC000", "accent5": "4472C4", "accent6": "70AD47",
+    "dk1": "000000", "lt1": "FFFFFF", "dk2": "44546A", "lt2": "E7E6E6",
+}
+
+
+def _resolve_color(color_el) -> str | None:
+    """Resolve any color element (srgbClr, sysClr, schemeClr) to a hex RGB string.
+    Applies lumMod/lumOff modifiers from children."""
+    tag = color_el.tag.split("}")[-1]
+    base = None
+    if tag == "srgbClr":
+        base = color_el.get("val")
+    elif tag == "sysClr":
+        base = color_el.get("lastClr") or color_el.get("val")
+        # sysClr "window" → white, "windowText" → black, etc.
+        sys_map = {"window": "FFFFFF", "windowText": "000000"}
+        if base is None and color_el.get("val") in sys_map:
+            base = sys_map[color_el.get("val")]
+    elif tag == "schemeClr":
+        scheme = color_el.get("val")
+        base = _SCHEME_FALLBACK.get(scheme)
+    if not base:
+        return None
+    base = base.upper().lstrip("#")
+    if len(base) != 6:
+        return None
+
+    # Apply lumMod / lumOff
+    try:
+        rgb = [int(base[i:i+2], 16) for i in (0, 2, 4)]
+        for child in color_el:
+            ctag = child.tag.split("}")[-1]
+            v = child.get("val")
+            if v is None:
+                continue
+            try:
+                pct = int(v) / 100000.0
+            except ValueError:
+                continue
+            if ctag == "lumMod":
+                rgb = [int(c * pct) for c in rgb]
+            elif ctag == "lumOff":
+                rgb = [int(c + (255 - c) * pct) for c in rgb]
+            elif ctag == "shade":
+                rgb = [int(c * pct) for c in rgb]
+            elif ctag == "tint":
+                rgb = [int(c + (255 - c) * pct) for c in rgb]
+        rgb = [max(0, min(255, c)) for c in rgb]
+        return f"{rgb[0]:02X}{rgb[1]:02X}{rgb[2]:02X}"
+    except Exception:
+        return base
+
+
 def _extract_chart_style(chart) -> dict:
     """Extract visual properties from a chart: series/dPt colors only, data labels, legend, font.
 
@@ -107,27 +162,33 @@ def _extract_chart_style(chart) -> dict:
     try:
         chart_xml = chart._chartSpace
 
-        # Strict color extraction: only from c:ser/c:spPr/a:solidFill or c:dPt/c:spPr/a:solidFill
-        # Iterate series elements
+        # Color extraction from series/dPt fills, supports srgbClr, sysClr (with lastClr/lumMod),
+        # schemeClr (with fallback palette + lumMod/tint/shade modifiers).
+        color_tags = {f"{{{NS_A}}}srgbClr", f"{{{NS_A}}}sysClr", f"{{{NS_A}}}schemeClr"}
         for ser in chart_xml.iter(f"{{{NS_C}}}ser"):
-            # series-level fill
+            # series-level fill (used for BAR, COLUMN, LINE, etc.)
             for spPr in ser.findall(f"{{{NS_C}}}spPr"):
-                for srgb in spPr.iter(f"{{{NS_A}}}srgbClr"):
-                    parent_tag = srgb.getparent().tag if srgb.getparent() is not None else ""
-                    if "solidFill" in parent_tag:
-                        val = srgb.get("val")
-                        if val and val.upper() not in style["colors"]:
-                            style["colors"].append(val.upper())
-                        break
-            # data point fills (used for PIE/DONUT)
+                for solidFill in spPr.iter(f"{{{NS_A}}}solidFill"):
+                    for child in solidFill:
+                        if child.tag in color_tags:
+                            hex_color = _resolve_color(child)
+                            if hex_color and hex_color not in style["colors"]:
+                                style["colors"].append(hex_color)
+                            break
+                    break
+            # data point fills (used for PIE/DONUT — one dPt per slice)
             for dpt in ser.findall(f"{{{NS_C}}}dPt"):
-                for srgb in dpt.iter(f"{{{NS_A}}}srgbClr"):
-                    parent_tag = srgb.getparent().tag if srgb.getparent() is not None else ""
-                    if "solidFill" in parent_tag:
-                        val = srgb.get("val")
-                        if val and val.upper() not in style["colors"]:
-                            style["colors"].append(val.upper())
-                        break
+                spPr = dpt.find(f"{{{NS_C}}}spPr")
+                if spPr is None:
+                    continue
+                for solidFill in spPr.iter(f"{{{NS_A}}}solidFill"):
+                    for child in solidFill:
+                        if child.tag in color_tags:
+                            hex_color = _resolve_color(child)
+                            if hex_color and hex_color not in style["colors"]:
+                                style["colors"].append(hex_color)
+                            break
+                    break
 
         # Legend position
         legend = chart_xml.find(f".//{{{NS_C}}}legend")
