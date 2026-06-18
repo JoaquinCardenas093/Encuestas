@@ -3,18 +3,9 @@ import Modal from "../../../components/Modal"
 import type { ChartType, ParsedDB } from "../../../types"
 import { ColorPicker } from "../../../components/ColorPicker"
 import { autoDeriveColors } from "../../../utils/colorUtils"
+import { useStyleGuideStore } from "../../../store/styleGuide"
 
-const CHART_TYPES: ChartType[] = [
-  "PIE",
-  "DONUT",
-  "BAR",
-  "COLUMN",
-  "BAR_STACKED",
-  "COLUMN_STACKED",
-  "LINE",
-  "AREA",
-  "RADAR",
-]
+const BUILTIN_CHART_TYPES = ["PIE", "DONUT", "BAR_HORIZONTAL", "BAR_CLUSTERED", "COLUMN_CLUSTERED"]
 
 interface ApplyResult {
   questionId: string
@@ -32,15 +23,25 @@ interface Props {
 }
 
 export default function AddChartModal({ open, onClose, onApply, db }: Props) {
+  const styleGuide = useStyleGuideStore((s) => s.styleGuide)
+  const chartTypes = styleGuide?.available_chart_types?.length
+    ? styleGuide.available_chart_types
+    : BUILTIN_CHART_TYPES
+
   const [questionId, setQuestionId] = useState<string>("")
   const [breakdownIds, setBreakdownIds] = useState<Set<string>>(new Set())
-  const [chartType, setChartType] = useState<ChartType>("PIE")
+  const [chartType, setChartType] = useState<ChartType>((chartTypes[0] ?? "PIE") as ChartType)
   const [multiSeries, setMultiSeries] = useState(false)
   const [colorPickerOpen, setColorPickerOpen] = useState(false)
   const [primaryColor, setPrimaryColor] = useState("")
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [advancedColors, setAdvancedColors] = useState<string[]>([])
   const [openAdvancedPicker, setOpenAdvancedPicker] = useState<number | null>(null)
+
+  // Sync chartType when available chart types change (style guide loads after mount)
+  useEffect(() => {
+    setChartType((chartTypes[0] ?? "PIE") as ChartType)
+  }, [chartTypes.join(",")])
 
   useEffect(() => {
     if (open && db && db.questions.length > 0) {
@@ -144,11 +145,12 @@ export default function AddChartModal({ open, onClose, onApply, db }: Props) {
       </label>
       <select
         id="ct-select"
+        aria-label="Tipo de chart"
         value={chartType}
         onChange={(e) => setChartType(e.target.value as ChartType)}
         className="w-full mb-3 bg-neutral-900 border border-neutral-700 rounded px-3 py-2 text-sm"
       >
-        {CHART_TYPES.map((t) => (
+        {chartTypes.map((t) => (
           <option key={t} value={t}>
             {t}
           </option>
