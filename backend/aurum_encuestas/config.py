@@ -85,3 +85,12 @@ def get_ai_logs_dir() -> Path:
     d = get_training_dir() / "ai_analysis_logs"
     d.mkdir(parents=True, exist_ok=True)
     return d
+
+
+# Alias used by style_guide_analyzer
+def get_analysis_logs_dir() -> Path:
+    """Alias for get_ai_logs_dir."""
+    return get_ai_logs_dir()
+
+
+RENDER_CACHE_MAX_BYTES = 500 * 1024 * 1024  # 500 MB

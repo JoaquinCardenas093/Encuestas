@@ -571,6 +571,18 @@ def migrate_legacy_files() -> None:
 # load_active helper
 # ────────────────────────────────────────────────────────────────────────────
 
+def save_style_guide(sg: StyleGuide) -> None:
+    """Persist a StyleGuide to ~/.aurum/training/style_guide.json."""
+    import logging
+    log = logging.getLogger(__name__)
+
+    sg_path = _get_aurum_dir() / "training" / "style_guide.json"
+    sg_path.parent.mkdir(parents=True, exist_ok=True)
+    data = sg.model_dump(by_alias=True)
+    sg_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    log.info("save_style_guide: saved %d patterns to %s", len(sg.patterns), sg_path)
+
+
 def load_active_style_guide() -> StyleGuide:
     """Alias for load_active — returns the active StyleGuide."""
     return load_active()
