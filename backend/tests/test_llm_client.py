@@ -1,9 +1,10 @@
+import json
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from aurum_encuestas.errors import LLMError
-from aurum_encuestas.llm_client import generate_analysis
+from aurum_encuestas.llm_client import generate_analysis, analyze_training_corpus
 
 
 @patch("aurum_encuestas.llm_client._client")
@@ -73,6 +74,73 @@ def test_suggest_layout_returns_validated_json(mock_client):
     )
     assert "elements" in res
     assert len(res["elements"]) == 1
+
+
+# ─── M6.7: analyze_training_corpus tests ────────────────────────────────────
+
+MINIMAL_STYLE_GUIDE_JSON = json.dumps({
+    "version": 1,
+    "is_builtin": False,
+    "generated_at": "2026-06-17T20:00:00Z",
+    "ai_prompt_version": "v1.0",
+    "source_pptxs": ["test.pptx"],
+    "manual_edits": {},
+    "global": {
+        "typography": {"font_family": "Arial", "title_size": 16, "subtitle_size": 12, "label_size": 9, "body_size": 10},
+        "text_patterns": {},
+        "suggested_palette": ["#7F7F7F", "#BFBFBF"],
+        "vibe": "Minimalista",
+    },
+    "available_chart_types": ["PIE", "BAR_HORIZONTAL"],
+    "patterns": [],
+})
+
+
+@patch("aurum_encuestas.llm_client._client")
+def test_analyze_training_corpus_returns_raw_json(mock_client):
+    fake_msg = MagicMock()
+    fake_msg.content = [MagicMock(text=MINIMAL_STYLE_GUIDE_JSON)]
+    fake_msg.usage = MagicMock(input_tokens=10000, output_tokens=500, cache_read_input_tokens=8000, cache_creation_input_tokens=2000)
+    mock_client.messages.create.return_value = fake_msg
+
+    result = analyze_training_corpus(slides_content=[{"type": "text", "text": "test"}])
+    assert result["raw_json"] == MINIMAL_STYLE_GUIDE_JSON
+    assert result["input_tokens"] == 10000
+    assert result["cached_input_tokens"] == 8000
+
+
+@patch("aurum_encuestas.llm_client._client")
+def test_analyze_training_corpus_uses_sonnet_46(mock_client):
+    fake_msg = MagicMock()
+    fake_msg.content = [MagicMock(text=MINIMAL_STYLE_GUIDE_JSON)]
+    fake_msg.usage = MagicMock(input_tokens=100, output_tokens=50, cache_read_input_tokens=0, cache_creation_input_tokens=100)
+    mock_client.messages.create.return_value = fake_msg
+
+    analyze_training_corpus(slides_content=[{"type": "text", "text": "x"}])
+    call_kwargs = mock_client.messages.create.call_args[1]
+    assert call_kwargs["model"] == "claude-sonnet-4-6"
+
+
+@patch("aurum_encuestas.llm_client._client")
+def test_analyze_training_corpus_system_prompt_cached(mock_client):
+    fake_msg = MagicMock()
+    fake_msg.content = [MagicMock(text=MINIMAL_STYLE_GUIDE_JSON)]
+    fake_msg.usage = MagicMock(input_tokens=100, output_tokens=50, cache_read_input_tokens=0, cache_creation_input_tokens=100)
+    mock_client.messages.create.return_value = fake_msg
+
+    analyze_training_corpus(slides_content=[{"type": "text", "text": "x"}])
+    call_kwargs = mock_client.messages.create.call_args[1]
+    system_blocks = call_kwargs["system"]
+    # At least one system block should have cache_control ephemeral
+    cached_blocks = [b for b in system_blocks if b.get("cache_control", {}).get("type") == "ephemeral"]
+    assert len(cached_blocks) >= 1
+
+
+@patch("aurum_encuestas.llm_client._client", None)
+def test_analyze_training_corpus_no_api_key_raises():
+    from aurum_encuestas.errors import LLMError
+    with pytest.raises(LLMError, match="ANTHROPIC_API_KEY"):
+        analyze_training_corpus(slides_content=[])
 
 
 @patch("aurum_encuestas.llm_client._client")
