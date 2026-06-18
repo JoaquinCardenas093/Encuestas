@@ -52,3 +52,49 @@ def test_project_state_roundtrip():
     dumped = state.model_dump()
     restored = ProjectState.model_validate(dumped)
     assert restored.project_name == "Test"
+
+
+# ── M6.1 new field tests ──────────────────────────────────────────────────────
+
+def test_chart_colors_defaults_to_empty_list():
+    c = Chart(id="c1", question_id="q1", breakdown_id="general", chart_type="PIE", multi_series=False)
+    assert c.colors == []
+
+
+def test_chart_colors_accepts_hex_list():
+    c = Chart(id="c1", question_id="q1", breakdown_id="general", chart_type="PIE", multi_series=False, colors=["#7F7F7F", "#BFBFBF"])
+    assert len(c.colors) == 2
+    assert c.colors[0] == "#7F7F7F"
+
+
+def test_project_state_palette_defaults_none():
+    # minimal valid ProjectState construction
+    from aurum_encuestas.models import ProjectInputs
+    ps = ProjectState(
+        project_name="Test",
+        inputs=ProjectInputs(db_path="./x.xlsx", template_path="./t.pptx", font_override=None),
+        slides=[],
+    )
+    assert ps.palette is None
+
+
+def test_project_state_palette_accepts_dict():
+    from aurum_encuestas.models import ProjectInputs
+    ps = ProjectState(
+        project_name="Test",
+        inputs=ProjectInputs(db_path="./x.xlsx", template_path="./t.pptx", font_override=None),
+        slides=[],
+        palette={"primary": "#7F7F7F", "secondary": "#BFBFBF", "accent": "#FFC000"},
+    )
+    assert ps.palette["primary"] == "#7F7F7F"
+
+
+def test_project_state_no_style_set_field():
+    """style_set must NOT exist on ProjectState (sets concept dropped in M6)."""
+    from aurum_encuestas.models import ProjectInputs
+    ps = ProjectState(
+        project_name="Test",
+        inputs=ProjectInputs(db_path="./x.xlsx", template_path="./t.pptx", font_override=None),
+        slides=[],
+    )
+    assert not hasattr(ps, "style_set")

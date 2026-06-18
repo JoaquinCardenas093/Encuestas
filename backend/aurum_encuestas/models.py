@@ -45,6 +45,7 @@ class Chart(BaseModel):
     breakdown_id: str
     chart_type: ChartType
     multi_series: bool = False
+    colors: list[str] = []          # per-slice/series hex; [] = auto cascade
 
 
 class Analysis(BaseModel):
@@ -81,6 +82,7 @@ class ProjectState(BaseModel):
     parsed_db: ParsedDB | None = None
     slides: list[Slide] = []
     history: dict = Field(default_factory=lambda: {"past": [], "future": []})
+    palette: dict | None = None  # project-level color defaults; None = use style_guide
 
 
 class TemplateInfo(BaseModel):
