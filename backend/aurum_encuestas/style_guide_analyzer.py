@@ -45,32 +45,22 @@ def _pptx_hash(pptx_path: Path) -> str:
 
 
 def _render_slide_to_png(pptx_path: Path, slide_idx: int, output_dir: Path) -> bytes | None:
-    """Render a single slide via libreoffice headless → PNG bytes.
+    """Render a single slide via render_service (libreoffice + pdftoppm pipeline).
 
-    Returns PNG bytes or None on failure.
+    Reuses the production render_service which handles soffice path detection
+    + multi-slide via PDF intermediate. Returns PNG bytes or None on failure.
     """
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmp_pptx = Path(tmpdir) / pptx_path.name
-        shutil.copy(pptx_path, tmp_pptx)
+    from .render_service import _PLACEHOLDER_PNG, render_slide_to_png
 
-        # libreoffice converts entire PPTX to images; we pick slide_idx
-        try:
-            subprocess.run(
-                [
-                    "libreoffice", "--headless", "--convert-to", "png",
-                    "--outdir", tmpdir, str(tmp_pptx),
-                ],
-                timeout=60,
-                capture_output=True,
-            )
-        except (subprocess.TimeoutExpired, FileNotFoundError) as exc:
-            log.warning("libreoffice render failed: %s", exc)
+    try:
+        png = render_slide_to_png(str(pptx_path), slide_index=slide_idx)
+        # If render_service returns the placeholder, treat as failure (libreoffice missing)
+        if png == _PLACEHOLDER_PNG or len(png) < 200:
+            log.warning("render returned placeholder for %s slide %d", pptx_path.name, slide_idx)
             return None
-
-        # libreoffice names output: filename-slideN.png (1-indexed)
-        png_candidates = sorted(Path(tmpdir).glob(f"{tmp_pptx.stem}*.png"))
-        if slide_idx < len(png_candidates):
-            return png_candidates[slide_idx].read_bytes()
+        return png
+    except Exception as exc:
+        log.warning("render_slide_to_png failed for %s slide %d: %s", pptx_path.name, slide_idx, exc)
         return None
 
 
