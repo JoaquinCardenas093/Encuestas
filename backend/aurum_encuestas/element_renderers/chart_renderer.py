@@ -277,6 +277,11 @@ def _build_chart_data(source_chart, value_field: str, sort: str):
     if not cats:
         cats = list(data.keys())
 
+    # Backfill options from data keys when question.options is empty (parity with general branch).
+    if not options and cats:
+        first_row = data.get(cats[0]) or {}
+        options = list(first_row.keys())
+
     # Sort options by the FIRST category's value so all series share an axis order.
     if options and sort in ("desc_by_value", "asc_by_value") and cats:
         reverse = sort == "desc_by_value"

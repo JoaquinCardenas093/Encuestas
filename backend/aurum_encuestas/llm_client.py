@@ -78,27 +78,35 @@ Reglas:
 - Output: solo JSON válido, sin texto explicativo.
 
 Slide canvas estándar: 12192000 × 6858000 EMU. Free area típica: x=487680 y=1097280 cx=11216640 cy=5212080.
+  → x_end = 487680 + 11216640 = 11704320. y_end = 1097280 + 5212080 = 6309360.
 
-Ejemplo 1 — Single binary PIE (binary_general):
-  Input: n_charts=1, question_type=binary, n_breakdowns=0
-  Output: {"elements":[{"role":"chart_0","x":1828800,"y":1722120,"cx":7619680,"cy":4114800}]}
+Ejemplo 1 — Single PIE:
+  Input: {"n_charts":1,"chart_types":["PIE"],"n_chart_analyses":0,"n_question_analyses":0,"has_slide_analysis":false}
+  Output: {"elements":[{"role":"chart_0","x":2286720,"y":1463040,"cx":7619200,"cy":4572000}]}
 
-Ejemplo 2 — Two charts side-by-side (comparison_two_charts, e.g. Sexo PIE + Edad BAR):
-  Input: n_charts=2, breakdowns=["sexo","edad"]
+Ejemplo 2 — Two charts side-by-side (PIE + BAR_CLUSTERED):
+  Input: {"n_charts":2,"chart_types":["PIE","BAR_CLUSTERED"],"n_chart_analyses":0,"n_question_analyses":0,"has_slide_analysis":false}
   Output: {"elements":[
-    {"role":"chart_0","x":1234440,"y":1463040,"cx":3504000,"cy":5181600},
-    {"role":"chart_1","x":6918960,"y":1463040,"cx":3960000,"cy":5181600}
+    {"role":"chart_0","x":1234440,"y":1463040,"cx":3500000,"cy":4572000},
+    {"role":"chart_1","x":6918960,"y":1463040,"cx":3960000,"cy":4572000}
   ]}
 
-Ejemplo 3 — Three charts grid (n_charts_grid, e.g. Sexo/NSE/Edad demographics):
-  Input: n_charts=3, breakdowns=["sexo","nse","edad"]
+Ejemplo 3 — Three charts grid (BAR_CLUSTERED × 3):
+  Input: {"n_charts":3,"chart_types":["BAR_CLUSTERED","BAR_CLUSTERED","BAR_CLUSTERED"],"n_chart_analyses":0,"n_question_analyses":0,"has_slide_analysis":false}
   Output: {"elements":[
-    {"role":"chart_0","x":487680,"y":1463040,"cx":3504000,"cy":4965600},
-    {"role":"chart_1","x":4357680,"y":1463040,"cx":3504000,"cy":4965600},
-    {"role":"chart_2","x":8227680,"y":1463040,"cx":3504000,"cy":4965600}
+    {"role":"chart_0","x":487680,"y":1463040,"cx":3500000,"cy":4572000},
+    {"role":"chart_1","x":4357680,"y":1463040,"cx":3500000,"cy":4572000},
+    {"role":"chart_2","x":8227680,"y":1463040,"cx":3476640,"cy":4572000}
   ]}
 
-Si hay análisis (chart_analysis_i / question_analysis_i / slide_analysis), apilá debajo del chart al que aplica con altura ≈ 15% del chart y 200000 EMU de padding.
+Ejemplo 4 — Chart + slide analysis band below:
+  Input: {"n_charts":1,"chart_types":["BAR_CLUSTERED"],"n_chart_analyses":0,"n_question_analyses":0,"has_slide_analysis":true}
+  Output: {"elements":[
+    {"role":"chart_0","x":1234440,"y":1463040,"cx":9500000,"cy":3700000},
+    {"role":"slide_analysis","x":487680,"y":5363040,"cx":11216640,"cy":946320}
+  ]}
+
+Si hay análisis (chart_analysis_i / question_analysis_i / slide_analysis), apilá debajo del chart al que aplica con altura ≈ 15% del chart y 200000 EMU de padding. Verificá siempre que y+cy ≤ y_end para cada elemento.
 """
 
 
@@ -171,6 +179,8 @@ def suggest_layout(
     })
 
     try:
+        # Note: LAYOUT_SYSTEM is ~500 tokens; ephemeral cache requires ≥1024 input tokens.
+        # Cache write will be silently skipped server-side until prompt grows.
         msg = _client.messages.create(
             model=MODEL,
             max_tokens=600,

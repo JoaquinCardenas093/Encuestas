@@ -89,7 +89,9 @@ def render_pattern(
                 expanded.append(new_el)
         else:
             expanded.append(el)
-    ordered_elements = expanded
+    # Re-run topological sort after fan-out so per-clone IDs (e.g. grid_chart_0)
+    # are correctly ordered if future patterns anchor against them.
+    ordered_elements = _topological_sort(expanded)
 
     # Ensure resolved_anchors is mutable on ctx
     if not hasattr(ctx, "resolved_anchors") or ctx.resolved_anchors is None:
