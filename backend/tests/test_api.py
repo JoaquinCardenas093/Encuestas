@@ -311,3 +311,31 @@ def test_corpus_delete_missing_file_still_ok(tmp_path, monkeypatch):
     r = client.post("/api/training/corpus/delete", json={"filename": "nonexistent.pptx"})
     assert r.status_code == 200
     assert r.json()["deleted"] is False
+
+
+# ─── M6.8 T3: Verify analyze-with-ai + analysis-status from M6.7 ─────────────
+
+def test_analyze_with_ai_endpoint_returns_job_id():
+    r = client.post("/api/training/analyze-with-ai")
+    assert r.status_code == 200
+    body = r.json()
+    assert "job_id" in body
+    assert isinstance(body["job_id"], str)
+
+
+def test_analysis_status_returns_progress_for_valid_job():
+    r = client.post("/api/training/analyze-with-ai")
+    job_id = r.json()["job_id"]
+
+    # Poll status immediately — job may still be running
+    r2 = client.get(f"/api/training/analysis-status/{job_id}")
+    assert r2.status_code == 200
+    body = r2.json()
+    assert "progress" in body
+    assert "status" in body
+    assert body["status"] in ("running", "done", "error")
+
+
+def test_analysis_status_404_for_unknown_job():
+    r = client.get("/api/training/analysis-status/nonexistent-job-id-xyz")
+    assert r.status_code == 404
