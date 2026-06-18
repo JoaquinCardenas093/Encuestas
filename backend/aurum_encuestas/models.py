@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 ChartType = Literal[
     "PIE", "DONUT",
     "BAR", "COLUMN", "BAR_HORIZONTAL",
+    "BAR_CLUSTERED", "COLUMN_CLUSTERED",
     "BAR_STACKED", "COLUMN_STACKED",
     "LINE", "AREA", "RADAR",
     "TABLE_WITH_MINIBARS", "TABLE_SIMPLE",
