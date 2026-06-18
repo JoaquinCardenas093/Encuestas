@@ -256,7 +256,7 @@ class TextPatterns(_Base):
 class GlobalConfig(_Base):
     typography: Typography = Field(default_factory=Typography)
     text_patterns: TextPatterns = Field(default_factory=TextPatterns)
-    suggested_palette: list[str] = Field(default_factory=lambda: ["#7F7F7F", "#BFBFBF", "#FFC000", "#404040", "#D9D9D9"])
+    suggested_palette: list[str] = Field(default_factory=lambda: ["#7F7F7F", "#404040", "#EEC245", "#C00000", "#FFC000"])
     vibe: str = "Minimalista profesional. Greys dominan. Yellow accent puntual. Layouts limpios."
 
 
@@ -273,7 +273,13 @@ class StyleGuide(_Base):
     manual_edits: dict[str, str] = Field(default_factory=dict)
     global_: GlobalConfig = Field(default_factory=GlobalConfig, alias="global")
     available_chart_types: list[str] = Field(
-        default_factory=lambda: ["PIE", "DONUT", "BAR_HORIZONTAL", "BAR_CLUSTERED", "COLUMN_CLUSTERED", "TABLE_WITH_MINIBARS"]
+        default_factory=lambda: [
+            "PIE", "DONUT",
+            "BAR_HORIZONTAL", "BAR_CLUSTERED", "BAR_STACKED",
+            "COLUMN_CLUSTERED", "COLUMN_STACKED",
+            "LINE", "AREA",
+            "TABLE_WITH_MINIBARS",
+        ]
     )
     patterns: list[Pattern] = Field(default_factory=list)
 
@@ -305,11 +311,15 @@ BUILTIN_STYLE_GUIDE = StyleGuide.model_validate({
             "analysis_style": "El {X}% de los encuestados {finding}. {context}.",
             "tone": "formal técnico español neutral",
         },
-        "suggested_palette": ["#7F7F7F", "#BFBFBF", "#FFC000", "#404040", "#D9D9D9"],
-        "vibe": "Minimalista profesional. Greys dominan. Yellow accent puntual.",
+        "suggested_palette": ["#7F7F7F", "#404040", "#EEC245", "#C00000", "#FFC000"],
+        "vibe": "Minimalista profesional. Greys dominan, yellow #EEC245 acentúa la barra destacada (último bar). Red+Yellow para PIEs binarios.",
     },
     "available_chart_types": [
-        "PIE", "DONUT", "BAR_HORIZONTAL", "BAR_CLUSTERED", "COLUMN_CLUSTERED", "TABLE_WITH_MINIBARS"
+        "PIE", "DONUT",
+        "BAR_HORIZONTAL", "BAR_CLUSTERED", "BAR_STACKED",
+        "COLUMN_CLUSTERED", "COLUMN_STACKED",
+        "LINE", "AREA",
+        "TABLE_WITH_MINIBARS",
     ],
     "patterns": [
         # ── 0: binary_general ─────────────────────────────────────────────

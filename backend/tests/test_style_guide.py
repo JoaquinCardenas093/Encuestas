@@ -379,3 +379,16 @@ def test_load_active_falls_back_on_corrupt_file(tmp_path, monkeypatch):
 
     sg = load_active()
     assert sg.is_builtin is True
+
+
+def test_builtin_palette_matches_aurora_reference():
+    from aurum_encuestas.style_guide import BUILTIN_STYLE_GUIDE
+    palette = BUILTIN_STYLE_GUIDE.global_.suggested_palette
+    # Yellow accent must appear in the palette (Aurora last-bar highlight)
+    assert "#EEC245" in palette or "#FFC000" in palette
+    # Grey neutrals first
+    assert palette[0] in ("#7F7F7F", "#595959", "#404040")
+    # All 9 supported chart types must be in available_chart_types
+    assert "LINE" in BUILTIN_STYLE_GUIDE.available_chart_types
+    assert "DONUT" in BUILTIN_STYLE_GUIDE.available_chart_types
+    assert "AREA" in BUILTIN_STYLE_GUIDE.available_chart_types
