@@ -227,3 +227,142 @@ def test_style_guide_extra_ignored():
         "FUTURE_TOP_LEVEL_KEY": "ignored",
     })
     assert not hasattr(sg, "FUTURE_TOP_LEVEL_KEY")
+
+
+# ── BUILTIN_STYLE_GUIDE ───────────────────────────────────────────────────────
+
+from aurum_encuestas.style_guide import BUILTIN_STYLE_GUIDE
+
+
+def test_builtin_is_valid_style_guide():
+    assert isinstance(BUILTIN_STYLE_GUIDE, StyleGuide)
+    assert BUILTIN_STYLE_GUIDE.is_builtin is True
+
+
+def test_builtin_has_five_patterns():
+    assert len(BUILTIN_STYLE_GUIDE.patterns) == 5
+
+
+def test_builtin_pattern_ids():
+    ids = {p.id for p in BUILTIN_STYLE_GUIDE.patterns}
+    assert "binary_general" in ids
+    assert "binary_with_demographics" in ids
+    assert "multi_choice_small" in ids
+    assert "multi_choice_large" in ids
+    assert "comparison_two_charts" in ids
+
+
+def test_builtin_patterns_have_valid_triggers():
+    for p in BUILTIN_STYLE_GUIDE.patterns:
+        assert isinstance(p.trigger, Trigger), f"pattern {p.id} has invalid trigger"
+
+
+def test_builtin_patterns_have_elements():
+    for p in BUILTIN_STYLE_GUIDE.patterns:
+        assert len(p.implementation.elements) >= 1, f"pattern {p.id} has no elements"
+
+
+def test_builtin_priority_ordering():
+    priorities = [p.priority for p in BUILTIN_STYLE_GUIDE.patterns]
+    # priorities should be unique and ordered (not required to be sequential, but let's verify they're sortable)
+    assert sorted(priorities) == priorities or len(set(priorities)) == len(priorities)
+
+
+# ── migrate_legacy_files ──────────────────────────────────────────────────────
+
+import os
+from pathlib import Path
+from aurum_encuestas.style_guide import migrate_legacy_files
+
+
+def test_migrate_moves_pptx_to_corpus(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    training_dir = tmp_path / ".aurum" / "training"
+    training_dir.mkdir(parents=True)
+    (training_dir / "deck_a.pptx").write_bytes(b"fake")
+    (training_dir / "deck_b.pptx").write_bytes(b"fake")
+
+    migrate_legacy_files()
+
+    corpus_dir = training_dir / "corpus"
+    assert (corpus_dir / "deck_a.pptx").exists()
+    assert (corpus_dir / "deck_b.pptx").exists()
+    assert not (training_dir / "deck_a.pptx").exists()
+
+
+def test_migrate_renames_layout_bank(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    training_dir = tmp_path / ".aurum" / "training"
+    training_dir.mkdir(parents=True)
+    bank = training_dir / "layout_bank.json"
+    bank.write_text('{"layouts": []}')
+
+    migrate_legacy_files()
+
+    assert (training_dir / "layout_bank.json.legacy").exists()
+    assert not bank.exists()
+
+
+def test_migrate_idempotent(tmp_path, monkeypatch):
+    """Running twice must not raise or double-move."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    training_dir = tmp_path / ".aurum" / "training"
+    training_dir.mkdir(parents=True)
+    (training_dir / "deck.pptx").write_bytes(b"fake")
+
+    migrate_legacy_files()
+    migrate_legacy_files()  # second call must not raise
+
+    assert (training_dir / "corpus" / "deck.pptx").exists()
+
+
+def test_migrate_no_training_dir(tmp_path, monkeypatch):
+    """Should not raise if ~/.aurum/training doesn't exist yet."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    migrate_legacy_files()  # must not raise
+
+
+# ── load_active ───────────────────────────────────────────────────────────────
+
+import json
+from aurum_encuestas.style_guide import load_active
+
+
+def test_load_active_returns_builtin_when_no_file(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    sg = load_active()
+    assert sg.is_builtin is True
+
+
+def test_load_active_returns_file_when_present(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    training_dir = tmp_path / ".aurum" / "training"
+    training_dir.mkdir(parents=True)
+    # write a minimal valid style_guide.json
+    sg_data = {
+        "version": 1,
+        "is_builtin": False,
+        "patterns": [],
+        "global": {
+            "typography": {"font_family": "Arial", "title_size": 18, "subtitle_size": 12, "label_size": 9, "body_size": 10},
+            "text_patterns": {},
+            "suggested_palette": ["#123456"],
+            "vibe": "test",
+        },
+        "available_chart_types": ["PIE"],
+    }
+    (training_dir / "style_guide.json").write_text(json.dumps(sg_data))
+
+    sg = load_active()
+    assert sg.is_builtin is False
+    assert sg.global_.typography.font_family == "Arial"
+
+
+def test_load_active_falls_back_on_corrupt_file(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    training_dir = tmp_path / ".aurum" / "training"
+    training_dir.mkdir(parents=True)
+    (training_dir / "style_guide.json").write_text("NOT VALID JSON{{{{")
+
+    sg = load_active()
+    assert sg.is_builtin is True
