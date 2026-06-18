@@ -12,10 +12,9 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Annotated, Any, Literal, Optional, Union
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field
-
 
 # ────────────────────────────────────────────────────────────────────────────
 # Config
@@ -44,7 +43,7 @@ class PositionAnchored(_Base):
     h_rel: float
 
 
-AnyPosition = Union[Position, PositionAnchored]
+AnyPosition = Position | PositionAnchored
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -55,22 +54,22 @@ AnyPosition = Union[Position, PositionAnchored]
 
 class Trigger(_Base):
     # Leaf fields
-    field: Optional[str] = None
+    field: str | None = None
 
     # Comparison operators (stored without $ prefix for pydantic compat)
     eq: Any = Field(None, alias="$eq")
     neq: Any = Field(None, alias="$neq")
-    gt: Optional[float] = Field(None, alias="$gt")
-    gte: Optional[float] = Field(None, alias="$gte")
-    lt: Optional[float] = Field(None, alias="$lt")
-    lte: Optional[float] = Field(None, alias="$lte")
-    in_: Optional[list] = Field(None, alias="$in")
-    nin: Optional[list] = Field(None, alias="$nin")
+    gt: float | None = Field(None, alias="$gt")
+    gte: float | None = Field(None, alias="$gte")
+    lt: float | None = Field(None, alias="$lt")
+    lte: float | None = Field(None, alias="$lte")
+    in_: list | None = Field(None, alias="$in")
+    nin: list | None = Field(None, alias="$nin")
 
     # Composition operators
-    and_: Optional[list["Trigger"]] = Field(None, alias="$and")
-    or_: Optional[list["Trigger"]] = Field(None, alias="$or")
-    not_: Optional["Trigger"] = Field(None, alias="$not")
+    and_: list[Trigger] | None = Field(None, alias="$and")
+    or_: list[Trigger] | None = Field(None, alias="$or")
+    not_: Trigger | None = Field(None, alias="$not")
 
     model_config = {"extra": "ignore", "populate_by_name": True}
 
@@ -88,7 +87,7 @@ class _DataSourceChart(_Base):
 
 class _DataSourceTable(_Base):
     chart_ref_index: int
-    breakdown_groups: Union[list[str], Literal["all", "all_except_general"]] = "all"
+    breakdown_groups: list[str] | Literal["all", "all_except_general"] = "all"
 
 
 class _Labels(_Base):
@@ -97,25 +96,25 @@ class _Labels(_Base):
     show_percentage: bool = False
     position: Literal["inside", "outside_end", "center", "best_fit"] = "outside_end"
     format: str = "0%"
-    font_size: Optional[int] = None
+    font_size: int | None = None
 
 
 class ElementChart(_Base):
     kind: Literal["chart"]
     id: str
-    position: Union[Position, PositionAnchored]
+    position: Position | PositionAnchored
     chart_type: str
     data_source: _DataSourceChart
-    labels: Optional[_Labels] = None
+    labels: _Labels | None = None
     legend: Literal["none", "right", "bottom", "top", "left"] = "none"
-    title: Optional[str] = None
+    title: str | None = None
     sort: Literal["none", "desc_by_value", "asc_by_value", "category_order"] = "none"
 
 
 class _CellStyle(_Base):
-    fill: Optional[str] = None
-    text_color: Optional[str] = None
-    font_size: Optional[int] = None
+    fill: str | None = None
+    text_color: str | None = None
+    font_size: int | None = None
     bold: bool = False
     align_h: Literal["left", "center", "right"] = "left"
 
@@ -123,7 +122,7 @@ class _CellStyle(_Base):
 class _MinibarSpec(_Base):
     enabled: bool = False
     color_role: str = "primary"
-    track_color_role: Optional[str] = None
+    track_color_role: str | None = None
     height_rel_to_cell: float = 0.4
     align: Literal["left", "center", "right"] = "left"
     show_percent_text: bool = True
@@ -131,23 +130,23 @@ class _MinibarSpec(_Base):
 
 
 class _OptionRowSpec(_Base):
-    style: Optional[_CellStyle] = None
-    label_style: Optional[_CellStyle] = None
+    style: _CellStyle | None = None
+    label_style: _CellStyle | None = None
     label_col_width_rel: float = 0.10
     value_format: Literal["percentage", "count", "both"] = "percentage"
     value_decimals: int = 1
-    minibar: Optional[_MinibarSpec] = None
+    minibar: _MinibarSpec | None = None
 
 
 class _TableCells(_Base):
-    group_header: Optional[dict] = None
-    category_header: Optional[dict] = None
-    counts_row: Optional[dict] = None
-    option_row: Optional[_OptionRowSpec] = None
+    group_header: dict | None = None
+    category_header: dict | None = None
+    counts_row: dict | None = None
+    option_row: _OptionRowSpec | None = None
 
 
 class _TableLayout(_Base):
-    col_widths: Union[Literal["auto", "equal"], list[float]] = "auto"
+    col_widths: Literal["auto", "equal"] | list[float] = "auto"
     header_height_rel: float = 0.12
     counts_row_height_rel: float = 0.08
 
@@ -155,26 +154,26 @@ class _TableLayout(_Base):
 class ElementTable(_Base):
     kind: Literal["table"]
     id: str
-    position: Union[Position, PositionAnchored]
+    position: Position | PositionAnchored
     structure: Literal["segmented_breakdowns", "comparison_grid", "simple_data"] = "simple_data"
     data_source: _DataSourceTable
-    layout: Optional[_TableLayout] = None
-    cells: Optional[_TableCells] = None
+    layout: _TableLayout | None = None
+    cells: _TableCells | None = None
 
 
 class _ContentSource(_Base):
     type: Literal["analysis", "static", "computed"]
-    scope: Optional[Literal["slide", "question", "chart"]] = None
-    ref_index: Optional[int] = None
-    text: Optional[str] = None
+    scope: Literal["slide", "question", "chart"] | None = None
+    ref_index: int | None = None
+    text: str | None = None
 
 
 class _TextStyle(_Base):
-    fill: Optional[str] = None
-    text_color: Optional[str] = None
-    font_size: Optional[int] = None
-    border_left: Optional[dict] = None
-    padding: Optional[int] = None
+    fill: str | None = None
+    text_color: str | None = None
+    font_size: int | None = None
+    border_left: dict | None = None
+    padding: int | None = None
     align_h: Literal["left", "center", "right"] = "left"
     bold: bool = False
 
@@ -182,34 +181,34 @@ class _TextStyle(_Base):
 class ElementText(_Base):
     kind: Literal["text"]
     id: str
-    position: Union[Position, PositionAnchored]
+    position: Position | PositionAnchored
     content_source: _ContentSource
-    style: Optional[_TextStyle] = None
+    style: _TextStyle | None = None
 
 
 class _ShapeStyle(_Base):
     color: str = "secondary"
-    fill: Optional[str] = None
+    fill: str | None = None
     width_pt: float = 0.75
 
 
 class ElementShape(_Base):
     kind: Literal["shape"]
     id: str
-    position: Union[Position, PositionAnchored]
+    position: Position | PositionAnchored
     shape_type: Literal["line", "rectangle"] = "line"
-    style: Optional[_ShapeStyle] = None
+    style: _ShapeStyle | None = None
 
 
 class ElementImage(_Base):
     kind: Literal["image"]
     id: str
-    position: Union[Position, PositionAnchored]
+    position: Position | PositionAnchored
     source_ref: str
 
 
 AnyElement = Annotated[
-    Union[ElementChart, ElementTable, ElementText, ElementShape, ElementImage],
+    ElementChart | ElementTable | ElementText | ElementShape | ElementImage,
     Field(discriminator="kind"),
 ]
 
@@ -226,9 +225,9 @@ class Pattern(_Base):
     id: str
     priority: int = 0
     trigger: Trigger
-    extends: Optional[str] = None
-    best_example: Optional[str] = None
-    why_picked: Optional[str] = None
+    extends: str | None = None
+    best_example: str | None = None
+    why_picked: str | None = None
     implementation: Implementation
 
 
@@ -265,8 +264,8 @@ class GlobalConfig(_Base):
 class StyleGuide(_Base):
     version: int = 1
     is_builtin: bool = False
-    generated_at: Optional[str] = None
-    ai_prompt_version: Optional[str] = None
+    generated_at: str | None = None
+    ai_prompt_version: str | None = None
     source_pptxs: list[str] = Field(default_factory=list)
     manual_edits: dict[str, str] = Field(default_factory=dict)
     global_: GlobalConfig = Field(default_factory=GlobalConfig, alias="global")
