@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react"
 import Modal from "../../../components/Modal"
 import type { ChartType, ParsedDB } from "../../../types"
+import { ColorPicker } from "../../../components/ColorPicker"
+import { autoDeriveColors } from "../../../utils/colorUtils"
 
 const CHART_TYPES: ChartType[] = [
   "PIE",
@@ -19,6 +21,7 @@ interface ApplyResult {
   breakdownIds: string[]
   chartType: ChartType
   multiSeries: boolean
+  colors: string[]
 }
 
 interface Props {
@@ -33,13 +36,26 @@ export default function AddChartModal({ open, onClose, onApply, db }: Props) {
   const [breakdownIds, setBreakdownIds] = useState<Set<string>>(new Set())
   const [chartType, setChartType] = useState<ChartType>("PIE")
   const [multiSeries, setMultiSeries] = useState(false)
+  const [colorPickerOpen, setColorPickerOpen] = useState(false)
+  const [primaryColor, setPrimaryColor] = useState("")
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [advancedColors, setAdvancedColors] = useState<string[]>([])
+  const [openAdvancedPicker, setOpenAdvancedPicker] = useState<number | null>(null)
 
   useEffect(() => {
     if (open && db && db.questions.length > 0) {
       setQuestionId(db.questions[0].id)
       setBreakdownIds(new Set())
+      setPrimaryColor("")
+      setShowAdvanced(false)
+      setAdvancedColors([])
     }
   }, [open, db])
+
+  // Reset advanced colors count when breakdowns change
+  useEffect(() => {
+    setAdvancedColors(Array.from(breakdownIds).map(() => ""))
+  }, [breakdownIds])
 
   if (!db) return null
 
@@ -55,11 +71,19 @@ export default function AddChartModal({ open, onClose, onApply, db }: Props) {
 
   const handleApply = () => {
     if (!questionId || breakdownIds.size === 0) return
+    const nOptions = breakdownIds.size
+    const finalColors = showAdvanced && advancedColors.some(Boolean)
+      ? advancedColors
+      : primaryColor
+        ? autoDeriveColors(primaryColor, nOptions)
+        : []
+
     onApply({
       questionId,
       breakdownIds: Array.from(breakdownIds),
       chartType,
       multiSeries,
+      colors: finalColors,
     })
     onClose()
   }
@@ -131,7 +155,7 @@ export default function AddChartModal({ open, onClose, onApply, db }: Props) {
         ))}
       </select>
 
-      <label className="flex items-center gap-2 text-sm">
+      <label className="flex items-center gap-2 text-sm mb-3">
         <input
           type="checkbox"
           checked={multiSeries}
@@ -139,6 +163,73 @@ export default function AddChartModal({ open, onClose, onApply, db }: Props) {
         />
         Multi-serie (desglose por sub-categoría)
       </label>
+
+      {/* Color section */}
+      <div className="mt-2">
+        <label className="block text-xs text-neutral-400 mb-2">Color principal</label>
+        <div className="relative">
+          <button
+            type="button"
+            aria-label="Abrir selector de color principal"
+            onClick={() => setColorPickerOpen((v) => !v)}
+            className="flex items-center gap-2 px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm hover:bg-neutral-700"
+          >
+            {primaryColor ? (
+              <div className="w-4 h-4 rounded border border-neutral-600" style={{ backgroundColor: primaryColor }} />
+            ) : (
+              <span className="text-neutral-500 text-xs">Auto</span>
+            )}
+            <span className="text-xs text-neutral-300">{primaryColor || "Auto"} ▾</span>
+          </button>
+          <ColorPicker
+            open={colorPickerOpen}
+            value={primaryColor}
+            onChange={(c) => { setPrimaryColor(c); setColorPickerOpen(false) }}
+            onClose={() => setColorPickerOpen(false)}
+          />
+        </div>
+
+        {/* Avanzados expand */}
+        <button
+          type="button"
+          onClick={() => setShowAdvanced((v) => !v)}
+          className="mt-2 text-xs text-neutral-500 hover:text-neutral-300"
+        >
+          {showAdvanced ? "▴" : "▾"} Avanzados (N colores individuales)
+        </button>
+
+        {showAdvanced && (
+          <div className="mt-2 space-y-2">
+            {advancedColors.map((color, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <span className="text-xs text-neutral-400 w-16">Color {i + 1}</span>
+                <div className="relative">
+                  <button
+                    type="button"
+                    aria-label={`Color avanzado ${i + 1}`}
+                    onClick={() => setOpenAdvancedPicker(openAdvancedPicker === i ? null : i)}
+                    className="flex items-center gap-2 px-2 py-1 bg-neutral-800 border border-neutral-700 rounded text-xs"
+                  >
+                    <div className="w-4 h-4 rounded border border-neutral-600" style={{ backgroundColor: color || "#7F7F7F" }} />
+                    <span>{color || "Auto"}</span>
+                  </button>
+                  <ColorPicker
+                    open={openAdvancedPicker === i}
+                    value={color}
+                    onChange={(c) => {
+                      const next = [...advancedColors]
+                      next[i] = c
+                      setAdvancedColors(next)
+                      setOpenAdvancedPicker(null)
+                    }}
+                    onClose={() => setOpenAdvancedPicker(null)}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </Modal>
   )
 }

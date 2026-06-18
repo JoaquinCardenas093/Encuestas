@@ -33,6 +33,7 @@ interface Store {
   addCharts(slideId: string, questionId: string, breakdownIds: string[], chartType: import("../types").ChartType, multiSeries: boolean): void
   removeChart(slideId: string, chartId: string): void
   updateChartType(slideId: string, chartId: string, chartType: import("../types").ChartType): void
+  updateChartColors(slideId: string, chartId: string, colors: string[]): void
   resetSlide(slideId: string): void
   resetAll(): void
 
@@ -73,6 +74,7 @@ export const useProjectStore = create<Store>()(
             parsed_db: null,
             slides: [],
             history: { past: [], future: [] },
+            palette: null,
           },
         })
       },
@@ -137,6 +139,7 @@ export const useProjectStore = create<Store>()(
             breakdown_id: bid,
             chart_type: chartType,
             multi_series: multiSeries,
+            colors: [],
           }))
           return { ...sl, charts: [...sl.charts, ...newCharts] }
         })
@@ -162,6 +165,20 @@ export const useProjectStore = create<Store>()(
                 ...sl,
                 charts: sl.charts.map((c) => (c.id === chartId ? { ...c, chart_type: chartType } : c)),
               },
+        )
+        set({ state: { ...s, slides } })
+      },
+
+      updateChartColors(slideId, chartId, colors) {
+        const s = get().state
+        if (!s) return
+        const slides = s.slides.map((sl) =>
+          sl.id !== slideId ? sl : {
+            ...sl,
+            charts: sl.charts.map((c) =>
+              c.id !== chartId ? c : { ...c, colors }
+            ),
+          }
         )
         set({ state: { ...s, slides } })
       },

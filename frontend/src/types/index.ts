@@ -33,6 +33,7 @@ export interface Chart {
   breakdown_id: string
   chart_type: ChartType
   multi_series: boolean
+  colors: string[]   // per-slice/series colors; empty array = cascade to project/style-guide/built-in
 }
 
 export interface Analysis {
@@ -69,6 +70,7 @@ export interface ProjectState {
   parsed_db: ParsedDB | null
   slides: Slide[]
   history: { past: unknown[]; future: unknown[] }
+  palette: Record<string, string> | null  // optional project-level color role defaults
 }
 
 export interface TemplateInfo {

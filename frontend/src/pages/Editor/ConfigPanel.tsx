@@ -4,6 +4,7 @@ import { useProjectStore } from "../../store/project"
 import * as api from "../../api/client"
 import AddChartModal from "./modals/AddChartModal"
 import AddAnalysisModal from "./modals/AddAnalysisModal"
+import { ColorPicker } from "../../components/ColorPicker"
 import type { ChartType } from "../../types"
 
 const CHART_TYPES: ChartType[] = [
@@ -31,8 +32,10 @@ export default function ConfigPanel({ slideId }: Props) {
   const updateSeparatorTitle = useProjectStore((s) => s.updateSeparatorTitle)
   const addAnalysis = useProjectStore((s) => s.addAnalysis)
   const removeAnalysis = useProjectStore((s) => s.removeAnalysis)
+  const updateChartColors = useProjectStore((s) => s.updateChartColors)
   const [chartModalOpen, setChartModalOpen] = useState(false)
   const [analysisModalOpen, setAnalysisModalOpen] = useState(false)
+  const [chartColorOpen, setChartColorOpen] = useState<string | null>(null)
 
   const slide = state?.slides.find((s) => s.id === slideId)
   if (!slide) {
@@ -77,6 +80,29 @@ export default function ConfigPanel({ slideId }: Props) {
                     </option>
                   ))}
                 </select>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setChartColorOpen(chartColorOpen === c.id ? null : c.id)}
+                    aria-label={`color-${c.id}`}
+                    className="p-1 rounded hover:bg-neutral-700"
+                  >
+                    <div
+                      className="w-4 h-4 rounded border border-neutral-600"
+                      style={{ backgroundColor: c.colors?.[0] || "#7F7F7F" }}
+                    />
+                  </button>
+                  <ColorPicker
+                    open={chartColorOpen === c.id}
+                    value={c.colors?.[0] ?? ""}
+                    onChange={(color) => {
+                      const newColors = color ? [color] : []
+                      updateChartColors(slide.id, c.id, newColors)
+                      setChartColorOpen(null)
+                    }}
+                    onClose={() => setChartColorOpen(null)}
+                  />
+                </div>
                 <button
                   onClick={() => removeChart(slide.id, c.id)}
                   className="text-neutral-500 hover:text-red-400"

@@ -93,6 +93,15 @@ describe("store chart operations", () => {
     useProjectStore.getState().resetAll()
     expect(useProjectStore.getState().state!.slides).toEqual([])
   })
+
+  it("updateChartColors sets colors array on chart", () => {
+    const shellId = useProjectStore.getState().state!.slides[1].id
+    useProjectStore.getState().addCharts(shellId, "q1", ["general"], "PIE", false)
+    const chartId = useProjectStore.getState().state!.slides[1].charts[0].id
+    useProjectStore.getState().updateChartColors(shellId, chartId, ["#7F7F7F", "#BFBFBF"])
+    const colors = useProjectStore.getState().state!.slides[1].charts[0].colors
+    expect(colors).toEqual(["#7F7F7F", "#BFBFBF"])
+  })
 })
 
 describe("store analysis operations", () => {
