@@ -68,14 +68,37 @@ Scope: {scope}
     return text
 
 
-LAYOUT_SYSTEM = """Sos diseñador de slides. Te paso config slide y free_area canvas. Devolvés JSON con posiciones EMU para cada elemento (charts y análisis).
+LAYOUT_SYSTEM = """Sos diseñador de slides de encuestas. Te paso config slide y free_area canvas. Devolvés JSON con posiciones EMU para cada elemento.
 
 Reglas:
 - Coords todas dentro de free_area (x ≥ free_area.x, x+cx ≤ free_area.x+free_area.cx, similar Y).
-- Sin overlaps.
-- Padding mínimo 200000 EMU entre elementos.
-- Output: solo JSON válido, sin texto explicativo, formato:
-  {"elements": [{"role": "chart_0", "x": ..., "y": ..., "cx": ..., "cy": ...}, ...]}
+- Sin overlaps. Padding mínimo 200000 EMU entre elementos.
+- Cada breakdown ⇒ chart separado (NUNCA dos breakdowns en un mismo chart con multi-series).
+- Charts deben ocupar ≥75% de la altura de free_area cuando hay 1-2 charts; ≥65% cuando hay 3-6 (grid).
+- Output: solo JSON válido, sin texto explicativo.
+
+Slide canvas estándar: 12192000 × 6858000 EMU. Free area típica: x=487680 y=1097280 cx=11216640 cy=5212080.
+
+Ejemplo 1 — Single binary PIE (binary_general):
+  Input: n_charts=1, question_type=binary, n_breakdowns=0
+  Output: {"elements":[{"role":"chart_0","x":1828800,"y":1722120,"cx":7619680,"cy":4114800}]}
+
+Ejemplo 2 — Two charts side-by-side (comparison_two_charts, e.g. Sexo PIE + Edad BAR):
+  Input: n_charts=2, breakdowns=["sexo","edad"]
+  Output: {"elements":[
+    {"role":"chart_0","x":1234440,"y":1463040,"cx":3504000,"cy":5181600},
+    {"role":"chart_1","x":6918960,"y":1463040,"cx":3960000,"cy":5181600}
+  ]}
+
+Ejemplo 3 — Three charts grid (n_charts_grid, e.g. Sexo/NSE/Edad demographics):
+  Input: n_charts=3, breakdowns=["sexo","nse","edad"]
+  Output: {"elements":[
+    {"role":"chart_0","x":487680,"y":1463040,"cx":3504000,"cy":4965600},
+    {"role":"chart_1","x":4357680,"y":1463040,"cx":3504000,"cy":4965600},
+    {"role":"chart_2","x":8227680,"y":1463040,"cx":3504000,"cy":4965600}
+  ]}
+
+Si hay análisis (chart_analysis_i / question_analysis_i / slide_analysis), apilá debajo del chart al que aplica con altura ≈ 15% del chart y 200000 EMU de padding.
 """
 
 

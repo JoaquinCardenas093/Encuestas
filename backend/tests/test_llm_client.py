@@ -154,3 +154,15 @@ def test_suggest_layout_invalid_json_falls_back(mock_client):
     res = suggest_layout(n_charts=1, chart_types=["PIE"], n_chart_an=0, n_q_an=0, has_slide_an=False, free_area={"x": 0, "y": 0, "cx": 12000000, "cy": 7000000})
     # falls back to heuristic
     assert res["source"] in ("heuristic", "ai_fallback")
+
+
+def test_layout_system_includes_aurora_few_shot():
+    from aurum_encuestas.llm_client import LAYOUT_SYSTEM
+    # Must mention three reference cases
+    assert "Ejemplo 1" in LAYOUT_SYSTEM
+    assert "Ejemplo 2" in LAYOUT_SYSTEM
+    assert "Ejemplo 3" in LAYOUT_SYSTEM
+    # Must include Aurora-style EMU coords as ballpark
+    assert "12192000" in LAYOUT_SYSTEM  # full slide width hint
+    # Must mention single-series per breakdown convention
+    assert "breakdown" in LAYOUT_SYSTEM.lower()
