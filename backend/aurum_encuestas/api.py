@@ -1,5 +1,7 @@
 import base64
+import logging
 import tempfile
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, File, Request, UploadFile
@@ -14,9 +16,25 @@ from .pptx_generator import build_pptx
 from .pptx_template import load_template
 from .project_store import load_project, save_project
 from .render_service import render_slide_to_png
+from .style_guide import migrate_legacy_files
 from .xlsx_parser import parse_xlsx
 
-app = FastAPI(title="AurumEncuestas API", version="0.1.0")
+log = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app):
+    # Startup
+    try:
+        migrate_legacy_files()
+        log.info("M6 migration check complete")
+    except Exception as exc:
+        log.warning("migrate_legacy_files failed (non-fatal): %s", exc)
+    yield
+    # Shutdown (nothing to do)
+
+
+app = FastAPI(title="AurumEncuestas API", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
