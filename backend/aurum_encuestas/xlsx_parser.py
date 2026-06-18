@@ -209,7 +209,7 @@ def _detect_data_blocks(ws) -> dict:
             blocks.append((current_start, col - 1, current_kind))
             current_start = col
             current_kind = k
-        prev_kind = k
+        prev_kind = k  # noqa: F841
     if current_start is not None:
         blocks.append((current_start, max_col, current_kind))
 

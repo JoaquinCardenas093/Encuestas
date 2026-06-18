@@ -7,7 +7,6 @@ from pathlib import Path
 
 from .errors import RenderError
 
-
 # Minimal 1x1 transparent PNG fallback (only when libreoffice itself missing)
 _PLACEHOLDER_PNG = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="

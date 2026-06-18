@@ -1,11 +1,10 @@
 """Tests for pattern_renderer — M6.6."""
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
+
 from pptx import Presentation
 
-from aurum_encuestas.pattern_renderer import render_pattern, merge_implementations
 from aurum_encuestas.element_renderers.render_context import RenderContext
-
+from aurum_encuestas.pattern_renderer import merge_implementations, render_pattern
 
 FREE_AREA = {"x": 500000, "y": 1200000, "cx": 11000000, "cy": 5500000}
 
@@ -118,8 +117,7 @@ def test_render_pattern_extends_merges_parent_elements():
 
 # ── T2: resolve_position tests ──────────────────────────────────────────────
 
-from aurum_encuestas.pattern_renderer import resolve_position
-
+from aurum_encuestas.pattern_renderer import resolve_position  # noqa: E402
 
 FREE_AREA_SIMPLE = {"x": 0, "y": 0, "cx": 10_000_000, "cy": 5_000_000}
 
@@ -164,7 +162,7 @@ def test_resolve_position_defaults_for_missing_keys():
 
 # ── T4: resolve_data_source tests ────────────────────────────────────────────
 
-from aurum_encuestas.pattern_renderer import resolve_data_source
+from aurum_encuestas.pattern_renderer import resolve_data_source  # noqa: E402
 
 
 def _make_slide_config_with_charts():

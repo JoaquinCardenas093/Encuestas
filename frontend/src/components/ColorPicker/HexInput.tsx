@@ -20,10 +20,11 @@ export default function HexInput({ value, onChange }: Props) {
 
   const handleChange = (text: string) => {
     setRaw(text)
-    const normalized = normalizeHex(text)
-    if (normalized) {
+    // Only fire onChange for complete 6-char hex to avoid resetting field on 3-char shorthand
+    const stripped = text.replace(/^#/, "")
+    if (/^[0-9a-fA-F]{6}$/.test(stripped)) {
       setIsInvalid(false)
-      onChange(normalized)
+      onChange(`#${stripped.toUpperCase()}`)
     } else if (text.length > 0) {
       setIsInvalid(true)
     } else {

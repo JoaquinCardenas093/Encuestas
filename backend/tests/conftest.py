@@ -129,8 +129,8 @@ def invalid_template_no_titulo(tmp_path):
     return out
 
 
-from pptx.chart.data import CategoryChartData
-from pptx.enum.chart import XL_CHART_TYPE
+from pptx.chart.data import CategoryChartData  # noqa: E402
+from pptx.enum.chart import XL_CHART_TYPE  # noqa: E402
 
 
 @pytest.fixture

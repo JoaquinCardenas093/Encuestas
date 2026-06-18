@@ -1,10 +1,9 @@
 """Tests for style_guide_analyzer — T1 render cache, T2 vision message, T4 validate/repair, T5 pipeline."""
-import hashlib
 import json
 import os
 import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from pptx import Presentation
@@ -21,8 +20,6 @@ from aurum_encuestas.style_guide_analyzer import (
     render_corpus_slides,
     run_full_analysis_pipeline,
 )
-from aurum_encuestas.config import get_render_cache_dir
-
 
 # ─── Fixtures ───────────────────────────────────────────────────────────────
 
@@ -60,7 +57,7 @@ def test_render_corpus_slides_returns_list(tmp_path, monkeypatch, training_pptx_
     # Mock libreoffice render to return fake PNG bytes
     with patch("aurum_encuestas.style_guide_analyzer._render_slide_to_png") as mock_render:
         mock_render.return_value = b"\x89PNG\r\nfake_bytes"
-        results = render_corpus_slides(corpus_dir)
+        results = render_corpus_slides(corpus_dir)  # noqa: F841
     assert isinstance(results, list)
     assert len(results) >= 0  # May be 0 if no charts detected without real libreoffice
 
@@ -79,7 +76,7 @@ def test_render_cache_hit_skips_libreoffice(tmp_path, monkeypatch, training_pptx
         corpus_dir.mkdir(parents=True, exist_ok=True)
         import shutil
         shutil.copy(training_pptx_with_chart, corpus_dir / "test_corpus.pptx")
-        results = render_corpus_slides(corpus_dir)
+        render_corpus_slides(corpus_dir)
         # render should NOT be called for cached slides
         mock_render.assert_not_called()
 

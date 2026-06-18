@@ -1,14 +1,12 @@
 """Tests for color_resolver — cascade, auto_derive, update_recent."""
-import pytest
 from aurum_encuestas.color_resolver import (
-    resolve,
-    auto_derive,
-    update_recent,
-    normalize_hex,
     _BUILTIN_DEFAULTS,
+    auto_derive,
+    normalize_hex,
+    resolve,
+    update_recent,
 )
 from aurum_encuestas.style_guide import BUILTIN_STYLE_GUIDE
-
 
 # ────────────────────────────────────────────────────────────────────────────
 # normalize_hex
@@ -226,7 +224,7 @@ class TestAutoDerive:
 # update_recent tests
 # ────────────────────────────────────────────────────────────────────────────
 
-from aurum_encuestas.color_resolver import update_recent, get_recent_colors
+from aurum_encuestas.color_resolver import get_recent_colors  # noqa: E402
 
 
 class TestUpdateRecent:

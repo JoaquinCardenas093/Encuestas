@@ -1,21 +1,15 @@
-import pytest
 from aurum_encuestas.style_guide import (
-    StyleGuide,
-    Pattern,
-    Trigger,
-    Implementation,
     ElementChart,
+    ElementImage,
+    ElementShape,
     ElementTable,
     ElementText,
-    ElementShape,
-    ElementImage,
+    Pattern,
     Position,
     PositionAnchored,
-    GlobalConfig,
-    Typography,
-    TextPatterns,
+    StyleGuide,
+    Trigger,
 )
-
 
 # ── Position ──────────────────────────────────────────────────────────────────
 
@@ -231,7 +225,7 @@ def test_style_guide_extra_ignored():
 
 # ── BUILTIN_STYLE_GUIDE ───────────────────────────────────────────────────────
 
-from aurum_encuestas.style_guide import BUILTIN_STYLE_GUIDE
+from aurum_encuestas.style_guide import BUILTIN_STYLE_GUIDE  # noqa: E402
 
 
 def test_builtin_is_valid_style_guide():
@@ -270,9 +264,7 @@ def test_builtin_priority_ordering():
 
 # ── migrate_legacy_files ──────────────────────────────────────────────────────
 
-import os
-from pathlib import Path
-from aurum_encuestas.style_guide import migrate_legacy_files
+from aurum_encuestas.style_guide import migrate_legacy_files  # noqa: E402
 
 
 def test_migrate_moves_pptx_to_corpus(tmp_path, monkeypatch):
@@ -324,8 +316,9 @@ def test_migrate_no_training_dir(tmp_path, monkeypatch):
 
 # ── load_active ───────────────────────────────────────────────────────────────
 
-import json
-from aurum_encuestas.style_guide import load_active
+import json  # noqa: E402
+
+from aurum_encuestas.style_guide import load_active  # noqa: E402
 
 
 def test_load_active_returns_builtin_when_no_file(tmp_path, monkeypatch):

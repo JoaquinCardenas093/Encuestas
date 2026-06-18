@@ -1,13 +1,11 @@
 """Tests for pattern_classifier module — field extractors, trigger evaluation, classify, LRU cache."""
-import pytest
 from aurum_encuestas.pattern_classifier import (
-    extract_context,
-    evaluate_trigger,
     classify,
     clear_cache,
+    evaluate_trigger,
+    extract_context,
 )
-from aurum_encuestas.style_guide import Trigger, Pattern, Implementation, StyleGuide, BUILTIN_STYLE_GUIDE
-
+from aurum_encuestas.style_guide import BUILTIN_STYLE_GUIDE, Pattern, StyleGuide, Trigger
 
 # ────────────────────────────────────────────────────────────────────────────
 # Helper builders
