@@ -224,3 +224,90 @@ def test_recents_add_and_list(tmp_path, monkeypatch):
     assert r.status_code == 200
     recs = r.json()["recents"]
     assert any(rec["path"] == save_path for rec in recs)
+
+
+# ─── M6.8 T2: Corpus CRUD endpoints ─────────────────────────────────────────
+
+import io
+
+
+def test_corpus_add_pptx(tmp_path, monkeypatch, training_pptx_path):
+    """POST /api/training/corpus/add saves PPT to corpus dir and returns metadata."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    with open(training_pptx_path, "rb") as f:
+        r = client.post(
+            "/api/training/corpus/add",
+            files={"file": ("demo.pptx", f, "application/octet-stream")},
+        )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["filename"] == "demo.pptx"
+    assert "slides_with_charts" in body
+    assert "added_at" in body
+
+    # Verify file actually saved
+    corpus_dir = tmp_path / ".aurum" / "training" / "corpus"
+    assert (corpus_dir / "demo.pptx").exists()
+
+
+def test_corpus_add_rejects_non_pptx(tmp_path, monkeypatch):
+    """Only .pptx files should be accepted."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    fake_csv = io.BytesIO(b"col1,col2\n1,2")
+    r = client.post(
+        "/api/training/corpus/add",
+        files={"file": ("data.csv", fake_csv, "text/csv")},
+    )
+    assert r.status_code == 400
+    assert "pptx" in r.json()["detail"].lower()
+
+
+def test_corpus_list_returns_pptxs(tmp_path, monkeypatch, training_pptx_path):
+    """GET /api/training/corpus/list returns list of corpus PPTs with metadata."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    corpus_dir = tmp_path / ".aurum" / "training" / "corpus"
+    corpus_dir.mkdir(parents=True, exist_ok=True)
+    import shutil
+    shutil.copy(training_pptx_path, corpus_dir / "deck_a.pptx")
+    shutil.copy(training_pptx_path, corpus_dir / "deck_b.pptx")
+
+    r = client.get("/api/training/corpus/list")
+    assert r.status_code == 200
+    body = r.json()
+    assert "pptxs" in body
+    filenames = [p["filename"] for p in body["pptxs"]]
+    assert "deck_a.pptx" in filenames
+    assert "deck_b.pptx" in filenames
+    # Each item should have filename, slides_with_charts, added_at
+    for pptx_info in body["pptxs"]:
+        assert "filename" in pptx_info
+        assert "added_at" in pptx_info
+        assert "slides_with_charts" in pptx_info
+
+
+def test_corpus_list_empty_when_no_corpus(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    r = client.get("/api/training/corpus/list")
+    assert r.status_code == 200
+    assert r.json()["pptxs"] == []
+
+
+def test_corpus_delete_removes_file(tmp_path, monkeypatch, training_pptx_path):
+    """POST /api/training/corpus/delete removes file from corpus."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    corpus_dir = tmp_path / ".aurum" / "training" / "corpus"
+    corpus_dir.mkdir(parents=True, exist_ok=True)
+    import shutil
+    shutil.copy(training_pptx_path, corpus_dir / "to_delete.pptx")
+
+    r = client.post("/api/training/corpus/delete", json={"filename": "to_delete.pptx"})
+    assert r.status_code == 200
+    assert r.json()["deleted"] is True
+    assert not (corpus_dir / "to_delete.pptx").exists()
+
+
+def test_corpus_delete_missing_file_still_ok(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    r = client.post("/api/training/corpus/delete", json={"filename": "nonexistent.pptx"})
+    assert r.status_code == 200
+    assert r.json()["deleted"] is False

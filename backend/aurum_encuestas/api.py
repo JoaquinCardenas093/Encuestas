@@ -3,6 +3,7 @@ import logging
 import tempfile
 import uuid
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime as dt
 from pathlib import Path
 
 from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Request, UploadFile
@@ -11,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from .config import add_recent, load_recents
+from .config import add_recent, get_corpus_dir, load_recents
 from .errors import AurumError
 from .llm_client import generate_analysis, suggest_layout
 from .models import ProjectState
@@ -183,6 +184,80 @@ async def generate_analysis_endpoint(req: GenerateAnalysisRequest):
 
 # M4 training endpoints (add/list/delete/reprocess/bank) removed in M6.2.
 # New corpus/style-guide/cache endpoints added below in M6.8.
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# M6.8 T2: Corpus CRUD endpoints
+# ────────────────────────────────────────────────────────────────────────────
+
+def _count_slides_with_charts(pptx_path: Path) -> int:
+    """Count slides in PPTX that have at least one chart shape."""
+    try:
+        from pptx import Presentation
+        prs = Presentation(str(pptx_path))
+        return sum(
+            1 for slide in prs.slides
+            if any(getattr(sh, "has_chart", False) for sh in slide.shapes)
+        )
+    except Exception:
+        return 0
+
+
+@app.post("/api/training/corpus/add")
+async def corpus_add(file: UploadFile = File(...)):
+    """Save an uploaded PPT to the corpus directory."""
+    filename = file.filename or "upload.pptx"
+    if not filename.lower().endswith(".pptx"):
+        raise HTTPException(status_code=400, detail="Only .pptx files are accepted for the training corpus.")
+
+    corpus_dir = get_corpus_dir()
+    dest = corpus_dir / Path(filename).name  # strip any path component
+    contents = await file.read()
+    dest.write_bytes(contents)
+
+    slides_with_charts = _count_slides_with_charts(dest)
+    return {
+        "filename": dest.name,
+        "slides_with_charts": slides_with_charts,
+        "added_at": dt.now(UTC).isoformat(),
+    }
+
+
+@app.get("/api/training/corpus/list")
+async def corpus_list():
+    """List all PPTs in the corpus directory with metadata."""
+    corpus_dir = get_corpus_dir()
+    pptxs = []
+    for p in sorted(corpus_dir.glob("*.pptx")):
+        pptxs.append({
+            "filename": p.name,
+            "slides_with_charts": _count_slides_with_charts(p),
+            "added_at": dt.fromtimestamp(p.stat().st_mtime, UTC).isoformat(),
+            "size_bytes": p.stat().st_size,
+        })
+    return {"pptxs": pptxs}
+
+
+class CorpusDeleteRequest(BaseModel):
+    filename: str
+
+
+@app.post("/api/training/corpus/delete")
+async def corpus_delete(req: CorpusDeleteRequest):
+    """Delete a PPT from the corpus by filename."""
+    corpus_dir = get_corpus_dir()
+    # Safety: strip path components; only allow simple filename
+    safe_name = Path(req.filename).name
+    target = corpus_dir / safe_name
+    # Extra guard: resolved path must be inside corpus_dir
+    try:
+        target.resolve().relative_to(corpus_dir.resolve())
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid filename — path traversal not allowed.")
+    if not target.exists():
+        return {"deleted": False, "message": f"{safe_name} not found in corpus"}
+    target.unlink()
+    return {"deleted": True}
 
 
 class SuggestLayoutRequest(BaseModel):
