@@ -190,39 +190,8 @@ def test_generate_analysis_returns_fallback_on_error(mock_gen):
     assert "[Análisis no disponible" in r.json()["text"]
 
 
-def test_training_add_and_list(tmp_path, monkeypatch, training_pptx_path):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    with open(training_pptx_path, "rb") as f:
-        r = client.post("/api/training/add", files={"file": ("t.pptx", f, "application/octet-stream")})
-    assert r.status_code == 200
-    assert r.json()["layouts_extracted"] >= 1
-
-    r2 = client.get("/api/training/list")
-    assert r2.status_code == 200
-    assert len(r2.json()["pptxs"]) >= 1
-
-
-def test_training_bank_returns_layouts(tmp_path, monkeypatch, training_pptx_path):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    with open(training_pptx_path, "rb") as f:
-        client.post("/api/training/add", files={"file": ("t.pptx", f, "application/octet-stream")})
-    r = client.get("/api/training/bank")
-    assert r.status_code == 200
-    bank = r.json()
-    assert "layouts" in bank
-    assert len(bank["layouts"]) >= 1
-
-
-def test_training_delete(tmp_path, monkeypatch, training_pptx_path):
-    monkeypatch.setenv("HOME", str(tmp_path))
-    with open(training_pptx_path, "rb") as f:
-        client.post("/api/training/add", files={"file": ("removeme.pptx", f, "application/octet-stream")})
-    r = client.post("/api/training/delete", json={"filename": "removeme.pptx"})
-    assert r.status_code == 200
-    r2 = client.get("/api/training/list")
-    files = [p["filename"] for p in r2.json()["pptxs"]]
-    assert "removeme.pptx" not in files
-
+# test_training_add_and_list, test_training_bank_returns_layouts, test_training_delete
+# removed in M6.2 — M4/M5 training endpoints deleted; will be replaced by M6.8 corpus CRUD tests.
 
 @patch("aurum_encuestas.api.suggest_layout")
 def test_suggest_layout_endpoint(mock_sug):

@@ -10,7 +10,6 @@ from pptx.util import Emu
 
 from .config import get_layout_bank_path
 from .data_extractor import extract_chart_data
-from .layout_matcher import match_layout
 from .models import Chart, LayoutBank, ProjectState, Slide
 
 CHART_TYPE_MAP = {
@@ -157,22 +156,55 @@ def build_pptx(state: ProjectState, out_path: str) -> None:
 
 
 def _add_slide_content(slide, slide_def: Slide, state: ProjectState, free_area: dict) -> None:
-    """Add charts + analyses to a shell slide per layout matcher."""
+    """Add charts + analyses to a shell slide.
+
+    M6.2: Tries new M6 pipeline stubs first (classify → render_pattern). Since classify
+    returns None (stub), falls through to legacy heuristic chart insertion.
+    """
     n_chart_an = sum(1 for a in slide_def.analyses if a.scope == "chart")
     n_q_an = sum(1 for a in slide_def.analyses if a.scope == "question")
     has_slide_an = any(a.scope == "slide" for a in slide_def.analyses)
 
-    layout_result = match_layout(
-        bank=_load_bank(),
+    # M6 pipeline (stubs — will be fully implemented in M6.6)
+    from .style_guide import load_active
+    from .pattern_classifier import classify
+    from .pattern_renderer import render_pattern
+
+    _style_guide = load_active()
+    _slide_config = {
+        "n_charts": len(slide_def.charts),
+        "charts": [c.model_dump() for c in slide_def.charts],
+        "analyses": [a.model_dump() for a in slide_def.analyses],
+        "free_area": free_area,
+    }
+    _matched_pattern = classify(_slide_config, {}, _style_guide)
+    if _matched_pattern is not None:
+        render_pattern(
+            pattern=_matched_pattern,
+            slide=slide,
+            slide_config=_slide_config,
+            parsed_db={},
+            free_area=free_area,
+            chart_colors=[],
+            project_palette=state.palette,
+            style_guide=_style_guide,
+        )
+        # Pattern renderer handled all elements; legacy insertion skipped.
+        return
+
+    # Legacy chart insertion (temp fallback during M6.2 while stubs are no-ops)
+    # classify() returns None, so this block always runs until M6.6.
+    from .llm_client import _compute_layout_heuristic
+    layout_result = _compute_layout_heuristic(
         n_charts=len(slide_def.charts),
         chart_types=[c.chart_type for c in slide_def.charts],
-        n_chart_an=n_chart_an,
-        n_q_an=n_q_an,
-        has_slide_an=has_slide_an,
+        n_chart_analyses=n_chart_an,
+        n_question_analyses=n_q_an,
+        has_slide_analysis=has_slide_an,
         free_area=free_area,
     )
     layout = {"elements": layout_result["elements"]}
-    layout_chart_style = layout_result.get("chart_style") or {}
+    layout_chart_style = {}
 
     # Insert charts and analysis textboxes per layout elements
     for el in layout["elements"]:
@@ -239,22 +271,9 @@ def _add_chart(slide, chart_def: Chart, state: ProjectState, el: dict, specific_
 def _apply_training_style(chart, chart_type: str, specific_style: dict | None = None) -> None:
     """Apply colors / font / data labels / legend from training to a fresh chart.
     If specific_style provided (from a matched layout), use it. Else aggregate from bank."""
+    # M6.2: training_extractor removed; chart_style comes from specific_style only.
+    # Full color resolution from style_guide planned in M6.4 (color_resolver).
     style = specific_style or {}
-    if not style:
-        from .training_extractor import aggregate_chart_style_by_type
-        bank = _load_bank()
-        if bank.layouts:
-            agg = aggregate_chart_style_by_type(bank)
-            # Try Aurora-leaning: prefer a layout that has the most colors of this chart_type
-            best_lay = None
-            best_count = -1
-            for lay in bank.layouts:
-                for role, st in (lay.chart_style or {}).items():
-                    ct = next((e.chart_type for e in lay.elements if e.role == role), None)
-                    if ct == chart_type and len(st.get("colors", [])) > best_count:
-                        best_lay = st
-                        best_count = len(st.get("colors", []))
-            style = best_lay or agg.get(chart_type) or {}
     if not style:
         return
 

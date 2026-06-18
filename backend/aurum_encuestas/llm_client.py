@@ -79,6 +79,56 @@ Reglas:
 """
 
 
+_PADDING = 200_000  # EMU
+_GRID = {1: (1, 1), 2: (1, 2), 3: (1, 3), 4: (2, 2), 5: (2, 3), 6: (2, 3), 7: (3, 3), 8: (3, 3), 9: (3, 3)}
+
+
+def _compute_layout_heuristic(
+    n_charts: int,
+    chart_types: list[str],
+    n_chart_analyses: int,
+    n_question_analyses: int,
+    has_slide_analysis: bool,
+    free_area: dict,
+) -> dict:
+    """Deterministic fallback layout — inlined from deleted layout_engine.py."""
+    elements: list[dict] = []
+    cx_, cy_ = free_area["x"], free_area["y"]
+    cw, ch = free_area["cx"], free_area["cy"]
+
+    slide_an_h = int(ch * 0.15) if has_slide_analysis else 0
+    chart_area_h = ch - slide_an_h
+    has_chart_an = n_chart_analyses > 0
+    chart_an_h = int(chart_area_h * 0.18) if has_chart_an else 0
+    grid_h = chart_area_h - chart_an_h
+
+    if n_charts > 0:
+        n = min(n_charts, 9)
+        rows, cols = _GRID[n]
+        cell_w = (cw - _PADDING * (cols - 1)) // cols
+        cell_h = (grid_h - _PADDING * (rows - 1)) // rows
+        for i in range(n_charts):
+            r, c = divmod(i, cols)
+            x = cx_ + c * (cell_w + _PADDING)
+            y = cy_ + r * (cell_h + _PADDING)
+            elements.append({"role": f"chart_{i}", "x": x, "y": y, "cx": cell_w, "cy": cell_h,
+                              "chart_type": chart_types[i] if i < len(chart_types) else "BAR"})
+        for i in range(min(n_chart_analyses, n_charts)):
+            ce = elements[i]
+            elements.append({"role": f"chart_analysis_{i}", "x": ce["x"],
+                              "y": ce["y"] + ce["cy"] + _PADDING // 2,
+                              "cx": ce["cx"], "cy": chart_an_h - _PADDING, "anchor_chart": i})
+    for i in range(n_question_analyses):
+        elements.append({"role": f"question_analysis_{i}", "x": cx_,
+                          "y": cy_ + chart_area_h - chart_an_h + _PADDING,
+                          "cx": cw, "cy": chart_an_h - _PADDING})
+    if has_slide_analysis:
+        elements.append({"role": "slide_analysis", "x": cx_,
+                          "y": cy_ + chart_area_h + _PADDING // 2,
+                          "cx": cw, "cy": slide_an_h - _PADDING})
+    return {"elements": elements}
+
+
 def suggest_layout(
     n_charts: int,
     chart_types: list[str],
@@ -88,8 +138,7 @@ def suggest_layout(
     free_area: dict,
 ) -> dict:
     if _client is None:
-        from .layout_engine import compute_layout
-        return {"source": "heuristic", **compute_layout(n_charts, chart_types, n_chart_an, n_q_an, has_slide_an, free_area)}
+        return {"source": "heuristic", **_compute_layout_heuristic(n_charts, chart_types, n_chart_an, n_q_an, has_slide_an, free_area)}
 
     user_msg = json.dumps({
         "n_charts": n_charts, "chart_types": chart_types,
@@ -114,8 +163,7 @@ def suggest_layout(
             raise ValueError("Layout validation failed")
         return {"source": "ai", **parsed}
     except Exception:
-        from .layout_engine import compute_layout
-        return {"source": "ai_fallback", **compute_layout(n_charts, chart_types, n_chart_an, n_q_an, has_slide_an, free_area)}
+        return {"source": "ai_fallback", **_compute_layout_heuristic(n_charts, chart_types, n_chart_an, n_q_an, has_slide_an, free_area)}
 
 
 def _validate_layout(parsed: dict, free_area: dict) -> bool:

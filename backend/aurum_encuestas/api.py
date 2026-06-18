@@ -163,66 +163,9 @@ async def generate_analysis_endpoint(req: GenerateAnalysisRequest):
         return {"text": "[Análisis no disponible — editar manualmente]", "fallback": True}
 
 
-import json as _json
-from datetime import UTC, datetime
+from .config import add_recent, load_recents
 
-from .config import add_recent, get_layout_bank_path, get_training_dir, load_recents
-from .training_extractor import build_bank_from_pptxs, extract_layouts_from_pptx
-
-
-def _save_bank() -> dict:
-    pptxs = sorted([str(p) for p in get_training_dir().glob("*.pptx")])
-    bank = build_bank_from_pptxs(pptxs)
-    get_layout_bank_path().write_text(bank.model_dump_json(indent=2), encoding="utf-8")
-    return bank.model_dump()
-
-
-@app.post("/api/training/add")
-async def training_add(file: UploadFile = File(...)):
-    contents = await file.read()
-    dest = get_training_dir() / file.filename
-    dest.write_bytes(contents)
-    layouts = extract_layouts_from_pptx(str(dest))
-    _save_bank()
-    return {"filename": file.filename, "layouts_extracted": len(layouts), "added_at": datetime.now(UTC).isoformat()}
-
-
-@app.get("/api/training/list")
-async def training_list():
-    bank_path = get_layout_bank_path()
-    bank = _json.loads(bank_path.read_text()) if bank_path.exists() else {"layouts": [], "source_pptxs": []}
-    pptxs_info = []
-    for p in sorted(get_training_dir().glob("*.pptx")):
-        count = sum(1 for lay in bank.get("layouts", []) if lay.get("source", "").startswith(p.name + "#"))
-        pptxs_info.append({"filename": p.name, "added_at": datetime.fromtimestamp(p.stat().st_mtime, UTC).isoformat(), "layouts_extracted": count, "status": "ok"})
-    return {"pptxs": pptxs_info, "bank_size": len(bank.get("layouts", []))}
-
-
-class DeleteTrainingRequest(BaseModel):
-    filename: str
-
-
-@app.post("/api/training/delete")
-async def training_delete(req: DeleteTrainingRequest):
-    p = get_training_dir() / req.filename
-    if p.exists():
-        p.unlink()
-    _save_bank()
-    return {"deleted": True}
-
-
-@app.post("/api/training/reprocess")
-async def training_reprocess():
-    bank = _save_bank()
-    return {"reprocessed": True, "bank_size": len(bank.get("layouts", []))}
-
-
-@app.get("/api/training/bank")
-async def training_bank():
-    p = get_layout_bank_path()
-    if not p.exists():
-        return {"layouts": [], "source_pptxs": []}
-    return _json.loads(p.read_text())
+# TODO M6.8: new training endpoints (corpus CRUD + AI analyze + style-guide GET/PUT)
 
 
 from .llm_client import suggest_layout
