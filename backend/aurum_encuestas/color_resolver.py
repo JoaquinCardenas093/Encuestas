@@ -16,6 +16,7 @@ from __future__ import annotations
 import colorsys
 import logging
 import re
+from typing import Any
 
 log = logging.getLogger(__name__)
 
@@ -208,7 +209,7 @@ def build_render_context(
     slide_config: Any,
     chart_colors_override: Any,
     free_area: dict,
-) -> "RenderContext":
+) -> Any:
     """Build a fully-resolved RenderContext for a slide.
 
     Args:
@@ -221,7 +222,6 @@ def build_render_context(
         RenderContext ready for element_renderers
     """
     from .element_renderers.render_context import RenderContext
-    from typing import Any as _Any
 
     # Resolve typography from style_guide
     try:

@@ -1,6 +1,6 @@
 import json as _json
+import logging
 import re
-from copy import deepcopy
 
 from lxml import etree
 from pptx import Presentation
@@ -155,8 +155,7 @@ def build_pptx(state: ProjectState, out_path: str) -> None:
     prs.save(out_path)
 
 
-import logging as _logging
-_log = _logging.getLogger(__name__)
+_log = logging.getLogger(__name__)
 
 
 def _add_slide_content(slide, slide_def: Slide, state: ProjectState, free_area: dict) -> None:
@@ -172,10 +171,10 @@ def _add_slide_content(slide, slide_def: Slide, state: ProjectState, free_area: 
     If no pattern matched and BUILTIN_STYLE_GUIDE has patterns, use the first one.
     Falls back to legacy heuristic only when no pattern is available at all.
     """
-    from .style_guide import load_active, BUILTIN_STYLE_GUIDE
-    from .pattern_classifier import classify, build_slide_config
-    from .pattern_renderer import render_pattern
     from .color_resolver import build_render_context
+    from .pattern_classifier import build_slide_config, classify
+    from .pattern_renderer import render_pattern
+    from .style_guide import BUILTIN_STYLE_GUIDE, load_active
 
     # 1. Load style guide
     try:

@@ -25,7 +25,7 @@ import hashlib
 import json
 import logging
 from collections import OrderedDict
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .style_guide import Pattern, StyleGuide, Trigger
@@ -276,13 +276,13 @@ def classify(slide_config: dict, parsed_db: dict, style_guide: StyleGuide) -> Pa
     return matched
 
 
-def classify_pattern(slide_config: Any, patterns: list) -> "Pattern | None":
+def classify_pattern(slide_config: Any, patterns: list) -> Pattern | None:
     """Classify a slide_config against a list of patterns (no parsed_db required).
 
     Convenience alias used by pptx_generator. Builds a dict-compatible slide_config
     from a SlideConfig object and delegates to classify().
     """
-    from .style_guide import StyleGuide, BUILTIN_STYLE_GUIDE
+    from .style_guide import BUILTIN_STYLE_GUIDE, StyleGuide
 
     # Build a minimal slide_config dict for extract_context
     if hasattr(slide_config, "charts"):
@@ -331,7 +331,7 @@ def build_slide_config(slide_def: Any, parsed_db: Any, db_path: str = "") -> Any
       .question — Question model from parsed_db (with .options)
       .data     — {breakdown_category: {option: {count, pct}}} dict
     """
-    from dataclasses import dataclass, field, make_dataclass
+    from dataclasses import dataclass, field
     from typing import Any as _Any
 
     @dataclass
