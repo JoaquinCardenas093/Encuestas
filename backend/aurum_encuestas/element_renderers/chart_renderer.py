@@ -197,49 +197,7 @@ def _apply_labels(chart, labels_cfg: dict, ctx: RenderContext) -> None:
 
 
 def _resolve_position(position: dict, ctx: RenderContext) -> tuple[int, int, int, int]:
-    """Convert relative position dict to absolute EMU via free_area."""
-    fa = ctx.free_area
-    fa_x = fa.get("x", 0)
-    fa_y = fa.get("y", 0)
-    fa_cx = fa.get("cx", 1)
-    fa_cy = fa.get("cy", 1)
-
-    if "anchor" in position:
-        anchor_id = position["anchor"]
-        anchor_rect = ctx.resolved_anchors.get(anchor_id, {})
-        base_x = anchor_rect.get("x", fa_x)
-        base_y = anchor_rect.get("y", fa_y)
-        base_cx = anchor_rect.get("cx", fa_cx)
-        base_cy = anchor_rect.get("cy", fa_cy)
-        relative = position.get("relative", "right_of")
-        offset_rel = position.get("offset_rel", 0.0)
-        w_rel = position.get("w_rel", 0.3)
-        h_rel = position.get("h_rel", 0.5)
-        w = int(w_rel * fa_cx)
-        h = int(h_rel * fa_cy)
-        offset = int(offset_rel * fa_cx)
-        if relative == "right_of":
-            x = base_x + base_cx + offset
-            y = base_y
-        elif relative == "below":
-            x = base_x
-            y = base_y + base_cy + offset
-        elif relative == "above":
-            x = base_x
-            y = base_y - h - offset
-        elif relative == "left_of":
-            x = base_x - w - offset
-            y = base_y
-        else:
-            x, y = base_x, base_y
-        return x, y, w, h
-
-    x_rel = position.get("x_rel", 0.0)
-    y_rel = position.get("y_rel", 0.0)
-    w_rel = position.get("w_rel", 0.5)
-    h_rel = position.get("h_rel", 0.5)
-    x = fa_x + int(x_rel * fa_cx)
-    y = fa_y + int(y_rel * fa_cy)
-    w = int(w_rel * fa_cx)
-    h = int(h_rel * fa_cy)
-    return x, y, w, h
+    """Delegate to pattern_renderer.resolve_position (single source of truth)."""
+    from aurum_encuestas.pattern_renderer import resolve_position
+    resolved_anchors = getattr(ctx, "resolved_anchors", {}) or {}
+    return resolve_position(position, ctx.free_area, resolved_anchors)
