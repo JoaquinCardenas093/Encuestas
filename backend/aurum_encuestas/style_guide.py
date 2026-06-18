@@ -5,11 +5,10 @@ All models use `extra = "ignore"` so future AI-generated fields don't break pars
 from __future__ import annotations
 
 import json
-import shutil
 from pathlib import Path
 from typing import Annotated, Any, Literal, Optional, Union
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 
 # ────────────────────────────────────────────────────────────────────────────
