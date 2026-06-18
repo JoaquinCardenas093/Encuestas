@@ -259,6 +259,7 @@ def _render_segmented_breakdowns(slide, element: dict, ctx: RenderContext) -> No
             counts_cfg=single_counts,
             option_cfg=single_option,
             matching_chart=None,
+            font_cap={"group_header": None, "category_header": None, "counts_row": None, "option_row": None},
         )
         return
 
@@ -381,6 +382,7 @@ def _render_panel(
     group_hdr_cfg: dict, cat_hdr_cfg: dict,
     counts_cfg: dict, option_cfg: dict,
     matching_chart=None,
+    font_cap: dict | None = None,
 ) -> None:
     """Render one mini-table (1 breakdown group) at (x,y,cx,cy) EMU.
 
@@ -422,10 +424,27 @@ def _render_panel(
     # Cap sub-row font sizes so 5 sub-rows fit inside compact panel heights
     # (libreoffice expands cells when content is taller than declared height,
     # pushing later option rows below the panel and breaking the layout).
-    g_style = {**group_hdr_cfg.get("style", {}), "font_size": min(group_hdr_cfg.get("style", {}).get("font_size") or 9, 9)}
-    c_style = {**cat_hdr_cfg.get("style", {}), "font_size": min(cat_hdr_cfg.get("style", {}).get("font_size") or 8, 8)}
-    cnt_style = {**counts_cfg.get("style", {}), "font_size": min(counts_cfg.get("style", {}).get("font_size") or 7, 7)}
-    opt_style = {**option_cfg.get("style", {}), "font_size": min(option_cfg.get("style", {}).get("font_size") or 7, 7)}
+    # font_cap=None → multi-panel compact caps (9/8/7/7pt).
+    # font_cap with None values per role → single-panel mode, bypass caps.
+    def _capped(role: str, default_size: int, default_cap: int) -> int:
+        if role == "group_header":
+            raw = (group_hdr_cfg.get("style") or {}).get("font_size")
+        elif role == "category_header":
+            raw = (cat_hdr_cfg.get("style") or {}).get("font_size")
+        elif role == "counts_row":
+            raw = (counts_cfg.get("style") or {}).get("font_size")
+        else:
+            raw = (option_cfg.get("style") or {}).get("font_size")
+        size = raw if raw is not None else default_size
+        cap = (font_cap or {}).get(role, default_cap)
+        if cap is None:
+            return size
+        return min(size, cap)
+
+    g_style   = {**(group_hdr_cfg.get("style", {}) or {}), "font_size": _capped("group_header", 9, 9)}
+    c_style   = {**(cat_hdr_cfg.get("style", {}) or {}),   "font_size": _capped("category_header", 8, 8)}
+    cnt_style = {**(counts_cfg.get("style", {}) or {}),    "font_size": _capped("counts_row", 7, 7)}
+    opt_style = {**(option_cfg.get("style", {}) or {}),    "font_size": _capped("option_row", 7, 7)}
 
     # Row 0 — group_header (spans all data cols + label col)
     _set_cell(tbl.cell(0, 0), panel["label"], ctx, g_style)

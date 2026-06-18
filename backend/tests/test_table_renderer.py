@@ -89,3 +89,19 @@ def test_segmented_breakdowns_single_panel_image_style(render_ctx):
     assert tbl.cell(4, 0).text_frame.text.strip() == "No"
     assert "8.0%" in tbl.cell(4, 1).text_frame.text
     assert "8.8%" in tbl.cell(4, 2).text_frame.text
+
+    # Style assertions: verify hex-extension + single-panel override fire
+    from pptx.dml.color import RGBColor
+
+    # group_header text color should be background role → palette[2] = #EEC245 yellow
+    grp_run = tbl.cell(0, 1).text_frame.paragraphs[0].runs[0]
+    assert str(grp_run.font.color.rgb) == "EEC245", \
+        f"group_header text should be #EEC245 yellow, got {grp_run.font.color.rgb}"
+    # group_header text size should be 11 (brief mandate, not the multi-panel 9 cap)
+    assert grp_run.font.size is not None and grp_run.font.size.pt == 11, \
+        f"group_header font_size should be 11pt, got {grp_run.font.size.pt if grp_run.font.size else None}"
+
+    # option_row Sí cell (row 3, col 1): text_color should be raw hex #FFFFFF (new hex path)
+    opt_run = tbl.cell(3, 1).text_frame.paragraphs[0].runs[0]
+    assert str(opt_run.font.color.rgb) == "FFFFFF", \
+        f"option_row text should be white via hex literal, got {opt_run.font.color.rgb}"
