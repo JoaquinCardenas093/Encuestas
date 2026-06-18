@@ -57,7 +57,7 @@ export default function ColorPicker({ open, value, onChange, onClose }: Props) {
   }
 
   return (
-    <div className="absolute z-50 top-full mt-1 left-0 bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl p-4 w-72">
+    <div className="absolute z-50 top-full mt-1 right-0 bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl p-4 w-72 max-w-[calc(100vw-2rem)]">
       {suggestedPalette.length > 0 && (
         <PaletteRow
           label="Sugeridas del training"

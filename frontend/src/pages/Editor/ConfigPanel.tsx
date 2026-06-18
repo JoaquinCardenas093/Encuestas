@@ -6,17 +6,10 @@ import AddChartModal from "./modals/AddChartModal"
 import AddAnalysisModal from "./modals/AddAnalysisModal"
 import { ColorPicker } from "../../components/ColorPicker"
 import type { ChartType } from "../../types"
+import { useStyleGuideStore } from "../../store/styleGuide"
 
-const CHART_TYPES: ChartType[] = [
-  "PIE",
-  "DONUT",
-  "BAR",
-  "COLUMN",
-  "BAR_STACKED",
-  "COLUMN_STACKED",
-  "LINE",
-  "AREA",
-  "RADAR",
+const BUILTIN_CHART_TYPES: ChartType[] = [
+  "PIE", "DONUT", "BAR_HORIZONTAL", "BAR_CLUSTERED", "COLUMN_CLUSTERED",
 ]
 
 interface Props {
@@ -29,6 +22,10 @@ export default function ConfigPanel({ slideId }: Props) {
   const addCharts = useProjectStore((s) => s.addCharts)
   const removeChart = useProjectStore((s) => s.removeChart)
   const updateChartType = useProjectStore((s) => s.updateChartType)
+  const styleGuide = useStyleGuideStore((s) => s.styleGuide)
+  const CHART_TYPES = (styleGuide?.available_chart_types?.length
+    ? styleGuide.available_chart_types
+    : BUILTIN_CHART_TYPES) as ChartType[]
   const updateSeparatorTitle = useProjectStore((s) => s.updateSeparatorTitle)
   const addAnalysis = useProjectStore((s) => s.addAnalysis)
   const removeAnalysis = useProjectStore((s) => s.removeAnalysis)

@@ -290,15 +290,19 @@ def _add_chart(slide, chart_def: Chart, state: ProjectState, el: dict, specific_
         except (TypeError, ValueError):
             return 0.0
 
-    if not chart_def.multi_series:
-        # Use General (single-cat) breakdown when present; else first breakdown
+    is_general = chart_def.breakdown_id == "general" or chart_def.breakdown_id is None
+    if is_general or (not chart_def.multi_series and len(data) <= 1):
+        # Single-series: pick Total/General row (one row of data)
         primary_cat = next((c for c in data if c.lower() in ("total", "general")), None)
         if primary_cat is None and data:
             primary_cat = next(iter(data))
         series = [_value(data.get(primary_cat, {}).get(opt, {})) for opt in options] if primary_cat else [0.0] * len(options)
         cd.add_series("Total", series)
     else:
-        for cat in data:
+        # Breakdown chart: one series PER subcategory (Hombre, Mujer, 18-39, etc.)
+        # Skip Total/General if present alongside breakdowns to avoid double bars
+        cats_to_plot = [c for c in data if c.lower() not in ("total", "general")] or list(data.keys())
+        for cat in cats_to_plot:
             values = [_value(data[cat].get(opt, {})) for opt in options]
             cd.add_series(cat, values)
 
