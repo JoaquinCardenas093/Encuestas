@@ -78,7 +78,6 @@ describe("StyleGuideViewer", () => {
     render(<StyleGuideViewer styleGuide={STYLE_GUIDE} />)
     const editButtons = screen.getAllByRole("button", { name: /editar/i })
     await userEvent.click(editButtons[0])
-    const textarea = screen.getByRole("textbox")
     // textarea already contains JSON, save as-is
     await userEvent.click(screen.getByRole("button", { name: /guardar/i }))
     await waitFor(() => expect(putPattern).toHaveBeenCalledWith("binary_general", expect.objectContaining({ id: "binary_general" })))
