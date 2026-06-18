@@ -1,8 +1,22 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import AddChartModal from "../src/pages/Editor/modals/AddChartModal"
 import type { ParsedDB } from "../src/types"
+
+// Mock the styleGuide store so available_chart_types includes TABLE_WITH_MINIBARS
+// (simulating a production style guide that has been trained with that type)
+vi.mock("../src/store/styleGuide", () => ({
+  useStyleGuideStore: (selector: (s: any) => any) =>
+    selector({
+      styleGuide: {
+        available_chart_types: [
+          "PIE", "DONUT", "BAR_HORIZONTAL", "BAR_CLUSTERED", "COLUMN_CLUSTERED", "TABLE_WITH_MINIBARS",
+        ],
+        global: { suggested_palette: [] },
+      },
+    }),
+}))
 
 const DB: ParsedDB = {
   questions: [
@@ -41,5 +55,24 @@ describe("AddChartModal", () => {
     await userEvent.click(screen.getByRole("button", { name: /Aplicar/i }))
     expect(result.questionId).toBe("q1")
     expect(result.breakdownIds).toContain("general")
+  })
+})
+
+describe("AddChartModal — TABLE_WITH_MINIBARS visibility", () => {
+  const baseDb = {
+    questions: [{ id: "q1", code: "Q1", text: "Test", options: ["Sí", "No"], confidence: 0.9 }],
+    breakdowns: [
+      { id: "general", label: "General", categories: ["Total"] },
+      { id: "edad", label: "Rango de edad", categories: ["18-39", "40-59"] },
+    ],
+    sample_size: 500,
+    data_blocks: { counts_cols: [], pct_row_cols: [], pct_col_cols: [] },
+  }
+
+  it("hides TABLE_WITH_MINIBARS when no breakdown is selected", () => {
+    render(<AddChartModal open={true} onClose={() => {}} onApply={() => {}} db={baseDb as any} />)
+    const dropdown = screen.getByLabelText(/Tipo de chart/i) as HTMLSelectElement
+    const optionTexts = Array.from(dropdown.options).map((o) => o.value)
+    expect(optionTexts).not.toContain("TABLE_WITH_MINIBARS")
   })
 })
