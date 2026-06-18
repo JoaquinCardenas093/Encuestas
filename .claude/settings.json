@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '{\"hookSpecificOutput\": {\"hookEventName\": \"SessionStart\", \"additionalContext\": \"INSTRUCCIONES PERMANENTES:\\n1. GRILL-ME: Cuando el usuario presente un plan, diseño, feature, decisión de arquitectura o cambio de sistema, entrevístalo de forma exhaustiva sobre cada aspecto, recorriendo cada rama del árbol de decisiones una por una. Para cada pregunta, da tu respuesta recomendada. Haz las preguntas de a una. Si puede responderse explorando el codebase, hazlo.\\n2. BRAINSTORMING: Antes de cualquier trabajo creativo (crear features, componentes, agregar funcionalidad o modificar comportamiento), invoca la skill superpowers:brainstorming para explorar intención, requisitos y diseño antes de implementar.\\n3. WRITING-PLANS: Antes de tocar código en tareas multi-paso, invoca la skill superpowers:writing-plans para generar un plan de implementación paso a paso.\\n4. UI-UX-PRO-MAX: Antes de crear o modificar componentes visuales, páginas o layouts, invoca la skill ui-ux-pro-max:ui-ux-pro-max para aplicar guías de diseño, paletas de colores y patrones UX profesionales.\"}}'",
+            "statusMessage": "Cargando instrucciones de sesión..."
+          }
+        ]
+      }
+    ]
+  }
+}
