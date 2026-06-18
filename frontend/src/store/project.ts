@@ -6,6 +6,38 @@ function uid(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`
 }
 
+function _migrateProjectState(raw: unknown): ProjectState {
+  const obj = raw as Record<string, unknown>
+
+  // Strip legacy style_set field
+  const { style_set: _dropped, ...rest } = obj
+
+  // Ensure palette defaults to null
+  if (!("palette" in rest)) {
+    rest.palette = null
+  }
+
+  // Ensure each chart has colors: []
+  if (Array.isArray(rest.slides)) {
+    rest.slides = (rest.slides as unknown[]).map((sl) => {
+      const slide = sl as Record<string, unknown>
+      if (!Array.isArray(slide.charts)) return slide
+      return {
+        ...slide,
+        charts: (slide.charts as unknown[]).map((ch) => {
+          const chart = ch as Record<string, unknown>
+          if (!("colors" in chart)) {
+            return { ...chart, colors: [] }
+          }
+          return chart
+        }),
+      }
+    })
+  }
+
+  return rest as unknown as ProjectState
+}
+
 interface NewProjectArgs {
   name: string
   db_path: string
@@ -82,7 +114,7 @@ export const useProjectStore = create<Store>()(
       setProjectPath(path) { set({ projectPath: path }) },
       setParsedDb(db) { set({ parsedDb: db }); const s = get().state; if (s) set({ state: { ...s, parsed_db: db } }) },
       setTemplateInfo(info) { set({ templateInfo: info }) },
-      loadProjectState(state) { set({ state }) },
+      loadProjectState(raw) { set({ state: _migrateProjectState(raw) }) },
 
       addSeparator(title: string) {
         const s = get().state

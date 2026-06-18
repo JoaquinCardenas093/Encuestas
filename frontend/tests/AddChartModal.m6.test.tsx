@@ -51,7 +51,7 @@ describe("AddChartModal — M6 chart types", () => {
   })
 
   it("falls back to 5 built-in chart types when styleGuide not loaded", () => {
-    currentMock = mockStyleGuideBuiltin as typeof mockStyleGuideWithTypes
+    currentMock = mockStyleGuideBuiltin as unknown as typeof mockStyleGuideWithTypes
     render(<AddChartModal open db={DB} onClose={vi.fn()} onApply={vi.fn()} />)
     // Should have PIE as at minimum (fallback)
     expect(screen.getByRole("option", { name: /PIE/i })).toBeInTheDocument()

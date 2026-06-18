@@ -136,3 +136,96 @@ describe("store analysis operations", () => {
     expect(a.edited).toBe(true)
   })
 })
+
+describe("M6 migration — .aurum.json backward compat", () => {
+  beforeEach(() => {
+    useProjectStore.setState({ state: null })
+  })
+
+  it("strips style_set field when loading old project", () => {
+    const oldProject = {
+      version: 1,
+      app_name: "AurumEncuestas",
+      project_name: "Old Project",
+      created_at: null,
+      updated_at: null,
+      inputs: { db_path: "./x", template_path: "./y", font_override: null },
+      parsed_db: null,
+      slides: [],
+      history: { past: [], future: [] },
+      palette: null,
+      style_set: "aurum_default",   // Legacy field — must be stripped
+    }
+    useProjectStore.getState().loadProjectState(oldProject as unknown as import("../src/types").ProjectState)
+    const state = useProjectStore.getState().state
+    expect(state).not.toBeNull()
+    expect((state as unknown as Record<string, unknown>).style_set).toBeUndefined()
+  })
+
+  it("adds palette: null when loading project without palette field", () => {
+    const oldProject = {
+      version: 1,
+      app_name: "AurumEncuestas",
+      project_name: "Old Project",
+      created_at: null,
+      updated_at: null,
+      inputs: { db_path: "./x", template_path: "./y", font_override: null },
+      parsed_db: null,
+      slides: [],
+      history: { past: [], future: [] },
+      // No palette field
+    }
+    useProjectStore.getState().loadProjectState(oldProject as unknown as import("../src/types").ProjectState)
+    const state = useProjectStore.getState().state
+    expect(state).not.toBeNull()
+    expect(state!.palette).toBeNull()
+  })
+
+  it("preserves palette if present in loaded project", () => {
+    const projectWithPalette = {
+      version: 1,
+      app_name: "AurumEncuestas",
+      project_name: "New Project",
+      created_at: null,
+      updated_at: null,
+      inputs: { db_path: "./x", template_path: "./y", font_override: null },
+      parsed_db: null,
+      slides: [],
+      history: { past: [], future: [] },
+      palette: { primary: "#7F7F7F", secondary: "#BFBFBF" },
+    }
+    useProjectStore.getState().loadProjectState(projectWithPalette as unknown as import("../src/types").ProjectState)
+    const state = useProjectStore.getState().state
+    expect(state!.palette).toEqual({ primary: "#7F7F7F", secondary: "#BFBFBF" })
+  })
+
+  it("defaults Chart.colors to [] when loading charts without colors field", () => {
+    const projectWithOldChart = {
+      version: 1,
+      app_name: "AurumEncuestas",
+      project_name: "Old Project",
+      created_at: null,
+      updated_at: null,
+      inputs: { db_path: "./x", template_path: "./y", font_override: null },
+      parsed_db: null,
+      history: { past: [], future: [] },
+      palette: null,
+      slides: [
+        {
+          id: "sl1",
+          type: "shell",
+          title: "Sec",
+          charts: [
+            { id: "c1", question_id: "q1", breakdown_id: "general", chart_type: "PIE", multi_series: false },
+            // no colors on chart
+          ],
+          analyses: [],
+          auto_notes: null,
+        },
+      ],
+    }
+    useProjectStore.getState().loadProjectState(projectWithOldChart as unknown as import("../src/types").ProjectState)
+    const chart = useProjectStore.getState().state!.slides[0].charts[0]
+    expect(chart.colors).toEqual([])
+  })
+})
