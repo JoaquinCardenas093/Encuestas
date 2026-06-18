@@ -243,46 +243,54 @@ def _set_pie_first_slice_angle(chart, angle_deg: int) -> None:
 
 
 def _build_chart_data(source_chart, value_field: str, sort: str):
-    """Extract CategoryChartData and the sorted value list from a chart object.
+    """Extract CategoryChartData from a chart for its breakdown_id.
 
-    Returns (CategoryChartData, list[float] sorted_values) — caller uses the
-    sorted values for first-slice-angle math without reordering data twice.
+    Single-series mode (breakdown_id in {"general", "", None}): plot the
+    General/Total row.
+
+    Multi-series mode (any other breakdown_id): one series per breakdown
+    category (e.g. Hombre/Mujer for sexo). General row is excluded so we
+    never double-plot it alongside the breakdown categories.
     """
     cd = CategoryChartData()
-
     question = getattr(source_chart, "question", None)
-    options = question.options if question else []
+    options = list(question.options) if question else []
     data = getattr(source_chart, "data", {}) or {}
+    breakdown_id = (getattr(source_chart, "breakdown_id", "") or "").lower()
 
-    # Pick the General/Total row for single-series, or first iter for non-general
-    breakdown_data = (
-        data.get("General")
-        or data.get("Total")
-        or (next(iter(data.values())) if data else {})
-    )
+    is_general = breakdown_id in ("", "general")
 
-    if not options and breakdown_data:
-        options = list(breakdown_data.keys())
+    if is_general:
+        primary = data.get("General") or data.get("Total") or (next(iter(data.values())) if data else {})
+        if not options and primary:
+            options = list(primary.keys())
+        if sort in ("desc_by_value", "asc_by_value") and primary:
+            reverse = sort == "desc_by_value"
+            options = sorted(options, key=lambda o: (primary.get(o) or {}).get(value_field, 0), reverse=reverse)
+        cd.categories = options
+        values = [float((primary.get(o) or {}).get(value_field, 0) or 0) for o in options]
+        cd.add_series("", values)
+        return cd, values
 
-    # Sort if requested
-    if sort in ("desc_by_value", "asc_by_value") and breakdown_data:
+    # Breakdown chart: every row except General becomes a series.
+    cats = [k for k in data.keys() if k.lower() not in ("general", "total")]
+    if not cats:
+        cats = list(data.keys())
+
+    # Sort options by the FIRST category's value so all series share an axis order.
+    if options and sort in ("desc_by_value", "asc_by_value") and cats:
         reverse = sort == "desc_by_value"
-        options = sorted(
-            options,
-            key=lambda o: (breakdown_data.get(o) or {}).get(value_field, 0),
-            reverse=reverse,
-        )
-
+        first = data.get(cats[0]) or {}
+        options = sorted(options, key=lambda o: (first.get(o) or {}).get(value_field, 0), reverse=reverse)
     cd.categories = options
 
-    values = []
-    for opt in options:
-        cell = (breakdown_data.get(opt) or {})
-        v = cell.get(value_field, 0) or 0
-        values.append(float(v))
-
-    cd.add_series("", values)
-    return cd, values
+    all_values: list[float] = []
+    for cat in cats:
+        row = data.get(cat) or {}
+        series_values = [float((row.get(o) or {}).get(value_field, 0) or 0) for o in options]
+        cd.add_series(cat, series_values)
+        all_values.extend(series_values)
+    return cd, all_values
 
 
 def _apply_series_colors(chart, colors: list[str]) -> None:

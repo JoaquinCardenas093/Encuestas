@@ -441,3 +441,50 @@ def test_render_chart_respects_source_chart_chart_type(tmp_path):
     from pptx.enum.chart import XL_CHART_TYPE
     chart_shape = next(sh for sh in slide.shapes if sh.has_chart)
     assert chart_shape.chart.chart_type == XL_CHART_TYPE.COLUMN_CLUSTERED
+
+
+# ---------------------------------------------------------------------------
+# T10: breakdown_id-driven multi-series
+# ---------------------------------------------------------------------------
+
+
+def test_render_chart_for_breakdown_creates_two_series():
+    from pptx import Presentation
+    from aurum_encuestas.element_renderers.chart_renderer import render
+    from aurum_encuestas.element_renderers.render_context import RenderContext
+    from types import SimpleNamespace
+
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    q = SimpleNamespace(options=["Sí", "No"])
+    source_chart = SimpleNamespace(
+        question=q,
+        breakdown_id="sexo",
+        chart_type="BAR_CLUSTERED",
+        data={
+            "General": {"Sí": {"pct": 0.55}, "No": {"pct": 0.45}},
+            "Hombre":  {"Sí": {"pct": 0.80}, "No": {"pct": 0.20}},
+            "Mujer":   {"Sí": {"pct": 0.30}, "No": {"pct": 0.70}},
+        },
+        colors=[],
+    )
+    ctx = RenderContext(
+        slide_config=SimpleNamespace(charts=[source_chart]),
+        chart_colors=["#7F7F7F","#404040"],
+        free_area={"x":0,"y":0,"cx":6_000_000,"cy":4_000_000},
+        typography={"label_size":9},
+        resolved_colors={"primary": "#7F7F7F"},
+        resolved_anchors={},
+    )
+    render(slide, {
+        "kind":"chart","id":"c","position":{"x_rel":0,"y_rel":0,"w_rel":1,"h_rel":1},
+        "data_source":{"chart_ref_index":0,"value_field":"pct"},
+    }, ctx)
+
+    chart_shape = next(sh for sh in slide.shapes if sh.has_chart)
+    series = list(chart_shape.chart.series)
+    # Expect 2 series (Hombre, Mujer), each with 2 points (Sí, No)
+    assert len(series) == 2, f"expected 2 series, got {len(series)}"
+    names = {s.name for s in series}
+    assert names == {"Hombre", "Mujer"}

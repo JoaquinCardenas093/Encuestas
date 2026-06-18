@@ -403,7 +403,6 @@ def build_slide_config(slide_def: Any, parsed_db: Any, db_path: str = "") -> Any
         question_id: str
         breakdown_id: str
         chart_type: str
-        multi_series: bool
         colors: list
         question: _Any = None   # Question model from parsed_db
         data: dict = field(default_factory=dict)
@@ -442,7 +441,6 @@ def build_slide_config(slide_def: Any, parsed_db: Any, db_path: str = "") -> Any
                 question_id=chart.question_id,
                 breakdown_id=chart.breakdown_id,
                 chart_type=chart.chart_type,
-                multi_series=getattr(chart, "multi_series", False),
                 colors=getattr(chart, "colors", []),
                 question=question,
                 data=chart_data,

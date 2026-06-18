@@ -41,7 +41,7 @@ describe("ConfigPanel", () => {
 
   it("chart list shows added charts with type override select", async () => {
     const shellId = useProjectStore.getState().state!.slides[1].id
-    useProjectStore.getState().addCharts(shellId, "q1", ["general"], "PIE", false)
+    useProjectStore.getState().addCharts(shellId, "q1", ["general"], "PIE")
     render(<ConfigPanel slideId={shellId} />)
     const selects = screen.getAllByRole("combobox")
     expect(selects.some((sel) => (sel as HTMLSelectElement).value === "PIE")).toBe(true)

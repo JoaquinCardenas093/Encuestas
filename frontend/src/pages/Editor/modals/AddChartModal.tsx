@@ -11,7 +11,6 @@ interface ApplyResult {
   questionId: string
   breakdownIds: string[]
   chartType: ChartType
-  multiSeries: boolean
   colors: string[]
 }
 
@@ -31,7 +30,6 @@ export default function AddChartModal({ open, onClose, onApply, db }: Props) {
   const [questionId, setQuestionId] = useState<string>("")
   const [breakdownIds, setBreakdownIds] = useState<Set<string>>(new Set())
   const [chartType, setChartType] = useState<ChartType>((chartTypes[0] ?? "PIE") as ChartType)
-  const [multiSeries, setMultiSeries] = useState(false)
   const [colorPickerOpen, setColorPickerOpen] = useState(false)
   const [primaryColor, setPrimaryColor] = useState("")
   const [showAdvanced, setShowAdvanced] = useState(false)
@@ -83,7 +81,6 @@ export default function AddChartModal({ open, onClose, onApply, db }: Props) {
       questionId,
       breakdownIds: Array.from(breakdownIds),
       chartType,
-      multiSeries,
       colors: finalColors,
     })
     onClose()
@@ -156,15 +153,6 @@ export default function AddChartModal({ open, onClose, onApply, db }: Props) {
           </option>
         ))}
       </select>
-
-      <label className="flex items-center gap-2 text-sm mb-3">
-        <input
-          type="checkbox"
-          checked={multiSeries}
-          onChange={(e) => setMultiSeries(e.target.checked)}
-        />
-        Multi-serie (desglose por sub-categoría)
-      </label>
 
       {/* Color section */}
       <div className="mt-2">

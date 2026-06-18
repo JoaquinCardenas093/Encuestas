@@ -164,7 +164,7 @@ export default function ConfigPanel({ slideId }: Props) {
             open={chartModalOpen}
             onClose={() => setChartModalOpen(false)}
             onApply={(r) =>
-              addCharts(slide.id, r.questionId, r.breakdownIds, r.chartType, r.multiSeries)
+              addCharts(slide.id, r.questionId, r.breakdownIds, r.chartType)
             }
             db={parsedDb}
           />

@@ -35,7 +35,6 @@ export interface Chart {
   question_id: string
   breakdown_id: string
   chart_type: ChartType
-  multi_series: boolean
   colors: string[]   // per-slice/series colors; empty array = cascade to project/style-guide/built-in
 }
 

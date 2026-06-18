@@ -59,7 +59,7 @@ describe("store chart operations", () => {
 
   it("addChart appends one chart", () => {
     const shellId = useProjectStore.getState().state!.slides[1].id
-    useProjectStore.getState().addCharts(shellId, "q1", ["general"], "PIE", false)
+    useProjectStore.getState().addCharts(shellId, "q1", ["general"], "PIE")
     const shell = useProjectStore.getState().state!.slides[1]
     expect(shell.charts.length).toBe(1)
     expect(shell.charts[0].chart_type).toBe("PIE")
@@ -67,7 +67,7 @@ describe("store chart operations", () => {
 
   it("addCharts multi-select breakdowns creates N charts", () => {
     const shellId = useProjectStore.getState().state!.slides[1].id
-    useProjectStore.getState().addCharts(shellId, "q1", ["general", "sexo", "edad"], "BAR", false)
+    useProjectStore.getState().addCharts(shellId, "q1", ["general", "sexo", "edad"], "BAR")
     const shell = useProjectStore.getState().state!.slides[1]
     expect(shell.charts.length).toBe(3)
     expect(shell.charts.every((c) => c.chart_type === "BAR")).toBe(true)
@@ -75,7 +75,7 @@ describe("store chart operations", () => {
 
   it("updateChartType changes one chart", () => {
     const shellId = useProjectStore.getState().state!.slides[1].id
-    useProjectStore.getState().addCharts(shellId, "q1", ["general", "sexo"], "PIE", false)
+    useProjectStore.getState().addCharts(shellId, "q1", ["general", "sexo"], "PIE")
     const chart0 = useProjectStore.getState().state!.slides[1].charts[0]
     useProjectStore.getState().updateChartType(shellId, chart0.id, "BAR")
     const updated = useProjectStore.getState().state!.slides[1].charts[0]
@@ -84,7 +84,7 @@ describe("store chart operations", () => {
 
   it("resetSlide clears charts and analyses", () => {
     const shellId = useProjectStore.getState().state!.slides[1].id
-    useProjectStore.getState().addCharts(shellId, "q1", ["general"], "PIE", false)
+    useProjectStore.getState().addCharts(shellId, "q1", ["general"], "PIE")
     useProjectStore.getState().resetSlide(shellId)
     expect(useProjectStore.getState().state!.slides[1].charts).toEqual([])
   })
@@ -96,7 +96,7 @@ describe("store chart operations", () => {
 
   it("updateChartColors sets colors array on chart", () => {
     const shellId = useProjectStore.getState().state!.slides[1].id
-    useProjectStore.getState().addCharts(shellId, "q1", ["general"], "PIE", false)
+    useProjectStore.getState().addCharts(shellId, "q1", ["general"], "PIE")
     const chartId = useProjectStore.getState().state!.slides[1].charts[0].id
     useProjectStore.getState().updateChartColors(shellId, chartId, ["#7F7F7F", "#BFBFBF"])
     const colors = useProjectStore.getState().state!.slides[1].charts[0].colors
@@ -216,7 +216,7 @@ describe("M6 migration — .aurum.json backward compat", () => {
           type: "shell",
           title: "Sec",
           charts: [
-            { id: "c1", question_id: "q1", breakdown_id: "general", chart_type: "PIE", multi_series: false },
+            { id: "c1", question_id: "q1", breakdown_id: "general", chart_type: "PIE" },
             // no colors on chart
           ],
           analyses: [],

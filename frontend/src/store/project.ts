@@ -62,7 +62,7 @@ interface Store {
   removeSlide(slideId: string): void
   updateSeparatorTitle(slideId: string, title: string): void
 
-  addCharts(slideId: string, questionId: string, breakdownIds: string[], chartType: import("../types").ChartType, multiSeries: boolean): void
+  addCharts(slideId: string, questionId: string, breakdownIds: string[], chartType: import("../types").ChartType): void
   removeChart(slideId: string, chartId: string): void
   updateChartType(slideId: string, chartId: string, chartType: import("../types").ChartType): void
   updateChartColors(slideId: string, chartId: string, colors: string[]): void
@@ -160,7 +160,7 @@ export const useProjectStore = create<Store>()(
         })
       },
 
-      addCharts(slideId, questionId, breakdownIds, chartType, multiSeries) {
+      addCharts(slideId, questionId, breakdownIds, chartType) {
         const s = get().state
         if (!s) return
         const slides = s.slides.map((sl) => {
@@ -170,7 +170,6 @@ export const useProjectStore = create<Store>()(
             question_id: questionId,
             breakdown_id: bid,
             chart_type: chartType,
-            multi_series: multiSeries,
             colors: [],
           }))
           return { ...sl, charts: [...sl.charts, ...newCharts] }

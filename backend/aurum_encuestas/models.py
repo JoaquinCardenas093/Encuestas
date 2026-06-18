@@ -47,7 +47,6 @@ class Chart(BaseModel):
     question_id: str
     breakdown_id: str
     chart_type: ChartType
-    multi_series: bool = False
     colors: list[str] = []          # per-slice/series hex; [] = auto cascade
 
 
