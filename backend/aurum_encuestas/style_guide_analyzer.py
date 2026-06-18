@@ -403,20 +403,29 @@ def run_full_analysis_pipeline(
     patterns_valid = 0
     patterns_dropped = 0
 
-    if sg is not None:
-        # Save raw for debug
+    # ALWAYS save raw response for debug — even if validation passed
+    try:
         raw_path = get_corpus_dir().parent / ".last_ai_raw.json"
-        raw_path.write_text(raw_json, encoding="utf-8")
+        raw_path.write_text(raw_json or "(empty)", encoding="utf-8")
+    except Exception:
+        pass
 
+    if sg is not None:
         # Save validated style guide
         save_style_guide(sg)
         patterns_valid = len(sg.patterns)
+        log.info("✓ AI style guide saved: %d patterns valid, %d repairs", patterns_valid, len(repairs))
     else:
         # Fallback to built-in
         from .style_guide import BUILTIN_STYLE_GUIDE
         save_style_guide(BUILTIN_STYLE_GUIDE)
         patterns_valid = len(BUILTIN_STYLE_GUIDE.patterns)
         log.warning("AI analysis failed — falling back to built-in style guide")
+        log.warning("Slides rendered: %d", len(slides))
+        log.warning("Raw JSON length: %d chars", len(raw_json or ""))
+        log.warning("Raw JSON head: %s", (raw_json or "")[:500])
+        log.warning("All errors: %s", all_errors)
+        log.warning("Raw response saved to %s for inspection", raw_path)
 
     duration = time.monotonic() - start_time
     corpus_pptxs = [p.name for p in get_corpus_dir().glob("*.pptx")]
