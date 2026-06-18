@@ -1,6 +1,12 @@
 """M6 Style Guide — pydantic schemas, built-in constant, and helpers.
 
 All models use `extra = "ignore"` so future AI-generated fields don't break parsing.
+
+Public API:
+    StyleGuide, Pattern, Trigger, Implementation, ElementChart, ElementTable,
+    ElementText, ElementShape, ElementImage, Position, PositionAnchored,
+    GlobalConfig, Typography, TextPatterns, BUILTIN_STYLE_GUIDE,
+    migrate_legacy_files, load_active
 """
 from __future__ import annotations
 
