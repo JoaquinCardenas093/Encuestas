@@ -88,6 +88,19 @@ def _set_cell(cell, text: str, ctx: RenderContext, style: dict) -> None:
     """Set cell text and basic style."""
     tf = cell.text_frame
     tf.clear()
+    # Disable text wrap so long labels (e.g. "Observaciones") don't push the
+    # row height beyond declared cell heights, which breaks compact panels.
+    try:
+        tf.word_wrap = False
+    except Exception:
+        pass
+    # Anchor text to top of cell so the bottom-anchored minibar overlay never
+    # overlaps the percentage label.
+    try:
+        from pptx.enum.text import MSO_ANCHOR
+        tf.vertical_anchor = MSO_ANCHOR.TOP
+    except Exception:
+        pass
     p = tf.paragraphs[0]
 
     align_h = style.get("align_h", "left")
@@ -128,20 +141,33 @@ def _set_cell(cell, text: str, ctx: RenderContext, style: dict) -> None:
 # ---------------------------------------------------------------------------
 
 def _render_segmented_breakdowns(slide, element: dict, ctx: RenderContext) -> None:
-    """Build segmented breakdown table per spec section 6.
+    """Render one mini-table per breakdown group, auto-wrapping rows.
 
-    Row layout per breakdown group:
-      - group_header row (spans all categories in breakdown)
-      - category_header row (one cell per category)
-      - counts_row (Observaciones + N per category)
-      - option_row × N_options (one row per question option)
+    Reference layout (Aurora deck): each breakdown group (Edad / Sexo / NSE /
+    Punto) becomes its OWN bordered mini-table. Tables are packed into rows by
+    weight (= 1 label col + N category cols), wrapping when row weight exceeds
+    a tunable limit. Within a row, table widths are proportional to weight.
 
-    Columns:
-      col 0            = label column (question option text / row label)
-      col 1..N_cats    = one column per breakdown category
+    Each mini-table rows:
+      0  group_header       : group label, spans all category cols
+      1  category_header    : one cell per category
+      2  counts_row         : "Observaciones" + N per category
+      3+ option_row × N     : pct (+ optional minibar) per (option, category)
+
+    Data source: source_chart.all_breakdowns_data — single chart_ref_index
+    delivers every demographic, so users don't need N charts.
     """
     from .chart_renderer import _resolve_position
-    x, y, cx, cy = _resolve_position(element.get("position", {}), ctx)
+    box_x, box_y, box_cx, box_cy = _resolve_position(element.get("position", {}), ctx)
+
+    # Extend the box vertically to fill the available free area below box_y.
+    # Pattern h_rel is often too short for compact multi-panel render — when
+    # libreoffice's PDF export inflates small row heights to its internal
+    # minimum, declared rows past the bottom get dropped silently.
+    fa_y = ctx.free_area.get("y", 0)
+    fa_cy = ctx.free_area.get("cy", 1)
+    bottom_limit = fa_y + int(fa_cy * 0.97)
+    box_cy = max(box_cy, bottom_limit - box_y)
 
     data_source = element.get("data_source", {})
     chart_ref_index = data_source.get("chart_ref_index", 0)
@@ -155,21 +181,51 @@ def _render_segmented_breakdowns(slide, element: dict, ctx: RenderContext) -> No
     source_chart = charts_list[chart_ref_index]
     question = getattr(source_chart, "question", None)
     options = question.options if question else []
-    data = getattr(source_chart, "data", {}) or {}
+    all_bds: dict = getattr(source_chart, "all_breakdowns_data", {}) or {}
 
-    # Collect breakdown groups excluding General if requested
+    # Pick which groups to include
     if breakdown_groups_filter == "all_except_general":
-        breakdown_keys = [k for k in data.keys() if k.lower() != "general"]
+        group_ids = [bid for bid in all_bds.keys() if bid.lower() != "general"]
     elif breakdown_groups_filter == "all":
-        breakdown_keys = list(data.keys())
+        group_ids = list(all_bds.keys())
     elif isinstance(breakdown_groups_filter, list):
-        breakdown_keys = breakdown_groups_filter
+        group_ids = [bid for bid in breakdown_groups_filter if bid in all_bds]
     else:
-        breakdown_keys = list(data.keys())
+        group_ids = list(all_bds.keys())
 
-    if not breakdown_keys:
+    # Materialize panel descriptors
+    panels: list[dict] = []
+    for gid in group_ids:
+        bd = all_bds.get(gid) or {}
+        cats = bd.get("categories") or {}
+        if not cats:
+            continue
+        panels.append({
+            "group_id": gid,
+            "label": bd.get("label") or gid,
+            "cats": list(cats.items()),  # preserve declared order
+        })
+
+    if not panels:
         log.debug("table_renderer segmented: no breakdown groups — skipping")
         return
+
+    # Map breakdown_id → user chart targeting this breakdown (used by packing
+    # and panel rendering). Excludes the general/main chart.
+    pre_charts_by_bd: dict[str, object] = {}
+    for c in charts_list:
+        bid = getattr(c, "breakdown_id", None)
+        if bid and bid.lower() != "general":
+            pre_charts_by_bd[bid] = c
+
+    # Pack panels into rows. Weight = 1 label col + N category cols.
+    # MAX_ROW_WEIGHT 14 lets Edad(3)+Sexo(3)+NSE(6)=12 fit on row 1, Punto(6) wraps.
+    # Panels whose breakdown has a user-added chart get their OWN row so the
+    # mini-chart has room next to the table.
+    MAX_ROW_WEIGHT = element.get("max_row_weight", 14)
+    panel_rows: list[list[dict]] = _pack_panels_into_rows(
+        panels, MAX_ROW_WEIGHT, pre_charts_by_bd,
+    )
 
     cells_cfg = element.get("cells", {})
     group_hdr_cfg = cells_cfg.get("group_header", {})
@@ -177,45 +233,175 @@ def _render_segmented_breakdowns(slide, element: dict, ctx: RenderContext) -> No
     counts_cfg = cells_cfg.get("counts_row", {})
     option_cfg = cells_cfg.get("option_row", {})
 
-    # Determine columns: label col + one col per breakdown category
-    n_data_cols = len(breakdown_keys)
-    n_cols = 1 + n_data_cols
+    # ── Pattern-config overrides for #14-style fidelity ─────────────────────
+    # AI-generated patterns often pick "primary" (= brand color) for the group
+    # header fill, which clashes when the brand is bright (orange/yellow).
+    # Force grey to match the reference deck's neutral table style.
+    g_style_override = dict(group_hdr_cfg.get("style") or {})
+    g_style_override["fill"] = "secondary"        # was: primary → orange
+    g_style_override["text_color"] = "background"
+    group_hdr_cfg = {**group_hdr_cfg, "style": g_style_override}
+    # Always enable minibars; force grey color and a short bar anchored below
+    # the percentage text (so the value reads cleanly without overlap).
+    option_cfg = {
+        **option_cfg,
+        "minibar": {
+            **(option_cfg.get("minibar") or {}),
+            "enabled": True,
+            "color_role": "secondary",
+            "show_percent_text": False,
+            "height_rel_to_cell": 0.25,
+        },
+    }
 
-    # Rows per breakdown group: group_header(1) + category_header(1) + counts_row(1) + options
-    N_HEADER_ROWS = 3  # group_header, category_header, counts_row
+    H_GAP_EMU = int(0.012 * box_cx)  # gap between panels in a row
+    V_GAP_EMU = int(0.030 * box_cy)  # gap between rows
+    n_rows = len(panel_rows)
+    # Each panel renders 5 sub-rows (group_header + cat_header + counts + N option
+    # rows). At 8pt body font + small padding, ~0.55cm per sub-row is the floor
+    # before libreoffice starts overflowing cells. Allow the table region to
+    # extend past the pattern's declared box_cy when needed — better than
+    # truncating option rows.
+    MIN_SUBROW_EMU = 240000  # ~0.66 cm — enough for minibar + text without clipping
+    n_subrows = 3 + max(len(options), 1)
+    panel_needed = MIN_SUBROW_EMU * n_subrows
+    row_h_fit = (box_cy - V_GAP_EMU * (n_rows - 1)) // max(n_rows, 1)
+    row_h = max(panel_needed, row_h_fit)
+
+    user_chart_by_bd = pre_charts_by_bd
+    cur_y = box_y
+    for row in panel_rows:
+        row_weight = sum(1 + len(p["cats"]) for p in row)
+        avail_w = box_cx - H_GAP_EMU * (len(row) - 1)
+        cur_x = box_x
+        for p in row:
+            w = 1 + len(p["cats"])
+            panel_w = int(avail_w * (w / row_weight)) if row_weight else avail_w
+            matching_chart = user_chart_by_bd.get(p["group_id"])
+            _render_panel(
+                slide=slide,
+                panel=p,
+                options=options,
+                x=cur_x, y=cur_y, cx=panel_w, cy=row_h,
+                ctx=ctx,
+                group_hdr_cfg=group_hdr_cfg,
+                cat_hdr_cfg=cat_hdr_cfg,
+                counts_cfg=counts_cfg,
+                option_cfg=option_cfg,
+                matching_chart=matching_chart,
+            )
+            cur_x += panel_w + H_GAP_EMU
+        cur_y += row_h + V_GAP_EMU
+
+
+def _pack_panels_into_rows(
+    panels: list[dict],
+    max_row_weight: int,
+    charts_by_bd: dict | None = None,
+) -> list[list[dict]]:
+    """Greedy row packing by weight (1 + len(cats)).
+
+    Mini-charts now stack vertically inside the same panel column (see
+    _render_panel), so packing doesn't need to special-case chart panels.
+    """
+    _ = charts_by_bd  # accepted for API compat, no longer used
+    rows: list[list[dict]] = []
+    current: list[dict] = []
+    current_w = 0
+    for p in panels:
+        w = 1 + len(p["cats"])
+        if current and current_w + w > max_row_weight:
+            rows.append(current)
+            current = [p]
+            current_w = w
+        else:
+            current.append(p)
+            current_w += w
+    if current:
+        rows.append(current)
+    return rows
+
+
+def _render_panel(
+    slide, panel: dict, options: list,
+    x: int, y: int, cx: int, cy: int,
+    ctx: RenderContext,
+    group_hdr_cfg: dict, cat_hdr_cfg: dict,
+    counts_cfg: dict, option_cfg: dict,
+    matching_chart=None,
+) -> None:
+    """Render one mini-table (1 breakdown group) at (x,y,cx,cy) EMU.
+
+    If matching_chart is provided (user added a chart targeting this
+    breakdown), the panel splits horizontally: table on the left, mini-chart
+    on the right using the chart's user-selected chart_type.
+    """
+    cats: list[tuple[str, dict]] = panel["cats"]  # [(cat_label, opt_cells_dict)]
+    n_cat = len(cats)
+    n_cols = 1 + n_cat
+    N_HEADER_ROWS = 3
     n_rows = N_HEADER_ROWS + len(options)
 
+    # Layout: every breakdown panel is rendered purely as a table (matches
+    # Aurora reference deck). chart_type selectors per breakdown are
+    # currently ignored at the panel level — they may resurface later as a
+    # row-level minibar variant.
+    _ = matching_chart  # accepted for API compat; mini-chart suppressed
+    table_h_local = cy
+    chart_x = chart_y = chart_h = chart_w = 0
+    table_w = cx
+
+    # Pre-compute label col width (so cells row 2 can decide whether to print
+    # the long "Observaciones" label or leave the cell blank).
+    label_col_w_rel_pre = option_cfg.get("label_col_width_rel") or 0.18
+    MIN_LABEL_EMU = 500000  # ~0.55 cm
+    label_w = max(MIN_LABEL_EMU, int(label_col_w_rel_pre * table_w))
+    if label_w > table_w * 0.4:
+        label_w = int(table_w * 0.4)
+        chart_x = chart_w = 0  # unused
+
     try:
-        table_shape = slide.shapes.add_table(n_rows, n_cols, Emu(x), Emu(y), Emu(cx), Emu(cy))
+        table_shape = slide.shapes.add_table(n_rows, n_cols, Emu(x), Emu(y), Emu(table_w), Emu(table_h_local))
         tbl = table_shape.table
     except Exception as exc:
-        log.error("table_renderer segmented: failed to add table: %s", exc)
+        log.error("_render_panel: add_table failed for %s: %s", panel.get("label"), exc)
         return
 
-    g_style = group_hdr_cfg.get("style", {})
-    c_style = cat_hdr_cfg.get("style", {})
-    cnt_style = counts_cfg.get("style", {})
-    opt_style = option_cfg.get("style", {})
+    # Cap sub-row font sizes so 5 sub-rows fit inside compact panel heights
+    # (libreoffice expands cells when content is taller than declared height,
+    # pushing later option rows below the panel and breaking the layout).
+    g_style = {**group_hdr_cfg.get("style", {}), "font_size": min(group_hdr_cfg.get("style", {}).get("font_size") or 9, 9)}
+    c_style = {**cat_hdr_cfg.get("style", {}), "font_size": min(cat_hdr_cfg.get("style", {}).get("font_size") or 8, 8)}
+    cnt_style = {**counts_cfg.get("style", {}), "font_size": min(counts_cfg.get("style", {}).get("font_size") or 7, 7)}
+    opt_style = {**option_cfg.get("style", {}), "font_size": min(option_cfg.get("style", {}).get("font_size") or 7, 7)}
 
-    # Row 0: group_header — label cell + one cell per breakdown (merge if merge_per_breakdown)
-    _set_cell(tbl.cell(0, 0), "", ctx, g_style)
-    for col_idx, bd_key in enumerate(breakdown_keys, start=1):
-        _set_cell(tbl.cell(0, col_idx), bd_key, ctx, g_style)
+    # Row 0 — group_header (spans all data cols + label col)
+    _set_cell(tbl.cell(0, 0), panel["label"], ctx, g_style)
+    for col_idx in range(1, n_cols):
+        _set_cell(tbl.cell(0, col_idx), "", ctx, g_style)
+    try:
+        tbl.cell(0, 0).merge(tbl.cell(0, n_cols - 1))
+    except Exception as exc:
+        log.debug("group_header merge failed for %s: %s", panel.get("label"), exc)
 
-    # Row 1: category_header — "Categoría" label + each breakdown category label
+    # Row 1 — category_header
     _set_cell(tbl.cell(1, 0), "", ctx, c_style)
-    for col_idx, bd_key in enumerate(breakdown_keys, start=1):
-        _set_cell(tbl.cell(1, col_idx), bd_key, ctx, c_style)
+    for col_idx, (cat_label, _) in enumerate(cats, start=1):
+        _set_cell(tbl.cell(1, col_idx), cat_label, ctx, c_style)
 
-    # Row 2: counts_row — "Observaciones" label + N per category
-    counts_label = counts_cfg.get("label_first_col", "Observaciones")
+    # Row 2 — counts_row.  Use full "Observaciones" only when label col is wide
+    # enough to render it on one line. Narrow panels (Edad/Sexo 2-cat) leave
+    # the label cell empty to match the reference deck style.
+    if label_w >= 1600000:  # ~1.7 cm — enough for "Observaciones" single-line
+        counts_label = counts_cfg.get("label_first_col", "Observaciones")
+    else:
+        counts_label = ""
     _set_cell(tbl.cell(2, 0), counts_label, ctx, cnt_style)
-    for col_idx, bd_key in enumerate(breakdown_keys, start=1):
-        bd_data = data.get(bd_key) or {}
-        total_count = sum((bd_data.get(opt) or {}).get("count", 0) for opt in options)
-        _set_cell(tbl.cell(2, col_idx), str(int(total_count)), ctx, cnt_style)
+    for col_idx, (_, opt_cells) in enumerate(cats, start=1):
+        total = sum((opt_cells.get(opt) or {}).get("count", 0) for opt in options)
+        _set_cell(tbl.cell(2, col_idx), str(int(total)), ctx, cnt_style)
 
-    # Rows 3+: option_rows
+    # Rows 3+ — option rows
     value_format = option_cfg.get("value_format", "percentage")
     value_decimals = option_cfg.get("value_decimals", 1)
     minibar_cfg = option_cfg.get("minibar", {})
@@ -223,31 +409,146 @@ def _render_segmented_breakdowns(slide, element: dict, ctx: RenderContext) -> No
     for opt_idx, option in enumerate(options):
         row_idx = N_HEADER_ROWS + opt_idx
         _set_cell(tbl.cell(row_idx, 0), option, ctx, opt_style)
-        for col_idx, bd_key in enumerate(breakdown_keys, start=1):
-            bd_data = data.get(bd_key) or {}
-            cell_data = bd_data.get(option) or {}
-            pct = cell_data.get("pct", 0) or 0
-            count = cell_data.get("count", 0) or 0
+        for col_idx, (_, opt_cells) in enumerate(cats, start=1):
+            cd = opt_cells.get(option) or {}
+            pct = cd.get("pct", 0) or 0
+            count = cd.get("count", 0) or 0
             if value_format == "percentage":
                 val_str = f"{pct * 100:.{value_decimals}f}%"
             elif value_format == "count":
                 val_str = str(int(count))
-            else:  # both
+            else:
                 val_str = f"{pct * 100:.{value_decimals}f}% ({int(count)})"
             _set_cell(tbl.cell(row_idx, col_idx), val_str, ctx, opt_style)
 
-    # Apply cell dimensions from layout config
-    layout_cfg = element.get("layout", {})
-    _apply_table_layout(tbl, layout_cfg, cx, cy, len(options))
+    # Column widths — label_w already computed above; just split remaining.
+    data_w = (table_w - label_w) // max(n_cat, 1)
+    try:
+        tbl.columns[0].width = label_w
+        for i in range(1, n_cols):
+            tbl.columns[i].width = data_w
+    except Exception as exc:
+        log.debug("Could not set column widths for %s: %s", panel.get("label"), exc)
 
-    # Minibar overlays — rendered after table is positioned
+    # Force explicit row heights so libreoffice/PowerPoint don't auto-grow rows
+    # beyond the declared table cy (which causes the last option rows to spill
+    # below the panel and overlap the next row's panels).
+    try:
+        per_row = table_h_local // max(n_rows, 1)
+        for r in range(n_rows):
+            tbl.rows[r].height = Emu(per_row)
+    except Exception as exc:
+        log.debug("Could not set row heights for %s: %s", panel.get("label"), exc)
+
+    # Minibar overlays — local to this mini-table
     if minibar_cfg.get("enabled", False):
+        legacy_data = {}
+        legacy_keys = []
+        for i, (cat_label, opt_cells) in enumerate(cats):
+            k = f"{panel['group_id']}::{cat_label}::{i}"
+            legacy_data[k] = opt_cells
+            legacy_keys.append(k)
         _render_minibar_overlays(
-            slide, tbl, options, breakdown_keys, data,
+            slide, tbl, options, legacy_keys, legacy_data,
             minibar_cfg, opt_style, ctx,
-            table_x=x, table_y=y, table_cx=cx, table_cy=cy,
+            table_x=x, table_y=y, table_cx=table_w, table_cy=cy,
             n_header_rows=N_HEADER_ROWS,
         )
+
+    # Mini-chart suppressed — every breakdown renders as table-only for #14
+    # fidelity. (chart_x/chart_w/chart_h kept above for future re-enabling.)
+
+
+def _render_panel_mini_chart(
+    slide, panel: dict, options: list, chart,
+    x: int, y: int, cx: int, cy: int,
+    ctx: RenderContext,
+) -> None:
+    """Render a small chart visualizing the breakdown's data.
+
+    Categories = breakdown categories. Series = question options. Values = pct.
+    chart_type orientation:
+      BAR_HORIZONTAL/BAR_*  → horizontal bars
+      COLUMN_*              → vertical columns
+      PIE/DONUT             → fallback to BAR_HORIZONTAL (pie per-breakdown
+                              doesn't make sense for clustered category view)
+      else                  → BAR_HORIZONTAL
+    """
+    from pptx.chart.data import CategoryChartData
+    from pptx.enum.chart import XL_CHART_TYPE
+
+    from .chart_renderer import (
+        _CHART_TYPE_MAP,
+        _apply_labels,
+        _apply_series_colors,
+    )
+
+    chart_type_raw = getattr(chart, "chart_type", "BAR_HORIZONTAL")
+    if chart_type_raw in ("PIE", "DONUT"):
+        chart_type = "BAR_HORIZONTAL"
+    else:
+        chart_type = chart_type_raw
+    xl_type = _CHART_TYPE_MAP.get(chart_type, XL_CHART_TYPE.BAR_CLUSTERED)
+
+    cats: list[tuple[str, dict]] = panel["cats"]
+    cat_labels = [c[0] for c in cats]
+
+    cd = CategoryChartData()
+    cd.categories = cat_labels
+    for opt in options:
+        values = []
+        for _, opt_cells in cats:
+            cell = opt_cells.get(opt) or {}
+            pct = cell.get("pct") or 0
+            values.append(float(pct) * 100.0)
+        cd.add_series(opt, values)
+
+    try:
+        cs = slide.shapes.add_chart(xl_type, Emu(x), Emu(y), Emu(cx), Emu(cy), cd)
+    except Exception as exc:
+        log.error("_render_panel_mini_chart: add_chart failed: %s", exc)
+        return
+    c = cs.chart
+
+    # Per-series colors from the matching user chart's color picks
+    per_chart_colors = list(getattr(chart, "colors", []) or [])
+    fallback = ctx.chart_colors or []
+    effective: list[str] = []
+    for i in range(max(len(options), len(per_chart_colors), len(fallback))):
+        if i < len(per_chart_colors) and per_chart_colors[i]:
+            effective.append(per_chart_colors[i])
+        elif fallback:
+            effective.append(fallback[i % len(fallback)])
+        else:
+            effective.append("#7F7F7F")
+    _apply_series_colors(c, effective)
+
+    # Compact: no legend, no title, no axes — pure bars with value labels only.
+    c.has_legend = False
+    c.has_title = False
+    try:
+        c.category_axis.visible = False
+    except Exception:
+        try:
+            c.category_axis.tick_labels.font.size = Pt(6)
+        except Exception:
+            pass
+    try:
+        c.value_axis.visible = False
+    except Exception:
+        try:
+            c.value_axis.tick_labels.font.size = Pt(6)
+        except Exception:
+            pass
+
+    _apply_labels(c, {
+        "show_value": True,
+        "show_percentage": False,
+        "show_category_name": False,
+        "format": "0.0\\%",
+        "position": "outside_end",
+        "font_size": 7,
+    }, ctx)
 
 
 def _apply_table_layout(tbl, layout_cfg: dict, total_cx: int, total_cy: int, n_options: int) -> None:
@@ -297,7 +598,9 @@ def _render_minibar_overlays(
             cell_y_abs = table_y + row_y_offsets[row_idx]
             cell_h = tbl.rows[row_idx].height
             bar_h = int(cell_h * height_rel)
-            bar_y = cell_y_abs + (cell_h - bar_h) // 2
+            # Anchor bar to BOTTOM so cell value text (rendered in upper half)
+            # stays legible above the minibar overlay (reference deck layout).
+            bar_y = cell_y_abs + cell_h - bar_h - int(cell_h * 0.05)
 
             option = options[opt_idx]
             for col_idx, bd_key in enumerate(breakdown_keys, start=1):

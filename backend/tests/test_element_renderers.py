@@ -308,14 +308,25 @@ def test_table_renderer_dispatch_by_structure():
 
 def _make_ctx_with_breakdowns():
     ctx = _make_ctx()
-    # Simulate source_chart with multiple breakdowns
+    # Nested all_breakdowns_data shape: {bd_id: {label, categories: {cat: {opt: {count,pct}}}}}
     ctx.slide_config.charts = [
         MagicMock(
             question=MagicMock(options=["Sí", "No"]),
             data={
                 "General": {"Sí": {"count": 80, "pct": 0.8}, "No": {"count": 20, "pct": 0.2}},
-                "Masculino": {"Sí": {"count": 60, "pct": 0.6}, "No": {"count": 40, "pct": 0.4}},
-                "Femenino": {"Sí": {"count": 85, "pct": 0.85}, "No": {"count": 15, "pct": 0.15}},
+            },
+            all_breakdowns_data={
+                "general": {
+                    "label": "General",
+                    "categories": {"Total": {"Sí": {"count": 80, "pct": 0.8}, "No": {"count": 20, "pct": 0.2}}},
+                },
+                "sexo": {
+                    "label": "Sexo",
+                    "categories": {
+                        "Masculino": {"Sí": {"count": 60, "pct": 0.6}, "No": {"count": 40, "pct": 0.4}},
+                        "Femenino": {"Sí": {"count": 85, "pct": 0.85}, "No": {"count": 15, "pct": 0.15}},
+                    },
+                },
             },
             breakdown=MagicMock(id="sexo", label="Sexo", categories=["Masculino", "Femenino"]),
         )

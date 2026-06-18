@@ -9,7 +9,7 @@ frontend-install:
 	cd frontend && npm install --cache /tmp/npm-cache
 
 dev-backend:
-	cd backend && .venv/bin/uvicorn aurum_encuestas.api:app --reload --port 8000
+	cd backend && arch -arm64 .venv/bin/uvicorn aurum_encuestas.api:app --reload --port 8000
 
 dev-frontend:
 	cd frontend && npm run dev

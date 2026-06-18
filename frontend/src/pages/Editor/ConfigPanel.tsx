@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { Plus, Trash2 } from "lucide-react"
 import { useProjectStore } from "../../store/project"
 import * as api from "../../api/client"
@@ -14,6 +14,46 @@ const BUILTIN_CHART_TYPES: ChartType[] = [
 
 interface Props {
   slideId: string | null
+}
+
+interface ColorSlotProps {
+  chartId: string
+  optionIdx: number
+  optionLabel: string
+  color: string
+  open: boolean
+  onToggle: () => void
+  onClose: () => void
+  onColorChange: (color: string) => void
+}
+
+function ColorSlot({ optionIdx, optionLabel, color, open, onToggle, onClose, onColorChange, chartId }: ColorSlotProps) {
+  const anchorRef = useRef<HTMLButtonElement>(null)
+  return (
+    <div className="flex flex-col items-center">
+      <button
+        ref={anchorRef}
+        type="button"
+        onClick={onToggle}
+        aria-label={`color-${chartId}-${optionIdx}`}
+        title={optionLabel}
+        className="p-0.5 rounded hover:bg-neutral-700"
+      >
+        <div
+          className="w-4 h-4 rounded border border-neutral-600"
+          style={{ backgroundColor: color || "#7F7F7F" }}
+        />
+      </button>
+      <span className="text-[9px] text-neutral-400 max-w-[60px] truncate">{optionLabel}</span>
+      <ColorPicker
+        open={open}
+        value={color}
+        onChange={onColorChange}
+        onClose={onClose}
+        anchorRef={anchorRef}
+      />
+    </div>
+  )
 }
 
 export default function ConfigPanel({ slideId }: Props) {
@@ -32,7 +72,7 @@ export default function ConfigPanel({ slideId }: Props) {
   const updateChartColors = useProjectStore((s) => s.updateChartColors)
   const [chartModalOpen, setChartModalOpen] = useState(false)
   const [analysisModalOpen, setAnalysisModalOpen] = useState(false)
-  const [chartColorOpen, setChartColorOpen] = useState<string | null>(null)
+  const [chartColorOpen, setChartColorOpen] = useState<string | null>(null) // key: `${chartId}:${optionIdx}`
 
   const slide = state?.slides.find((s) => s.id === slideId)
   if (!slide) {
@@ -62,50 +102,54 @@ export default function ConfigPanel({ slideId }: Props) {
           {slide.charts.map((c) => {
             const q = parsedDb?.questions.find((q) => q.id === c.question_id)
             const b = parsedDb?.breakdowns.find((b) => b.id === c.breakdown_id)
+            const options = q?.options ?? []
             return (
-              <div key={c.id} className="bg-neutral-800 border border-neutral-700 rounded p-2 mb-2 flex items-center gap-2">
-                <span className="bg-blue-700 text-white text-xs px-1.5 rounded">{q?.code || c.question_id}</span>
-                <span className="text-xs flex-1 truncate">{b?.label || c.breakdown_id}</span>
-                <select
-                  value={c.chart_type}
-                  onChange={(e) => updateChartType(slide.id, c.id, e.target.value as ChartType)}
-                  className="text-xs bg-neutral-900 border border-neutral-700 rounded px-1 py-0.5"
-                >
-                  {CHART_TYPES.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setChartColorOpen(chartColorOpen === c.id ? null : c.id)}
-                    aria-label={`color-${c.id}`}
-                    className="p-1 rounded hover:bg-neutral-700"
+              <div key={c.id} className="bg-neutral-800 border border-neutral-700 rounded p-2 mb-2 flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="bg-blue-700 text-white text-xs px-1.5 rounded">{q?.code || c.question_id}</span>
+                  <span className="text-xs flex-1 truncate">{b?.label || c.breakdown_id}</span>
+                  <select
+                    value={c.chart_type}
+                    onChange={(e) => updateChartType(slide.id, c.id, e.target.value as ChartType)}
+                    className="text-xs bg-neutral-900 border border-neutral-700 rounded px-1 py-0.5"
                   >
-                    <div
-                      className="w-4 h-4 rounded border border-neutral-600"
-                      style={{ backgroundColor: c.colors?.[0] || "#7F7F7F" }}
-                    />
+                    {CHART_TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => removeChart(slide.id, c.id)}
+                    className="text-neutral-500 hover:text-red-400"
+                  >
+                    <Trash2 size={12} />
                   </button>
-                  <ColorPicker
-                    open={chartColorOpen === c.id}
-                    value={c.colors?.[0] ?? ""}
-                    onChange={(color) => {
-                      const newColors = color ? [color] : []
-                      updateChartColors(slide.id, c.id, newColors)
-                      setChartColorOpen(null)
-                    }}
-                    onClose={() => setChartColorOpen(null)}
-                  />
                 </div>
-                <button
-                  onClick={() => removeChart(slide.id, c.id)}
-                  className="text-neutral-500 hover:text-red-400"
-                >
-                  <Trash2 size={12} />
-                </button>
+                {options.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 pl-1">
+                    <span className="text-[10px] text-neutral-500 uppercase tracking-wide mr-1">Colores</span>
+                    {options.map((opt, i) => (
+                      <ColorSlot
+                        key={`${c.id}:${i}`}
+                        chartId={c.id}
+                        optionIdx={i}
+                        optionLabel={opt}
+                        color={c.colors?.[i] || ""}
+                        open={chartColorOpen === `${c.id}:${i}`}
+                        onToggle={() => setChartColorOpen(chartColorOpen === `${c.id}:${i}` ? null : `${c.id}:${i}`)}
+                        onClose={() => setChartColorOpen(null)}
+                        onColorChange={(color) => {
+                          const newColors = [...(c.colors ?? [])]
+                          while (newColors.length < options.length) newColors.push("")
+                          newColors[i] = color
+                          updateChartColors(slide.id, c.id, newColors)
+                          setChartColorOpen(null)
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             )
           })}

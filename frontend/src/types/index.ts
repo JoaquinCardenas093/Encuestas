@@ -1,7 +1,10 @@
 export type ChartType =
-  | "PIE" | "DONUT" | "BAR" | "COLUMN"
+  | "PIE" | "DONUT"
+  | "BAR" | "COLUMN" | "BAR_HORIZONTAL"
+  | "BAR_CLUSTERED" | "COLUMN_CLUSTERED"
   | "BAR_STACKED" | "COLUMN_STACKED"
   | "LINE" | "AREA" | "RADAR"
+  | "TABLE_WITH_MINIBARS" | "TABLE_SIMPLE"
 
 export type AnalysisScope = "slide" | "question" | "chart"
 export type SlideType = "separator" | "shell"

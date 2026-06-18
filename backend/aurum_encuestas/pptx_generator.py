@@ -186,22 +186,44 @@ def _add_slide_content(slide, slide_def: Slide, state: ProjectState, free_area: 
     db_path = state.inputs.db_path if state.inputs else ""
     slide_config = build_slide_config(slide_def, state.parsed_db, db_path=db_path)
 
-    # 3. Classify
+    # 3. Classify — pass real parsed_db dict so extract_context can resolve
+    # question_type / n_options. Empty dict here caused everything to be typed
+    # as "open", breaking every AI binary/multi pattern trigger.
     matched_pattern = None
     try:
         _sc_dict = {
             "charts": [c.model_dump() for c in slide_def.charts],
             "analyses": [a.model_dump() for a in slide_def.analyses],
         }
-        matched_pattern = classify(_sc_dict, {}, style_guide)
+        _parsed_db_dict = state.parsed_db.model_dump() if state.parsed_db else {}
+        matched_pattern = classify(_sc_dict, _parsed_db_dict, style_guide, require_chart=bool(slide_def.charts))
     except Exception as exc:
         _log.warning("_add_slide_content: classify failed: %s", exc)
 
-    # Fallback to first built-in pattern if no match
+    # Fallback strategy:
+    #   1. Try classify against BUILTIN_STYLE_GUIDE (hand-curated, covers common cases
+    #      like binary + general-only that AI corpus may miss).
+    #   2. Else first style_guide pattern that has a chart element.
+    #   3. Else first BUILTIN pattern with a chart element.
     if matched_pattern is None:
-        fallback_patterns = style_guide.patterns or BUILTIN_STYLE_GUIDE.patterns
-        if fallback_patterns:
-            matched_pattern = fallback_patterns[0]
+        try:
+            matched_pattern = classify(
+                _sc_dict, _parsed_db_dict, BUILTIN_STYLE_GUIDE,
+                require_chart=bool(slide_def.charts),
+            )
+        except Exception as exc:
+            _log.warning("_add_slide_content: BUILTIN classify failed: %s", exc)
+
+    if matched_pattern is None:
+        candidates = list(style_guide.patterns or []) + list(BUILTIN_STYLE_GUIDE.patterns or [])
+        if slide_def.charts:
+            matched_pattern = next(
+                (p for p in candidates
+                 if any(getattr(e, "kind", None) == "chart" for e in (p.implementation.elements or []))),
+                None,
+            )
+        if matched_pattern is None and candidates:
+            matched_pattern = candidates[0]
 
     if matched_pattern is None:
         _log.warning("_add_slide_content: no pattern matched and no fallback — using legacy insertion")

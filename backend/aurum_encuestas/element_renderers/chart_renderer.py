@@ -44,13 +44,10 @@ _LEGEND_POSITION_MAP = {
 
 def render(slide, element: dict, ctx: RenderContext) -> None:
     """Render a chart element onto slide in-place."""
-    chart_type_str = element.get("chart_type", "BAR_HORIZONTAL")
-    xl_chart_type = _CHART_TYPE_MAP.get(chart_type_str)
-    if xl_chart_type is None:
-        log.warning("Unknown chart_type %r — falling back to BAR_CLUSTERED", chart_type_str)
-        xl_chart_type = XL_CHART_TYPE.BAR_CLUSTERED
-
-    # Resolve data source
+    # Resolve data source first so we can read the source chart's user-selected
+    # chart_type and override the pattern's hardcoded chart_type. This lets
+    # users change a slide's main chart from PIE → COLUMN_CLUSTERED via the UI
+    # without editing the pattern.
     data_source = element.get("data_source", {})
     chart_ref_index = data_source.get("chart_ref_index", 0)
     value_field = data_source.get("value_field", "pct")
@@ -61,9 +58,20 @@ def render(slide, element: dict, ctx: RenderContext) -> None:
         return
 
     source_chart = charts_list[chart_ref_index]
+    # General/main slot always uses the pattern's chart_type (typically PIE).
+    # Breakdown-targeted charts may override via source_chart.chart_type, but
+    # breakdown rendering is currently table-only, so we always defer to the
+    # pattern's chart_type here.
+    chart_type_str = element.get("chart_type", "BAR_HORIZONTAL")
+    xl_chart_type = _CHART_TYPE_MAP.get(chart_type_str)
+    if xl_chart_type is None:
+        log.warning("Unknown chart_type %r — falling back to BAR_CLUSTERED", chart_type_str)
+        xl_chart_type = XL_CHART_TYPE.BAR_CLUSTERED
+    is_pie = chart_type_str in ("PIE", "DONUT")
 
-    # Build CategoryChartData
-    chart_data = _build_chart_data(source_chart, value_field, element.get("sort", "none"))
+    # Build CategoryChartData (sorted in-place if requested)
+    sort_order = element.get("sort", "none")
+    chart_data, sorted_values = _build_chart_data(source_chart, value_field, sort_order)
 
     # Resolve position
     x, y, cx, cy = _resolve_position(element.get("position", {}), ctx)
@@ -77,15 +85,48 @@ def render(slide, element: dict, ctx: RenderContext) -> None:
 
     chart = chart_shape.chart
 
-    # Apply colors to series
-    _apply_series_colors(chart, ctx.chart_colors)
+    # Compose per-slice colors: source_chart.colors[i] wins over ctx global cascade.
+    per_chart_colors = list(getattr(source_chart, "colors", []) or [])
+    n_pts = len(sorted_values)
+    effective_colors: list[str] = []
+    fallback = ctx.chart_colors or []
+    for i in range(max(n_pts, len(per_chart_colors), len(fallback))):
+        if i < len(per_chart_colors) and per_chart_colors[i]:
+            effective_colors.append(per_chart_colors[i])
+        elif fallback:
+            effective_colors.append(fallback[i % len(fallback)])
+        else:
+            effective_colors.append("#7F7F7F")
+    _apply_series_colors(chart, effective_colors)
 
-    # Apply labels
-    labels_cfg = element.get("labels", {})
+    # Apply labels — pie/donut force show_category_name + show_percentage, NO value.
+    labels_cfg = dict(element.get("labels", {}))
+    if is_pie:
+        labels_cfg.setdefault("show_category_name", True)
+        labels_cfg.setdefault("show_percentage", True)
+        labels_cfg["show_value"] = False  # never raw fraction
+        labels_cfg.setdefault("format", "0.0%")
     _apply_labels(chart, labels_cfg, ctx)
 
-    # Apply legend
+    # Pie/donut rotation rules:
+    #   ~50/50  (|dom-0.5|<0.05) → firstSliceAng=180  vertical split, first
+    #                              option on the LEFT half (matches Aurora ref).
+    #   else                     → small slice centered ~45° (top-right). The
+    #                              dominant slice covers the rest, leading the
+    #                              eye to the right side of the disc.
+    if is_pie and sorted_values:
+        total = sum(v for v in sorted_values if v) or 1.0
+        dom_frac = (sorted_values[0] or 0) / total
+        if abs(dom_frac - 0.5) < 0.05:
+            angle = 180
+        else:
+            angle = int(round(-90 - dom_frac * 180)) % 360
+        _set_pie_first_slice_angle(chart, angle)
+
+    # Apply legend — pies/donuts force no legend (category names already in labels)
     legend_str = element.get("legend", "none")
+    if is_pie:
+        legend_str = "none"
     if legend_str == "none":
         chart.has_legend = False
     else:
@@ -103,16 +144,121 @@ def render(slide, element: dict, ctx: RenderContext) -> None:
         chart.has_title = False
 
 
-def _build_chart_data(source_chart, value_field: str, sort: str) -> CategoryChartData:
-    """Extract CategoryChartData from a slide_config chart object."""
+def render_chart_at(
+    slide,
+    source_chart,
+    x: int, y: int, cx: int, cy: int,
+    ctx: RenderContext,
+    chart_type: str = "BAR_HORIZONTAL",
+    value_field: str = "pct",
+    sort: str = "desc_by_value",
+    show_legend: bool = False,
+    show_category_name: bool = True,
+    show_percentage: bool = True,
+    number_format: str = "0.0%",
+    label_position: str = "outside_end",
+) -> None:
+    """Render a chart at absolute EMU coords, bypassing pattern position logic.
+
+    Used by table_renderer to embed a mini-chart inside a breakdown panel
+    without needing a synthetic element/position dict.
+    """
+    xl_chart_type = _CHART_TYPE_MAP.get(chart_type, XL_CHART_TYPE.BAR_CLUSTERED)
+    is_pie = chart_type in ("PIE", "DONUT")
+    chart_data, sorted_values = _build_chart_data(source_chart, value_field, sort)
+
+    try:
+        chart_shape = slide.shapes.add_chart(
+            xl_chart_type, Emu(x), Emu(y), Emu(cx), Emu(cy), chart_data,
+        )
+    except Exception as exc:
+        log.error("render_chart_at: add_chart failed: %s", exc)
+        return
+    chart = chart_shape.chart
+
+    per_chart_colors = list(getattr(source_chart, "colors", []) or [])
+    fallback = ctx.chart_colors or []
+    n_pts = len(sorted_values)
+    effective_colors: list[str] = []
+    for i in range(max(n_pts, len(per_chart_colors), len(fallback))):
+        if i < len(per_chart_colors) and per_chart_colors[i]:
+            effective_colors.append(per_chart_colors[i])
+        elif fallback:
+            effective_colors.append(fallback[i % len(fallback)])
+        else:
+            effective_colors.append("#7F7F7F")
+    _apply_series_colors(chart, effective_colors)
+
+    labels_cfg = {
+        "show_category_name": show_category_name and not is_pie,  # for pies category appears in slice label
+        "show_percentage": show_percentage,
+        "show_value": False,
+        "format": number_format,
+        "position": label_position,
+        "font_size": 8,
+    }
+    if is_pie:
+        labels_cfg["show_category_name"] = True
+    _apply_labels(chart, labels_cfg, ctx)
+
+    if is_pie and sorted_values:
+        total = sum(v for v in sorted_values if v) or 1.0
+        dom_frac = (sorted_values[0] or 0) / total
+        if abs(dom_frac - 0.5) < 0.05:
+            angle = 180
+        else:
+            angle = int(round(-90 - dom_frac * 180)) % 360
+        _set_pie_first_slice_angle(chart, angle)
+
+    if is_pie or not show_legend:
+        chart.has_legend = False
+    else:
+        chart.has_legend = True
+        chart.legend.position = XL_LEGEND_POSITION.BOTTOM
+        chart.legend.include_in_layout = False
+
+    chart.has_title = False
+
+
+def _set_pie_first_slice_angle(chart, angle_deg: int) -> None:
+    """Set <c:firstSliceAng val="..."/> on the pie/doughnut plot.
+
+    python-pptx does not expose firstSliceAng directly, so we manipulate the
+    underlying XML. Angle 0 = 12 o'clock; values increase clockwise.
+    """
+    try:
+        from pptx.oxml.ns import qn
+
+        plot = chart.plots[0]
+        plot_el = plot._element  # <c:pieChart> or <c:doughnutChart>
+        ang_el = plot_el.find(qn("c:firstSliceAng"))
+        if ang_el is None:
+            ang_el = plot_el.makeelement(qn("c:firstSliceAng"), {"val": str(angle_deg)})
+            plot_el.append(ang_el)
+        else:
+            ang_el.set("val", str(angle_deg))
+    except Exception as exc:
+        log.debug("Could not set firstSliceAng=%d: %s", angle_deg, exc)
+
+
+def _build_chart_data(source_chart, value_field: str, sort: str):
+    """Extract CategoryChartData and the sorted value list from a chart object.
+
+    Returns (CategoryChartData, list[float] sorted_values) — caller uses the
+    sorted values for first-slice-angle math without reordering data twice.
+    """
     cd = CategoryChartData()
 
     question = getattr(source_chart, "question", None)
     options = question.options if question else []
     data = getattr(source_chart, "data", {}) or {}
 
-    # Use General breakdown or first available
-    breakdown_data = data.get("General") or (next(iter(data.values())) if data else {})
+    # Pick the General/Total row for single-series, or first iter for non-general
+    breakdown_data = (
+        data.get("General")
+        or data.get("Total")
+        or (next(iter(data.values())) if data else {})
+    )
 
     if not options and breakdown_data:
         options = list(breakdown_data.keys())
@@ -135,7 +281,7 @@ def _build_chart_data(source_chart, value_field: str, sort: str) -> CategoryChar
         values.append(float(v))
 
     cd.add_series("", values)
-    return cd
+    return cd, values
 
 
 def _apply_series_colors(chart, colors: list[str]) -> None:
@@ -159,26 +305,41 @@ def _apply_series_colors(chart, colors: list[str]) -> None:
 
 
 def _apply_labels(chart, labels_cfg: dict, ctx: RenderContext) -> None:
-    """Apply label settings to all plot series."""
+    """Apply label settings to all plot series.
+
+    Always sets show_value/show_percentage/show_category_name EXPLICITLY so
+    python-pptx defaults (which include the raw value for pies) don't leak.
+    """
     if not labels_cfg:
         return
     try:
         plot = chart.plots[0]
-        plot.has_data_labels = any([
-            labels_cfg.get("show_category_name"),
-            labels_cfg.get("show_value"),
-            labels_cfg.get("show_percentage"),
-        ])
+        show_cat = bool(labels_cfg.get("show_category_name"))
+        show_pct = bool(labels_cfg.get("show_percentage"))
+        show_val = bool(labels_cfg.get("show_value"))
+        plot.has_data_labels = show_cat or show_pct or show_val
         if not plot.has_data_labels:
             return
 
         dls = plot.data_labels
-        if labels_cfg.get("show_category_name"):
-            dls.show_category_name = True
-        if labels_cfg.get("show_percentage"):
-            dls.show_percentage = True
-        if labels_cfg.get("show_value"):
-            dls.show_value = True
+        dls.show_category_name = show_cat
+        dls.show_percentage = show_pct
+        dls.show_value = show_val
+        # Defensive: explicitly suppress legend key + series name
+        try:
+            dls.show_legend_key = False
+            dls.show_series_name = False
+        except Exception:
+            pass
+
+        # Number format — controls how percentage is printed (e.g. "0.0%")
+        fmt = labels_cfg.get("format")
+        if fmt:
+            try:
+                dls.number_format = fmt
+                dls.number_format_is_linked = False
+            except Exception:
+                pass
 
         pos_str = labels_cfg.get("position", "outside_end")
         pos = _LABEL_POSITION_MAP.get(pos_str, XL_LABEL_POSITION.OUTSIDE_END)

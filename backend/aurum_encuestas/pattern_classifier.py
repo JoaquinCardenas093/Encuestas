@@ -263,15 +263,35 @@ def evaluate_trigger(trigger: Trigger, context: dict) -> bool:
 # classify — main entry point
 # ────────────────────────────────────────────────────────────────────────────
 
-def classify(slide_config: dict, parsed_db: dict, style_guide: StyleGuide) -> Pattern | None:
+def _pattern_has_chart(pattern) -> bool:
+    """True if pattern's implementation contains at least one element with kind=='chart'."""
+    impl = getattr(pattern, "implementation", None)
+    if impl is None:
+        return False
+    elements = getattr(impl, "elements", None) or []
+    for el in elements:
+        kind = getattr(el, "kind", None) if not isinstance(el, dict) else el.get("kind")
+        if kind == "chart":
+            return True
+    return False
+
+
+
+def classify(slide_config: dict, parsed_db: dict, style_guide: StyleGuide, require_chart: bool = False) -> Pattern | None:
     """Match slide_config against style_guide.patterns, return first match (priority asc).
 
     Returns None if no pattern matches → caller should use generic fallback layout.
+
+    Args:
+        require_chart: when True, patterns whose implementation has no element of
+            kind "chart" are skipped. Prevents chart-less overlay patterns (e.g.
+            logo-only headers with a permissive trigger) from outranking real
+            layout patterns for slides that actually have charts.
     """
     # Cache lookup
     cfg_hash = _hash_dict(slide_config)
     sg_hash = _hash_style_guide(style_guide)
-    cache_key = (cfg_hash, sg_hash)
+    cache_key = (cfg_hash, sg_hash, bool(require_chart))
 
     if cache_key in _cache:
         _cache.move_to_end(cache_key)
@@ -289,6 +309,8 @@ def classify(slide_config: dict, parsed_db: dict, style_guide: StyleGuide) -> Pa
 
     matched: Pattern | None = None
     for pattern in sorted_patterns:
+        if require_chart and not _pattern_has_chart(pattern):
+            continue
         try:
             if evaluate_trigger(pattern.trigger, context):
                 matched = pattern
@@ -385,6 +407,10 @@ def build_slide_config(slide_def: Any, parsed_db: Any, db_path: str = "") -> Any
         colors: list
         question: _Any = None   # Question model from parsed_db
         data: dict = field(default_factory=dict)
+        # Nested: {bd_id: {"label": str, "categories": {cat: {opt: {count,pct}}}}}
+        # Populated for every chart so segmented tables can render group-merged
+        # headers without needing N separate chart_ref_index queries.
+        all_breakdowns_data: dict = field(default_factory=dict)
 
     raw_charts = getattr(slide_def, "charts", []) or []
     analyses = getattr(slide_def, "analyses", []) or []
@@ -394,19 +420,20 @@ def build_slide_config(slide_def: Any, parsed_db: Any, db_path: str = "") -> Any
     for chart in raw_charts:
         question = None
         chart_data: dict = {}
+        all_bds: dict = {}
         if parsed_db and hasattr(parsed_db, "questions"):
             question = next(
                 (q for q in parsed_db.questions if q.id == chart.question_id), None
             )
         if question is not None and db_path and parsed_db and hasattr(parsed_db, "data_blocks"):
+            data_blocks = parsed_db.data_blocks if isinstance(parsed_db.data_blocks, dict) else {}
             try:
-                from .data_extractor import extract_chart_data
+                from .data_extractor import extract_all_breakdowns_data, extract_chart_data
                 chart_data = extract_chart_data(
-                    db_path,
-                    question,
-                    chart.breakdown_id,
-                    parsed_db.data_blocks if isinstance(parsed_db.data_blocks, dict) else {},
+                    db_path, question, chart.breakdown_id, data_blocks,
                 )
+                bd_list = getattr(parsed_db, "breakdowns", []) or []
+                all_bds = extract_all_breakdowns_data(db_path, question, bd_list, data_blocks)
             except Exception as exc:
                 log.debug("build_slide_config: could not extract chart data for %r: %s", chart.id, exc)
         enriched_charts.append(
@@ -419,6 +446,7 @@ def build_slide_config(slide_def: Any, parsed_db: Any, db_path: str = "") -> Any
                 colors=getattr(chart, "colors", []),
                 question=question,
                 data=chart_data,
+                all_breakdowns_data=all_bds,
             )
         )
 
