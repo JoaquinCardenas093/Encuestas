@@ -1,16 +1,19 @@
 import base64
 import logging
 import tempfile
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, File, Request, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from .config import add_recent, load_recents
 from .errors import AurumError
+from .llm_client import generate_analysis, suggest_layout
 from .models import ProjectState
 from .pptx_generator import build_pptx
 from .pptx_template import load_template
@@ -164,9 +167,6 @@ async def export_pptx_endpoint(req: ExportPptxRequest):
     return {"exported": True, "path": expanded, "size": size}
 
 
-from .llm_client import generate_analysis
-
-
 class GenerateAnalysisRequest(BaseModel):
     scope: str
     context: dict
@@ -181,12 +181,7 @@ async def generate_analysis_endpoint(req: GenerateAnalysisRequest):
         return {"text": "[Análisis no disponible — editar manualmente]", "fallback": True}
 
 
-from .config import add_recent, load_recents
-
 # TODO M6.8: new training endpoints (corpus CRUD + AI analyze + style-guide GET/PUT)
-
-
-from .llm_client import suggest_layout
 
 
 class SuggestLayoutRequest(BaseModel):
@@ -213,3 +208,42 @@ async def suggest_layout_endpoint(req: SuggestLayoutRequest):
 @app.get("/api/recents")
 async def recents_endpoint():
     return {"recents": load_recents()}
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# M6.7: Async AI analysis job endpoints
+# ────────────────────────────────────────────────────────────────────────────
+
+_analysis_jobs: dict[str, dict] = {}
+
+
+@app.post("/api/training/analyze-with-ai")
+async def analyze_with_ai(background_tasks: BackgroundTasks):
+    """Start async AI analysis job. Returns job_id immediately."""
+    job_id = str(uuid.uuid4())
+    _analysis_jobs[job_id] = {"progress": 0, "status": "running", "message": "Iniciando..."}
+
+    def _run():
+        from .style_guide import load_active_style_guide
+        from .style_guide_analyzer import run_full_analysis_pipeline
+        try:
+            existing_manual = load_active_style_guide().manual_edits or {}
+        except Exception:
+            existing_manual = {}
+        result = run_full_analysis_pipeline(
+            progress_dict=_analysis_jobs[job_id],
+            existing_manual_edits=existing_manual,
+        )
+        _analysis_jobs[job_id].update(result)
+
+    background_tasks.add_task(_run)
+    return {"job_id": job_id}
+
+
+@app.get("/api/training/analysis-status/{job_id}")
+async def analysis_status(job_id: str):
+    """Get progress of an async analysis job."""
+    job = _analysis_jobs.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"Job {job_id!r} not found")
+    return job

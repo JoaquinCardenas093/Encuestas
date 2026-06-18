@@ -206,6 +206,19 @@ def test_suggest_layout_endpoint(mock_sug):
     assert r.json()["source"] == "ai"
 
 
+# ─── M6.7: AI analysis job endpoints ────────────────────────────────────────
+
+def test_analyze_with_ai_returns_job_id():
+    r = client.post("/api/training/analyze-with-ai")
+    assert r.status_code == 200
+    assert "job_id" in r.json()
+
+
+def test_analysis_status_unknown_job():
+    r = client.get("/api/training/analysis-status/nonexistent-job-id")
+    assert r.status_code == 404
+
+
 def test_recents_add_and_list(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     # save a project (should auto-add to recents)
