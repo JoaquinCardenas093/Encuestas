@@ -52,6 +52,45 @@ def render_pattern(
     elements = implementation.get("elements", [])
     ordered_elements = _topological_sort(elements)
 
+    # Fan out elements marked with "_repeat": "per_chart" — one copy per
+    # chart in slide_config.charts. Used by n_charts_grid pattern.
+    charts_list = getattr(ctx.slide_config, "charts", []) or []
+    expanded: list[dict] = []
+    for el in ordered_elements:
+        if el.get("_repeat") == "per_chart" and charts_list:
+            n = len(charts_list)
+            cols = 3 if n <= 3 else (3 if n <= 6 else 3)  # always 3 cols
+            rows = (n + cols - 1) // cols
+            base_pos = el.get("position", {})
+            base_x = base_pos.get("x_rel", 0.03)
+            base_y = base_pos.get("y_rel", 0.14)
+            base_h = base_pos.get("h_rel", 0.74)
+            gap_x = 0.02
+            gap_y = 0.04
+            # Recompute w/h so the row fits inside free_area horizontally / vertically.
+            # x_rel is relative to free_area (0.0 = left edge, 1.0 = right edge), so
+            # 2*base_x accounts for equal left and right margins.
+            cell_w = (1.0 - 2 * base_x - gap_x * (cols - 1)) / cols
+            cell_h = (base_h - gap_y * (rows - 1)) / rows
+            for i in range(n):
+                r, c = divmod(i, cols)
+                new_el = copy.deepcopy(el)
+                new_el.pop("_repeat", None)
+                new_el["id"] = f"{el['id']}_{i}"
+                new_el["position"] = {
+                    "x_rel": base_x + c * (cell_w + gap_x),
+                    "y_rel": base_y + r * (cell_h + gap_y),
+                    "w_rel": cell_w,
+                    "h_rel": cell_h,
+                }
+                ds = dict(new_el.get("data_source", {}))
+                ds["chart_ref_index"] = i
+                new_el["data_source"] = ds
+                expanded.append(new_el)
+        else:
+            expanded.append(el)
+    ordered_elements = expanded
+
     # Ensure resolved_anchors is mutable on ctx
     if not hasattr(ctx, "resolved_anchors") or ctx.resolved_anchors is None:
         ctx.resolved_anchors = {}
@@ -296,11 +335,16 @@ def _collect_extends_chain(pattern: Any, all_patterns: list[Any]) -> list[Any]:
 
 
 def _el_to_dict(el: Any) -> dict:
-    """Convert element to dict (handles both dict and pydantic model)."""
+    """Convert element to dict (handles both dict and pydantic model).
+
+    Uses by_alias=True so that fields with aliases (e.g. _repeat) are exported
+    under their alias keys, preserving round-trip compatibility with the raw
+    BUILTIN_STYLE_GUIDE dict literals.
+    """
     if isinstance(el, dict):
         return el
     if hasattr(el, "model_dump"):
-        return el.model_dump()
+        return el.model_dump(by_alias=True)
     return dict(el)
 
 

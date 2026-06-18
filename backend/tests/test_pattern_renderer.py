@@ -219,3 +219,37 @@ def test_resolve_data_source_breakdown_groups_explicit_list():
     ds = {"chart_ref_index": 0, "breakdown_groups": ["Masculino"]}
     result = resolve_data_source(ds, slide_config)
     assert result["breakdown_keys"] == ["Masculino"]
+
+
+# ── Task 4: n_charts_grid fan-out ───────────────────────────────────────────
+
+def test_n_charts_grid_renders_three_chart_shapes():
+    from pptx import Presentation
+    from aurum_encuestas.pattern_renderer import render_pattern
+    from aurum_encuestas.style_guide import BUILTIN_STYLE_GUIDE
+    from aurum_encuestas.element_renderers.render_context import RenderContext
+    from types import SimpleNamespace
+
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    q = SimpleNamespace(options=["A", "B", "C"])
+    charts = [
+        SimpleNamespace(question=q, breakdown_id="general", chart_type="PIE",
+                        data={"General": {"A": {"pct": 0.5}, "B": {"pct": 0.3}, "C": {"pct": 0.2}}}, colors=[]),
+        SimpleNamespace(question=q, breakdown_id="general", chart_type="BAR_CLUSTERED",
+                        data={"General": {"A": {"pct": 0.4}, "B": {"pct": 0.4}, "C": {"pct": 0.2}}}, colors=[]),
+        SimpleNamespace(question=q, breakdown_id="general", chart_type="BAR_CLUSTERED",
+                        data={"General": {"A": {"pct": 0.6}, "B": {"pct": 0.3}, "C": {"pct": 0.1}}}, colors=[]),
+    ]
+    slide_config = SimpleNamespace(charts=charts, analyses=[], n_charts=3)
+    ctx = RenderContext(slide_config=slide_config, chart_colors=["#7F7F7F"],
+                        resolved_colors={"primary": "#7F7F7F", "secondary": "#BFBFBF", "background": "#FFFFFF"},
+                        free_area={"x": 0, "y": 0, "cx": 12_192_000, "cy": 6_858_000},
+                        typography={"label_size": 9}, resolved_anchors={})
+
+    pattern = next(p for p in BUILTIN_STYLE_GUIDE.patterns if p.id == "n_charts_grid")
+    render_pattern(pattern, slide, ctx, BUILTIN_STYLE_GUIDE, list(BUILTIN_STYLE_GUIDE.patterns))
+
+    n_chart_shapes = sum(1 for sh in slide.shapes if sh.has_chart)
+    assert n_chart_shapes == 3, f"expected 3 chart shapes, got {n_chart_shapes}"

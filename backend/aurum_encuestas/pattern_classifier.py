@@ -372,6 +372,53 @@ def classify_pattern(slide_config: Any, patterns: list) -> Pattern | None:
     return classify(sc_dict, {}, sg)
 
 
+def classify_slide(slide_config: Any, style_guide: "StyleGuide") -> "Pattern | None":
+    """Classify a slide_config object (or dict) against a StyleGuide.
+
+    Convenience wrapper used by tests and pptx_generator when a full StyleGuide
+    is available but no parsed_db is needed (context is derived solely from
+    slide_config.charts / analyses counts).
+
+    Args:
+        slide_config: any object with .charts (list) and .analyses (list), or a dict.
+        style_guide: StyleGuide instance to classify against.
+
+    Returns:
+        Matched Pattern or None.
+    """
+    if hasattr(slide_config, "charts"):
+        charts_list = slide_config.charts or []
+        # Convert to list of dicts for extract_context
+        charts_dicts = []
+        for c in charts_list:
+            if hasattr(c, "model_dump"):
+                charts_dicts.append(c.model_dump())
+            elif hasattr(c, "__dict__"):
+                charts_dicts.append(dict(c.__dict__))
+            elif isinstance(c, dict):
+                charts_dicts.append(c)
+            else:
+                charts_dicts.append({})
+        analyses_list = getattr(slide_config, "analyses", []) or []
+        analyses_dicts = []
+        for a in analyses_list:
+            if hasattr(a, "model_dump"):
+                analyses_dicts.append(a.model_dump())
+            elif hasattr(a, "__dict__"):
+                analyses_dicts.append(dict(a.__dict__))
+            elif isinstance(a, dict):
+                analyses_dicts.append(a)
+            else:
+                analyses_dicts.append({})
+        sc_dict: dict = {"charts": charts_dicts, "analyses": analyses_dicts}
+    elif isinstance(slide_config, dict):
+        sc_dict = slide_config
+    else:
+        sc_dict = {}
+
+    return classify(sc_dict, {}, style_guide)
+
+
 def build_slide_config(slide_def: Any, parsed_db: Any, db_path: str = "") -> Any:
     """Build a SlideConfig object from a Slide model + ParsedDB for classifier and renderer.
 

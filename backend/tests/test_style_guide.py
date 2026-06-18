@@ -233,8 +233,8 @@ def test_builtin_is_valid_style_guide():
     assert BUILTIN_STYLE_GUIDE.is_builtin is True
 
 
-def test_builtin_has_five_patterns():
-    assert len(BUILTIN_STYLE_GUIDE.patterns) == 5
+def test_builtin_has_six_patterns():
+    assert len(BUILTIN_STYLE_GUIDE.patterns) == 6
 
 
 def test_builtin_pattern_ids():
@@ -244,6 +244,7 @@ def test_builtin_pattern_ids():
     assert "multi_choice_small" in ids
     assert "multi_choice_large" in ids
     assert "comparison_two_charts" in ids
+    assert "n_charts_grid" in ids
 
 
 def test_builtin_patterns_have_valid_triggers():

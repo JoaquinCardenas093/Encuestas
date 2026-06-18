@@ -445,3 +445,25 @@ class TestLRUCache:
             classify(cfg, db, sg)
 
         assert len(pc._cache) <= 200
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Task 4: n_charts_grid pattern
+# ────────────────────────────────────────────────────────────────────────────
+
+def test_three_charts_matches_n_charts_grid_pattern():
+    from aurum_encuestas.pattern_classifier import classify_slide
+    from aurum_encuestas.style_guide import BUILTIN_STYLE_GUIDE
+    from types import SimpleNamespace
+
+    slide_config = SimpleNamespace(
+        charts=[
+            SimpleNamespace(question_id="q1", breakdown_id="sexo", chart_type="PIE"),
+            SimpleNamespace(question_id="q2", breakdown_id="general", chart_type="BAR_CLUSTERED"),
+            SimpleNamespace(question_id="q3", breakdown_id="general", chart_type="BAR_CLUSTERED"),
+        ],
+        n_charts=3,
+        analyses=[],
+    )
+    pattern = classify_slide(slide_config, BUILTIN_STYLE_GUIDE)
+    assert pattern is not None and pattern.id == "n_charts_grid"

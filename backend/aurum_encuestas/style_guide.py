@@ -109,6 +109,9 @@ class ElementChart(_Base):
     legend: Literal["none", "right", "bottom", "top", "left"] = "none"
     title: str | None = None
     sort: Literal["none", "desc_by_value", "asc_by_value", "category_order"] = "none"
+    # Fan-out marker: when set to "per_chart", pattern_renderer replicates this
+    # element once per chart in slide_config.charts (n_charts_grid pattern).
+    repeat: str | None = Field(None, alias="_repeat")
 
 
 class _CellStyle(_Base):
@@ -509,6 +512,35 @@ BUILTIN_STYLE_GUIDE = StyleGuide.model_validate({
                         },
                         "legend": "bottom",
                         "sort": "desc_by_value",
+                    },
+                ]
+            },
+        },
+        # ── 5: n_charts_grid ──────────────────────────────────────────────
+        # 3+ charts in one slide → auto-tile (1×3, 2×3, etc.).
+        # The single chart element below is replicated by pattern_renderer
+        # based on slide_config.charts count; position is the FIRST cell.
+        {
+            "id": "n_charts_grid",
+            "priority": 5,
+            "trigger": {"field": "n_charts_in_slide", "$gte": 3},
+            "why_picked": "3+ charts — auto grid de N celdas iguales.",
+            "implementation": {
+                "elements": [
+                    {
+                        "kind": "chart",
+                        "id": "grid_chart",
+                        "position": {"x_rel": 0.03, "y_rel": 0.14, "w_rel": 0.30, "h_rel": 0.74},
+                        "data_source": {"chart_ref_index": 0, "value_field": "pct"},
+                        "labels": {
+                            "show_percentage": True,
+                            "position": "outside_end",
+                            "format": "0.0%",
+                            "font_size": 8,
+                        },
+                        "legend": "none",
+                        "sort": "desc_by_value",
+                        "_repeat": "per_chart",
                     },
                 ]
             },
