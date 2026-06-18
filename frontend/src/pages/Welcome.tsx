@@ -1,9 +1,10 @@
 import { useNavigate } from "react-router-dom"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Upload, FileSpreadsheet, Presentation } from "lucide-react"
 import * as api from "../api/client"
 import { useFileUpload } from "../hooks/useUpload"
 import { useProjectStore } from "../store/project"
+import { useStyleGuideStore } from "../store/styleGuide"
 
 export default function Welcome() {
   const navigate = useNavigate()
@@ -17,6 +18,15 @@ export default function Welcome() {
   const setParsedDb = useProjectStore((s) => s.setParsedDb)
   const setTemplateInfo = useProjectStore((s) => s.setTemplateInfo)
   const setNewProject = useProjectStore((s) => s.setNewProject)
+
+  const { styleGuide, corpus, loadStyleGuide, loadCorpus } = useStyleGuideStore((s) => s)
+
+  useEffect(() => {
+    loadStyleGuide()
+    loadCorpus()
+  }, [])
+
+  const showCorpusBanner = !styleGuide || styleGuide.is_builtin || corpus.length === 0
 
   async function handleContinue() {
     if (!dbFile || !tplFile) return
@@ -38,6 +48,20 @@ export default function Welcome() {
 
   return (
     <div className="flex flex-col items-center justify-center h-full bg-neutral-900 text-neutral-100">
+      {showCorpusBanner && (
+        <div className="w-full max-w-xl mb-4 flex items-center gap-2 bg-amber-900/20 border border-amber-700/40 rounded-lg px-4 py-3 text-sm">
+          <span>⚡ Cargá training PPTs para que las generaciones reflejen tu estilo casa</span>
+          <a
+            href="#"
+            role="link"
+            aria-label="Configurar"
+            onClick={(e) => { e.preventDefault(); navigate("/training") }}
+            className="ml-auto text-amber-400 hover:text-amber-200 font-semibold whitespace-nowrap"
+          >
+            → Configurar
+          </a>
+        </div>
+      )}
       <div className="w-full max-w-xl bg-neutral-800 rounded-lg p-8 shadow border border-neutral-700">
         <h1 className="text-xl font-semibold mb-1">Nuevo proyecto</h1>
         <p className="text-sm text-neutral-400 mb-6">Subí los 3 archivos para empezar.</p>
