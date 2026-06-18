@@ -248,14 +248,17 @@ def analyze_training_corpus(slides_content: list[dict]) -> dict:
         }
     ]
 
+    # Streaming required by Anthropic for long requests (>10 min). With 32K max_tokens
+    # + 30 vision images, call comfortably exceeds that threshold.
     try:
-        msg = _client.messages.create(
+        with _client.messages.stream(
             model=ANALYSIS_MODEL,
             max_tokens=ANALYSIS_MAX_TOKENS,
             temperature=ANALYSIS_TEMPERATURE,
             system=system_blocks,
             messages=[{"role": "user", "content": slides_content}],
-        )
+        ) as stream:
+            msg = stream.get_final_message()
     except Exception as exc:
         raise LLMError(f"Sonnet 4.6 API error: {exc}") from exc
 
