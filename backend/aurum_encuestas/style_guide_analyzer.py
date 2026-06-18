@@ -356,6 +356,25 @@ def _semantic_repair(data: dict, repairs: list[str], errors: list[str]) -> dict:
                 repairs.append(f"Pattern {pid!r} image {el.get('id')!r}: synthesized source_ref from {role!r}")
                 el["source_ref"] = role
 
+            # Map invalid align_h to nearest valid (justify is now allowed; clamp others)
+            _style = el.get("style")
+            if isinstance(_style, dict):
+                ah = _style.get("align_h")
+                if ah and ah not in ("left", "center", "right", "justify"):
+                    repairs.append(f"Pattern {pid!r} el {el.get('id')!r}: align_h {ah!r} → 'left'")
+                    _style["align_h"] = "left"
+
+            # Map invalid minibar.percent_text_position
+            if el.get("kind") == "table":
+                cells = (el.get("cells") or {})
+                opt_row = cells.get("option_row") or {}
+                minibar = opt_row.get("minibar") or {}
+                ptp = minibar.get("percent_text_position")
+                valid_ptps = ("left_of_bar", "inside_bar", "right_of_bar", "right_of_label", "above_bar", "below_bar")
+                if ptp and ptp not in valid_ptps:
+                    repairs.append(f"Pattern {pid!r}: minibar.percent_text_position {ptp!r} → 'left_of_bar'")
+                    minibar["percent_text_position"] = "left_of_bar"
+
             repaired_elements.append(el)
 
         if "implementation" not in p:

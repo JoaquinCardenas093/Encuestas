@@ -116,7 +116,7 @@ class _CellStyle(_Base):
     text_color: str | None = None
     font_size: int | None = None
     bold: bool = False
-    align_h: Literal["left", "center", "right"] = "left"
+    align_h: Literal["left", "center", "right", "justify"] = "left"
 
 
 class _MinibarSpec(_Base):
@@ -126,7 +126,7 @@ class _MinibarSpec(_Base):
     height_rel_to_cell: float = 0.4
     align: Literal["left", "center", "right"] = "left"
     show_percent_text: bool = True
-    percent_text_position: Literal["left_of_bar", "inside_bar", "right_of_bar"] = "left_of_bar"
+    percent_text_position: Literal["left_of_bar", "inside_bar", "right_of_bar", "right_of_label", "above_bar", "below_bar"] = "left_of_bar"
 
 
 class _OptionRowSpec(_Base):
@@ -174,7 +174,7 @@ class _TextStyle(_Base):
     font_size: int | None = None
     border_left: dict | None = None
     padding: int | None = None
-    align_h: Literal["left", "center", "right"] = "left"
+    align_h: Literal["left", "center", "right", "justify"] = "left"
     bold: bool = False
 
 
