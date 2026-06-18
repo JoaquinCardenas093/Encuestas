@@ -99,6 +99,20 @@ def render_pattern(
 
     for element in ordered_elements:
         kind = element.get("kind")
+        # Render-time chart_type peek: if the source chart's chart_type is
+        # TABLE_WITH_MINIBARS, synthesize a single-panel segmented table
+        # element instead of a chart. Layout stays pattern-driven.
+        if kind == "chart":
+            ds = element.get("data_source", {}) or {}
+            ref_idx = ds.get("chart_ref_index", 0)
+            charts_list = getattr(ctx.slide_config, "charts", []) or []
+            if 0 <= ref_idx < len(charts_list):
+                source_chart = charts_list[ref_idx]
+                sc_chart_type = (getattr(source_chart, "chart_type", "") or "").strip()
+                sc_bd = (getattr(source_chart, "breakdown_id", "") or "").lower()
+                if sc_chart_type == "TABLE_WITH_MINIBARS" and sc_bd and sc_bd != "general":
+                    element = _synthesize_table_element(element, source_chart)
+                    kind = "table"
         renderer_module_path = _KIND_RENDERERS.get(kind)
         if renderer_module_path is None:
             log.warning(
@@ -348,6 +362,26 @@ def _el_to_dict(el: Any) -> dict:
     if hasattr(el, "model_dump"):
         return el.model_dump(by_alias=True)
     return dict(el)
+
+
+def _synthesize_table_element(chart_el: dict, source_chart) -> dict:
+    """Convert a chart element to a single-panel segmented_breakdowns table.
+
+    Called by render_pattern when source_chart.chart_type == TABLE_WITH_MINIBARS.
+    Inherits id/position from the original chart element so layout stays
+    pattern-driven; targets only the source_chart's own breakdown_id.
+    """
+    bd_id = getattr(source_chart, "breakdown_id", None)
+    return {
+        "kind": "table",
+        "id": chart_el.get("id"),
+        "position": chart_el.get("position", {}),
+        "structure": "segmented_breakdowns",
+        "data_source": {
+            "chart_ref_index": chart_el.get("data_source", {}).get("chart_ref_index", 0),
+            "breakdown_groups": [bd_id] if bd_id and bd_id.lower() != "general" else [],
+        },
+    }
 
 
 def _topological_sort(elements: list[dict]) -> list[dict]:
