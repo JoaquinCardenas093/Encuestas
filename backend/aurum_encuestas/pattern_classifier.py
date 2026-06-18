@@ -25,7 +25,7 @@ import hashlib
 import json
 import logging
 from collections import OrderedDict
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .style_guide import Pattern, StyleGuide, Trigger
@@ -37,7 +37,7 @@ log = logging.getLogger(__name__)
 # ────────────────────────────────────────────────────────────────────────────
 
 _LRU_MAX = 200
-_cache: OrderedDict[tuple[str, str], Optional[str]] = OrderedDict()
+_cache: OrderedDict[tuple[str, str], str | None] = OrderedDict()
 
 
 def clear_cache() -> None:
@@ -155,7 +155,7 @@ def extract_context(slide_config: dict, parsed_db: dict) -> dict:
 # Trigger evaluation — recursive descent
 # ────────────────────────────────────────────────────────────────────────────
 
-def evaluate_trigger(trigger: "Trigger", context: dict) -> bool:
+def evaluate_trigger(trigger: Trigger, context: dict) -> bool:
     """Evaluate a Trigger node against a context dict.
 
     Recursive: $and/$or/$not contain child Trigger nodes.
@@ -234,7 +234,7 @@ def evaluate_trigger(trigger: "Trigger", context: dict) -> bool:
 # classify — main entry point
 # ────────────────────────────────────────────────────────────────────────────
 
-def classify(slide_config: dict, parsed_db: dict, style_guide: "StyleGuide") -> Optional["Pattern"]:
+def classify(slide_config: dict, parsed_db: dict, style_guide: StyleGuide) -> Pattern | None:
     """Match slide_config against style_guide.patterns, return first match (priority asc).
 
     Returns None if no pattern matches → caller should use generic fallback layout.
@@ -258,7 +258,7 @@ def classify(slide_config: dict, parsed_db: dict, style_guide: "StyleGuide") -> 
     context = extract_context(slide_config, parsed_db)
     sorted_patterns = sorted(style_guide.patterns, key=lambda p: p.priority)
 
-    matched: Optional["Pattern"] = None
+    matched: Pattern | None = None
     for pattern in sorted_patterns:
         try:
             if evaluate_trigger(pattern.trigger, context):
