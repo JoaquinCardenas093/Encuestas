@@ -70,52 +70,46 @@ class TestPreviewSlide:
             import pytest
             pytest.skip("LibreOffice not installed")
 
-        import tempfile
-
-        from aurum_encuestas.models import ProjectState, Slide
-        from aurum_encuestas.pptx_generator import build_pptx
-
-        # Create a minimal project state
-        state = ProjectState(
-            version=1,
-            project_name="Test",
-            inputs={"db_path": str(valid_xlsx_path), "template_path": str(valid_template_path), "font_override": None},
-            slides=[
-                Slide(
-                    id="slide_0",
-                    type="separator",
-                    title="Test Slide",
-                )
+        state_dict = {
+            "version": 1,
+            "project_name": "Test",
+            "inputs": {"db_path": str(valid_xlsx_path), "template_path": str(valid_template_path), "font_override": None},
+            "slides": [
+                {
+                    "id": "slide_0",
+                    "type": "separator",
+                    "title": "Test Slide",
+                }
             ],
-        )
+        }
 
-        # Build PPTX
-        with tempfile.NamedTemporaryFile(suffix=".pptx", delete=False) as f:
-            pptx_path = f.name
-        build_pptx(state, pptx_path)
-
-        # Test preview endpoint
         req = {
-            "pptx_path": pptx_path,
+            "state": state_dict,
             "slide_index": 0,
         }
         r = client.post("/api/preview-slide", json=req)
         assert r.status_code == 200
         body = r.json()
         assert "png_base64" in body
-        # Should start with data URL prefix or just base64
         assert isinstance(body["png_base64"], str)
         assert len(body["png_base64"]) > 0
 
-    def test_preview_slide_returns_placeholder_without_libreoffice(self):
+    def test_preview_slide_returns_placeholder_without_libreoffice(self, valid_template_path, valid_xlsx_path):
         """preview-slide returns base64 placeholder PNG if LibreOffice unavailable."""
         import shutil
         if shutil.which("soffice"):
             import pytest
             pytest.skip("LibreOffice is installed")
 
+        state_dict = {
+            "version": 1,
+            "project_name": "Test",
+            "inputs": {"db_path": str(valid_xlsx_path), "template_path": str(valid_template_path), "font_override": None},
+            "slides": [],
+        }
+
         req = {
-            "pptx_path": "/nonexistent.pptx",
+            "state": state_dict,
             "slide_index": 0,
         }
         r = client.post("/api/preview-slide", json=req)
@@ -147,7 +141,7 @@ class TestExportPptx:
         out_path = str(tmp_path / "exported.pptx")
         req = {
             "state": state_dict,
-            "out_path": out_path,
+            "path": out_path,
         }
         r = client.post("/api/export-pptx", json=req)
         assert r.status_code == 200

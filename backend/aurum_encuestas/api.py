@@ -181,7 +181,8 @@ async def generate_analysis_endpoint(req: GenerateAnalysisRequest):
         return {"text": "[Análisis no disponible — editar manualmente]", "fallback": True}
 
 
-# TODO M6.8: new training endpoints (corpus CRUD + AI analyze + style-guide GET/PUT)
+# M4 training endpoints (add/list/delete/reprocess/bank) removed in M6.2.
+# New corpus/style-guide/cache endpoints added below in M6.8.
 
 
 class SuggestLayoutRequest(BaseModel):
