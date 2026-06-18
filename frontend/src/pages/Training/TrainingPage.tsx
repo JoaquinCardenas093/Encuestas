@@ -1,106 +1,156 @@
 import { useEffect, useRef, useState } from "react"
-import { Plus, Trash2, RefreshCw } from "lucide-react"
-import * as tapi from "../../api/training"
+import { Plus, Trash2, RefreshCw, Eye, Database } from "lucide-react"
+import { useStyleGuideStore } from "../../store/styleGuide"
+import StyleGuideViewer from "./StyleGuideViewer"
+import AnalysisProgressModal from "./AnalysisProgressModal"
 
 export default function TrainingPage() {
-  const [pptxs, setPptxs] = useState<tapi.TrainingPPT[]>([])
-  const [bankSize, setBankSize] = useState(0)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const {
+    styleGuide, isLoading, corpus, analysisJob,
+    loadStyleGuide, loadCorpus, addPPT, deletePPT,
+    analyzeWithAI, clearAnalysisJob,
+  } = useStyleGuideStore((s) => s)
+
+  const [showStyleGuide, setShowStyleGuide] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const refresh = async () => {
-    setLoading(true); setError(null)
-    try {
-      const r = await tapi.listTraining()
-      setPptxs(r.pptxs)
-      setBankSize(r.bank_size)
-    } catch (e) {
-      setError((e as { message?: string }).message || "Error")
-    } finally {
-      setLoading(false)
-    }
-  }
+  useEffect(() => {
+    loadStyleGuide()
+    loadCorpus()
+  }, [])
 
-  useEffect(() => { refresh() }, [])
-
-  const handleAdd = async (f: File) => {
-    setLoading(true)
-    try {
-      await tapi.addTraining(f)
-      await refresh()
-    } catch (e) {
-      setError((e as { message?: string }).message || "Error")
-    } finally {
-      setLoading(false)
-    }
+  const handleAddFile = async (file: File) => {
+    await addPPT(file)
   }
 
   const handleDelete = async (filename: string) => {
-    if (!window.confirm(`Eliminar ${filename}?`)) return
-    await tapi.deleteTraining(filename)
-    await refresh()
+    if (!window.confirm(`¿Eliminar ${filename} del corpus?`)) return
+    await deletePPT(filename)
   }
 
-  const handleReprocess = async () => {
-    setLoading(true)
-    try {
-      await tapi.reprocessTraining()
-      await refresh()
-    } finally {
-      setLoading(false)
-    }
-  }
+  const hasManualEdits = styleGuide && Object.keys(styleGuide.manual_edits).length > 0
 
   return (
-    <div className="p-6 max-w-4xl mx-auto text-neutral-100">
-      <header className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-lg font-semibold">Entrenamiento</h2>
-          <p className="text-sm text-neutral-400">Banco: {bankSize} layouts de {pptxs.length} PPTs</p>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={handleReprocess} disabled={loading} className="text-sm bg-neutral-700 hover:bg-neutral-600 px-3 py-1.5 rounded flex items-center gap-1 disabled:opacity-40">
-            <RefreshCw size={14} /> Re-procesar
-          </button>
-          <button onClick={() => fileRef.current?.click()} disabled={loading} className="text-sm bg-accent text-neutral-900 font-semibold px-3 py-1.5 rounded flex items-center gap-1">
-            <Plus size={14} /> Agregar PPT
-          </button>
-          <input ref={fileRef} type="file" accept=".pptx" className="hidden" onChange={(e) => e.target.files?.[0] && handleAdd(e.target.files[0])} />
-        </div>
+    <div className="p-6 max-w-5xl mx-auto text-neutral-100">
+      {/* Header */}
+      <header className="mb-6">
+        <h2 className="text-lg font-semibold">Corpus de entrenamiento</h2>
+        {styleGuide && (
+          <p className="text-sm text-neutral-400 mt-1">
+            Style guide {styleGuide.is_builtin ? (
+              <span className="text-amber-400 font-semibold">built-in (fallback)</span>
+            ) : (
+              <span className="text-green-400 font-semibold">AI ✓</span>
+            )}
+            {" · "}
+            {styleGuide.patterns.length} patterns
+            {styleGuide.generated_at && (
+              <> · actualizado {new Date(styleGuide.generated_at).toLocaleDateString()}</>
+            )}
+            {hasManualEdits && (
+              <span className="ml-2 text-amber-400"
+                title={`${Object.keys(styleGuide.manual_edits).length} patterns editados manualmente`}>
+                ✎ edits manuales
+              </span>
+            )}
+          </p>
+        )}
       </header>
 
-      {error && <div className="bg-red-900/40 border border-red-900 text-red-300 px-3 py-2 rounded mb-4 text-sm">{error}</div>}
+      {/* Corpus section */}
+      <section className="mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold flex items-center gap-2">
+            <Database size={16} />
+            PPTs en corpus ({corpus.length})
+          </h3>
+          <button
+            onClick={() => fileRef.current?.click()}
+            disabled={isLoading}
+            className="text-sm bg-accent text-neutral-900 font-semibold px-3 py-1.5 rounded flex items-center gap-1 disabled:opacity-40"
+          >
+            <Plus size={14} /> Agregar PPT al corpus
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".pptx"
+            className="hidden"
+            aria-label="Seleccionar PPT"
+            onChange={(e) => e.target.files?.[0] && handleAddFile(e.target.files[0])}
+          />
+        </div>
 
-      <table className="w-full text-sm">
-        <thead className="text-xs text-neutral-400 border-b border-neutral-700">
-          <tr>
-            <th className="text-left py-2 px-2">Archivo</th>
-            <th className="text-left py-2 px-2">Agregado</th>
-            <th className="text-left py-2 px-2">Layouts</th>
-            <th className="text-left py-2 px-2">Status</th>
-            <th className="py-2 px-2 w-12"></th>
-          </tr>
-        </thead>
-        <tbody>
-          {pptxs.length === 0 && !loading && (
-            <tr><td colSpan={5} className="text-center text-neutral-500 py-6">Sin training PPTs aún. Agregá uno.</td></tr>
+        <div className="border border-neutral-700 rounded-lg overflow-hidden">
+          {corpus.length === 0 && !isLoading && (
+            <div className="text-center text-neutral-500 py-8 text-sm">
+              Corpus vacío. Agregá PPTs de training para analizar el estilo.
+            </div>
           )}
-          {pptxs.map((p) => (
-            <tr key={p.filename} className="border-b border-neutral-800">
-              <td className="py-2 px-2">{p.filename}</td>
-              <td className="py-2 px-2 text-neutral-400">{new Date(p.added_at).toLocaleString()}</td>
-              <td className="py-2 px-2">{p.layouts_extracted}</td>
-              <td className="py-2 px-2">{p.status === "ok" ? "✓" : "⚠"}</td>
-              <td className="py-2 px-2">
-                <button onClick={() => handleDelete(p.filename)} className="text-neutral-500 hover:text-red-400">
-                  <Trash2 size={14} />
-                </button>
-              </td>
-            </tr>
+          {corpus.map((pptx) => (
+            <div
+              key={pptx.filename}
+              className="flex items-center justify-between px-4 py-3 border-b border-neutral-800 last:border-b-0 hover:bg-neutral-800/50"
+            >
+              <div>
+                <span className="text-sm font-medium">{pptx.filename}</span>
+                <span className="text-xs text-neutral-500 ml-3">
+                  {pptx.slides_with_charts} charts · agregado {new Date(pptx.added_at).toLocaleDateString()}
+                </span>
+              </div>
+              <button
+                onClick={() => handleDelete(pptx.filename)}
+                aria-label="eliminar"
+                className="text-neutral-500 hover:text-red-400 p-1"
+              >
+                <Trash2 size={15} />
+              </button>
+            </div>
           ))}
-        </tbody>
-      </table>
+        </div>
+      </section>
+
+      {/* Style Guide section */}
+      <section className="mb-6">
+        <div className="flex items-center gap-3 mb-3">
+          <h3 className="text-sm font-semibold">Style guide</h3>
+          <button
+            onClick={() => setShowStyleGuide((v) => !v)}
+            disabled={!styleGuide}
+            className="text-xs text-neutral-400 hover:text-neutral-200 flex items-center gap-1 disabled:opacity-40"
+          >
+            <Eye size={12} />
+            {showStyleGuide ? "Ocultar" : "Ver style guide"}
+          </button>
+          <button
+            onClick={analyzeWithAI}
+            disabled={isLoading || corpus.length === 0}
+            className="ml-auto text-sm bg-purple-700 hover:bg-purple-600 text-white font-semibold px-3 py-1.5 rounded flex items-center gap-1 disabled:opacity-40"
+          >
+            <RefreshCw size={14} />
+            Re-analizar con AI
+          </button>
+        </div>
+
+        {styleGuide && (
+          <div className="text-xs text-neutral-500 mb-3">
+            <span className="font-medium text-neutral-300">Tipos disponibles:</span>{" "}
+            {styleGuide.available_chart_types.join(", ") || "—"}
+          </div>
+        )}
+
+        {showStyleGuide && styleGuide && (
+          <StyleGuideViewer styleGuide={styleGuide} />
+        )}
+      </section>
+
+      {/* Analysis Progress Modal */}
+      {analysisJob && (
+        <AnalysisProgressModal
+          job={analysisJob}
+          onClose={clearAnalysisJob}
+        />
+      )}
     </div>
   )
 }
