@@ -339,3 +339,95 @@ def test_analysis_status_returns_progress_for_valid_job():
 def test_analysis_status_404_for_unknown_job():
     r = client.get("/api/training/analysis-status/nonexistent-job-id-xyz")
     assert r.status_code == 404
+
+
+# ─── M6.8 T4: Style guide read + manual pattern edit endpoints ───────────────
+
+MINIMAL_STYLE_GUIDE = {
+    "version": 1,
+    "is_builtin": False,
+    "generated_at": "2026-06-17T20:00:00Z",
+    "ai_prompt_version": "v1.0",
+    "source_pptxs": ["test.pptx"],
+    "manual_edits": {},
+    "global": {
+        "typography": {"font_family": "Arial", "title_size": 16, "subtitle_size": 12, "label_size": 9, "body_size": 10},
+        "text_patterns": {"title": "T", "notes": "N", "analysis_style": "A", "tone": "formal"},
+        "suggested_palette": ["#7F7F7F"],
+        "vibe": "Min",
+    },
+    "available_chart_types": ["PIE"],
+    "patterns": [
+        {
+            "id": "binary_general",
+            "priority": 0,
+            "trigger": {"field": "n_charts_in_slide", "$eq": 1},
+            "extends": None,
+            "best_example": "test.pptx#slide1",
+            "why_picked": "Clean",
+            "implementation": {"elements": []},
+        }
+    ],
+}
+
+
+def test_get_style_guide_returns_builtin_when_none_exists(tmp_path, monkeypatch):
+    """When no style_guide.json exists, returns the built-in fallback."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    r = client.get("/api/training/style-guide")
+    assert r.status_code == 200
+    body = r.json()
+    assert "patterns" in body
+    assert "global" in body
+    assert isinstance(body["patterns"], list)
+
+
+def test_get_style_guide_returns_saved_guide(tmp_path, monkeypatch):
+    """When style_guide.json exists, returns it."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    training_dir = tmp_path / ".aurum" / "training"
+    training_dir.mkdir(parents=True, exist_ok=True)
+    sg_path = training_dir / "style_guide.json"
+    import json
+    sg_path.write_text(json.dumps(MINIMAL_STYLE_GUIDE), encoding="utf-8")
+
+    r = client.get("/api/training/style-guide")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["source_pptxs"] == ["test.pptx"]
+    assert len(body["patterns"]) == 1
+
+
+def test_put_style_guide_pattern_updates_pattern(tmp_path, monkeypatch):
+    """PUT /api/training/style-guide/pattern/{pattern_id} updates a pattern and marks manual_edits."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    training_dir = tmp_path / ".aurum" / "training"
+    training_dir.mkdir(parents=True, exist_ok=True)
+    import json
+    (training_dir / "style_guide.json").write_text(json.dumps(MINIMAL_STYLE_GUIDE), encoding="utf-8")
+
+    updated_pattern = dict(MINIMAL_STYLE_GUIDE["patterns"][0])
+    updated_pattern["why_picked"] = "Updated by user"
+
+    r = client.put("/api/training/style-guide/pattern/binary_general", json=updated_pattern)
+    assert r.status_code == 200
+    assert r.json()["ok"] is True
+
+    # Reload and verify
+    r2 = client.get("/api/training/style-guide")
+    body = r2.json()
+    pat = next(p for p in body["patterns"] if p["id"] == "binary_general")
+    assert pat["why_picked"] == "Updated by user"
+    assert "binary_general" in body["manual_edits"]
+
+
+def test_put_style_guide_pattern_404_when_not_found(tmp_path, monkeypatch):
+    """PUT to non-existent pattern_id returns 404."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    training_dir = tmp_path / ".aurum" / "training"
+    training_dir.mkdir(parents=True, exist_ok=True)
+    import json
+    (training_dir / "style_guide.json").write_text(json.dumps(MINIMAL_STYLE_GUIDE), encoding="utf-8")
+
+    r = client.put("/api/training/style-guide/pattern/nonexistent_id", json={"id": "nonexistent_id", "priority": 99})
+    assert r.status_code == 404

@@ -323,3 +323,72 @@ async def analysis_status(job_id: str):
     if job is None:
         raise HTTPException(status_code=404, detail=f"Job {job_id!r} not found")
     return job
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# M6.8 T4: Style guide read + manual pattern edit endpoints
+# ────────────────────────────────────────────────────────────────────────────
+
+from .style_guide import BUILTIN_STYLE_GUIDE, load_active_style_guide, save_style_guide
+
+
+@app.get("/api/training/style-guide")
+async def get_style_guide():
+    """Return the active style guide (AI-generated or built-in fallback)."""
+    try:
+        sg = load_active_style_guide()
+    except Exception:
+        sg = BUILTIN_STYLE_GUIDE
+    return sg.model_dump(by_alias=True)
+
+
+class PatternUpdateRequest(BaseModel):
+    id: str
+    priority: int = 0
+    trigger: dict = {}
+    extends: str | None = None
+    best_example: str | None = None
+    why_picked: str | None = None
+    implementation: dict = {}
+
+
+@app.put("/api/training/style-guide/pattern/{pattern_id}")
+async def update_style_guide_pattern(pattern_id: str, req: PatternUpdateRequest):
+    """Manually edit a single pattern in the active style guide.
+
+    Marks manual_edits[pattern_id] = current timestamp so future AI re-analysis
+    can detect which patterns have been user-modified.
+    """
+    try:
+        sg = load_active_style_guide()
+    except Exception:
+        sg = BUILTIN_STYLE_GUIDE
+
+    # Find the pattern to update
+    pattern_idx = next(
+        (i for i, p in enumerate(sg.patterns) if p.id == pattern_id),
+        None,
+    )
+    if pattern_idx is None:
+        raise HTTPException(status_code=404, detail=f"Pattern {pattern_id!r} not found in active style guide.")
+
+    # Update the pattern fields from request
+    from .style_guide import Pattern
+    existing = sg.patterns[pattern_idx]
+    updated_data = existing.model_dump(by_alias=True)
+    req_dict = req.model_dump()
+    # Only override fields that were explicitly provided (non-None)
+    updated_data.update({k: v for k, v in req_dict.items() if v is not None})
+
+    try:
+        sg.patterns[pattern_idx] = Pattern.model_validate(updated_data)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid pattern data: {exc}")
+
+    # Mark as manually edited
+    if sg.manual_edits is None:
+        sg.manual_edits = {}
+    sg.manual_edits[pattern_id] = dt.now(UTC).isoformat()
+
+    save_style_guide(sg)
+    return {"ok": True, "pattern_id": pattern_id, "edited_at": sg.manual_edits[pattern_id]}
