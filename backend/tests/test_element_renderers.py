@@ -395,3 +395,49 @@ def test_comparison_grid_adds_table():
     initial = len(slide.shapes)
     render_table(slide, element, ctx)
     assert len(slide.shapes) > initial
+
+
+# ---------------------------------------------------------------------------
+# T9: chart_type UI override
+# ---------------------------------------------------------------------------
+
+
+def test_render_chart_respects_source_chart_chart_type(tmp_path):
+    """UI-selected chart_type must override the pattern's chart_type."""
+    from pptx import Presentation
+    from aurum_encuestas.element_renderers.chart_renderer import render
+    from aurum_encuestas.element_renderers.render_context import RenderContext
+    from types import SimpleNamespace
+
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    q = SimpleNamespace(options=["Sí", "No"])
+    source_chart = SimpleNamespace(
+        question=q,
+        data={"General": {"Sí": {"pct": 0.6, "count": 60}, "No": {"pct": 0.4, "count": 40}}},
+        chart_type="COLUMN_CLUSTERED",  # ← UI choice
+        colors=[],
+    )
+    slide_config = SimpleNamespace(charts=[source_chart])
+    ctx = RenderContext(
+        slide_config=slide_config,
+        chart_colors=["#7F7F7F"],
+        free_area={"x": 0, "y": 0, "cx": 6_000_000, "cy": 4_000_000},
+        typography={"label_size": 9},
+        resolved_colors={"primary": "#7F7F7F"},
+        resolved_anchors={},
+    )
+
+    element = {
+        "kind": "chart", "id": "main_pie",
+        "chart_type": "PIE",  # ← pattern said PIE
+        "position": {"x_rel": 0.1, "y_rel": 0.1, "w_rel": 0.8, "h_rel": 0.8},
+        "data_source": {"chart_ref_index": 0, "value_field": "pct"},
+    }
+    render(slide, element, ctx)
+
+    # Verify the rendered chart is COLUMN_CLUSTERED (51), not PIE (5)
+    from pptx.enum.chart import XL_CHART_TYPE
+    chart_shape = next(sh for sh in slide.shapes if sh.has_chart)
+    assert chart_shape.chart.chart_type == XL_CHART_TYPE.COLUMN_CLUSTERED

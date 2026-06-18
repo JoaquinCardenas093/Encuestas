@@ -58,11 +58,12 @@ def render(slide, element: dict, ctx: RenderContext) -> None:
         return
 
     source_chart = charts_list[chart_ref_index]
-    # General/main slot always uses the pattern's chart_type (typically PIE).
-    # Breakdown-targeted charts may override via source_chart.chart_type, but
-    # breakdown rendering is currently table-only, so we always defer to the
-    # pattern's chart_type here.
-    chart_type_str = element.get("chart_type", "BAR_HORIZONTAL")
+    # UI selection wins: source_chart.chart_type comes from AddChartModal and
+    # is the authoritative type. The pattern's chart_type is now layout-only
+    # advice — fall back to it only if the UI didn't pick anything (legacy charts).
+    ui_chart_type = (getattr(source_chart, "chart_type", None) or "").strip()
+    pattern_chart_type = (element.get("chart_type") or "").strip()
+    chart_type_str = ui_chart_type or pattern_chart_type or "BAR_HORIZONTAL"
     xl_chart_type = _CHART_TYPE_MAP.get(chart_type_str)
     if xl_chart_type is None:
         log.warning("Unknown chart_type %r — falling back to BAR_CLUSTERED", chart_type_str)

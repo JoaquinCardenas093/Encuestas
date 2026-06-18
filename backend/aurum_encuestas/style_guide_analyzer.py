@@ -298,12 +298,13 @@ def _semantic_repair(data: dict, repairs: list[str], errors: list[str]) -> dict:
                         position[key] = clamped
             el["position"] = position
 
-            # Map unsupported chart types to BAR_HORIZONTAL
+            # chart_type is now optional (UI wins). If AI emits an unknown type, drop it
+            # rather than rewriting to BAR_HORIZONTAL — render_chart will use the UI's pick.
             if el.get("kind") == "chart":
                 ct = el.get("chart_type", "")
-                if available_chart_types and ct not in available_chart_types:
-                    repairs.append(f"Pattern {pid!r}: chart_type {ct!r} not in available_chart_types → BAR_HORIZONTAL")
-                    el["chart_type"] = "BAR_HORIZONTAL"
+                if el.get("chart_type") and available_chart_types and ct not in available_chart_types:
+                    repairs.append(f"Pattern {pid!r}: chart_type {ct!r} not in available_chart_types → dropped")
+                    el.pop("chart_type", None)
 
                 # Map chart.sort variants AI commonly uses to valid enum values
                 sort_val = el.get("sort")

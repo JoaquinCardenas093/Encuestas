@@ -103,7 +103,7 @@ class ElementChart(_Base):
     kind: Literal["chart"]
     id: str
     position: Position | PositionAnchored
-    chart_type: str
+    chart_type: str | None = None   # ← layout-only; UI's source_chart.chart_type wins at render
     data_source: _DataSourceChart
     labels: _Labels | None = None
     legend: Literal["none", "right", "bottom", "top", "left"] = "none"
@@ -328,7 +328,6 @@ BUILTIN_STYLE_GUIDE = StyleGuide.model_validate({
                         "kind": "chart",
                         "id": "main_pie",
                         "position": {"x_rel": 0.15, "y_rel": 0.20, "w_rel": 0.70, "h_rel": 0.65},
-                        "chart_type": "PIE",
                         "data_source": {"chart_ref_index": 0, "value_field": "pct"},
                         "labels": {
                             "show_category_name": True,
@@ -361,7 +360,6 @@ BUILTIN_STYLE_GUIDE = StyleGuide.model_validate({
                         "kind": "chart",
                         "id": "main_pie",
                         "position": {"x_rel": 0.03, "y_rel": 0.22, "w_rel": 0.30, "h_rel": 0.58},
-                        "chart_type": "PIE",
                         "data_source": {"chart_ref_index": 0, "value_field": "pct"},
                         "labels": {
                             "show_category_name": True,
@@ -426,7 +424,6 @@ BUILTIN_STYLE_GUIDE = StyleGuide.model_validate({
                         "kind": "chart",
                         "id": "main_bar",
                         "position": {"x_rel": 0.05, "y_rel": 0.20, "w_rel": 0.90, "h_rel": 0.65},
-                        "chart_type": "BAR_HORIZONTAL",
                         "data_source": {"chart_ref_index": 0, "value_field": "pct"},
                         "labels": {
                             "show_percentage": True,
@@ -458,7 +455,6 @@ BUILTIN_STYLE_GUIDE = StyleGuide.model_validate({
                         "kind": "chart",
                         "id": "main_column",
                         "position": {"x_rel": 0.03, "y_rel": 0.18, "w_rel": 0.94, "h_rel": 0.68},
-                        "chart_type": "COLUMN_CLUSTERED",
                         "data_source": {"chart_ref_index": 0, "value_field": "pct"},
                         "labels": {
                             "show_percentage": True,
@@ -485,7 +481,6 @@ BUILTIN_STYLE_GUIDE = StyleGuide.model_validate({
                         "kind": "chart",
                         "id": "left_chart",
                         "position": {"x_rel": 0.02, "y_rel": 0.20, "w_rel": 0.46, "h_rel": 0.65},
-                        "chart_type": "PIE",
                         "data_source": {"chart_ref_index": 0, "value_field": "pct"},
                         "labels": {
                             "show_percentage": True,
@@ -506,7 +501,6 @@ BUILTIN_STYLE_GUIDE = StyleGuide.model_validate({
                         "kind": "chart",
                         "id": "right_chart",
                         "position": {"x_rel": 0.52, "y_rel": 0.20, "w_rel": 0.46, "h_rel": 0.65},
-                        "chart_type": "PIE",
                         "data_source": {"chart_ref_index": 1, "value_field": "pct"},
                         "labels": {
                             "show_percentage": True,
