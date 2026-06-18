@@ -262,6 +262,25 @@ def test_builtin_priority_ordering():
     assert sorted(priorities) == priorities or len(set(priorities)) == len(priorities)
 
 
+def test_builtin_patterns_use_aurora_proportions():
+    patterns = {p.id: p for p in BUILTIN_STYLE_GUIDE.patterns}
+
+    # comparison_two_charts: each chart should be tall (h_rel >= 0.70)
+    p = patterns["comparison_two_charts"]
+    chart_els = [e for e in p.implementation.elements if e.kind == "chart"]
+    assert len(chart_els) == 2
+    for el in chart_els:
+        assert el.position.h_rel >= 0.70, f"{el.id}: h_rel={el.position.h_rel} too short vs Aurora (0.75)"
+
+    # multi_choice_small: full-width bar with h_rel >= 0.70
+    el = next(e for e in patterns["multi_choice_small"].implementation.elements if e.kind == "chart")
+    assert el.position.h_rel >= 0.65
+
+    # binary_general: large centred pie
+    el = next(e for e in patterns["binary_general"].implementation.elements if e.kind == "chart")
+    assert el.position.h_rel >= 0.70
+
+
 # ── migrate_legacy_files ──────────────────────────────────────────────────────
 
 from aurum_encuestas.style_guide import migrate_legacy_files  # noqa: E402

@@ -327,7 +327,7 @@ BUILTIN_STYLE_GUIDE = StyleGuide.model_validate({
                     {
                         "kind": "chart",
                         "id": "main_pie",
-                        "position": {"x_rel": 0.15, "y_rel": 0.20, "w_rel": 0.70, "h_rel": 0.65},
+                        "position": {"x_rel": 0.12, "y_rel": 0.12, "w_rel": 0.76, "h_rel": 0.76},
                         "data_source": {"chart_ref_index": 0, "value_field": "pct"},
                         "labels": {
                             "show_category_name": True,
@@ -359,7 +359,7 @@ BUILTIN_STYLE_GUIDE = StyleGuide.model_validate({
                     {
                         "kind": "chart",
                         "id": "main_pie",
-                        "position": {"x_rel": 0.03, "y_rel": 0.22, "w_rel": 0.30, "h_rel": 0.58},
+                        "position": {"x_rel": 0.04, "y_rel": 0.12, "w_rel": 0.30, "h_rel": 0.76},
                         "data_source": {"chart_ref_index": 0, "value_field": "pct"},
                         "labels": {
                             "show_category_name": True,
@@ -373,7 +373,7 @@ BUILTIN_STYLE_GUIDE = StyleGuide.model_validate({
                     {
                         "kind": "table",
                         "id": "demographics_table",
-                        "position": {"x_rel": 0.38, "y_rel": 0.22, "w_rel": 0.58, "h_rel": 0.58},
+                        "position": {"x_rel": 0.38, "y_rel": 0.12, "w_rel": 0.58, "h_rel": 0.76},
                         "structure": "segmented_breakdowns",
                         "data_source": {"chart_ref_index": 0, "breakdown_groups": "all_except_general"},
                         "cells": {
@@ -423,7 +423,7 @@ BUILTIN_STYLE_GUIDE = StyleGuide.model_validate({
                     {
                         "kind": "chart",
                         "id": "main_bar",
-                        "position": {"x_rel": 0.05, "y_rel": 0.20, "w_rel": 0.90, "h_rel": 0.65},
+                        "position": {"x_rel": 0.17, "y_rel": 0.20, "w_rel": 0.65, "h_rel": 0.65},
                         "data_source": {"chart_ref_index": 0, "value_field": "pct"},
                         "labels": {
                             "show_percentage": True,
@@ -454,7 +454,7 @@ BUILTIN_STYLE_GUIDE = StyleGuide.model_validate({
                     {
                         "kind": "chart",
                         "id": "main_column",
-                        "position": {"x_rel": 0.03, "y_rel": 0.18, "w_rel": 0.94, "h_rel": 0.68},
+                        "position": {"x_rel": 0.03, "y_rel": 0.14, "w_rel": 0.94, "h_rel": 0.74},
                         "data_source": {"chart_ref_index": 0, "value_field": "pct"},
                         "labels": {
                             "show_percentage": True,
@@ -480,7 +480,7 @@ BUILTIN_STYLE_GUIDE = StyleGuide.model_validate({
                     {
                         "kind": "chart",
                         "id": "left_chart",
-                        "position": {"x_rel": 0.02, "y_rel": 0.20, "w_rel": 0.46, "h_rel": 0.65},
+                        "position": {"x_rel": 0.04, "y_rel": 0.12, "w_rel": 0.42, "h_rel": 0.76},
                         "data_source": {"chart_ref_index": 0, "value_field": "pct"},
                         "labels": {
                             "show_percentage": True,
@@ -493,14 +493,14 @@ BUILTIN_STYLE_GUIDE = StyleGuide.model_validate({
                     {
                         "kind": "shape",
                         "id": "center_divider",
-                        "position": {"x_rel": 0.495, "y_rel": 0.18, "w_rel": 0.002, "h_rel": 0.70},
+                        "position": {"x_rel": 0.495, "y_rel": 0.10, "w_rel": 0.002, "h_rel": 0.78},
                         "shape_type": "line",
                         "style": {"color": "secondary", "width_pt": 0.5},
                     },
                     {
                         "kind": "chart",
                         "id": "right_chart",
-                        "position": {"x_rel": 0.52, "y_rel": 0.20, "w_rel": 0.46, "h_rel": 0.65},
+                        "position": {"x_rel": 0.54, "y_rel": 0.12, "w_rel": 0.42, "h_rel": 0.76},
                         "data_source": {"chart_ref_index": 1, "value_field": "pct"},
                         "labels": {
                             "show_percentage": True,
