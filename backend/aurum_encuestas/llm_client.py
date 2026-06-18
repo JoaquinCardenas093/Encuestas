@@ -171,7 +171,7 @@ def suggest_layout(
 # ────────────────────────────────────────────────────────────────────────────
 
 ANALYSIS_MODEL = "claude-sonnet-4-6"
-ANALYSIS_MAX_TOKENS = 8000
+ANALYSIS_MAX_TOKENS = 32000  # full style guide w/ 8-15 patterns + table schemas easily 20-30K
 ANALYSIS_TEMPERATURE = 0.2
 
 STYLE_GUIDE_SYSTEM_PROMPT_V1 = """Sos un design system analyst especializado en presentaciones de encuestas.
