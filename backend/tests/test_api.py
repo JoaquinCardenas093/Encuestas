@@ -1,3 +1,6 @@
+import io
+from unittest.mock import patch
+
 from fastapi.testclient import TestClient
 
 from aurum_encuestas.api import app
@@ -146,16 +149,13 @@ class TestExportPptx:
         r = client.post("/api/export-pptx", json=req)
         assert r.status_code == 200
         body = r.json()
-        assert body["exported"] == True
+        assert body["exported"] is True
         assert body["path"] == out_path
 
         # Verify file was written
         from pathlib import Path
         assert Path(out_path).exists()
         assert Path(out_path).stat().st_size > 0
-
-
-from unittest.mock import patch
 
 
 @patch("aurum_encuestas.api.generate_analysis")
@@ -227,8 +227,6 @@ def test_recents_add_and_list(tmp_path, monkeypatch):
 
 
 # ─── M6.8 T2: Corpus CRUD endpoints ─────────────────────────────────────────
-
-import io
 
 
 def test_corpus_add_pptx(tmp_path, monkeypatch, training_pptx_path):
@@ -431,3 +429,49 @@ def test_put_style_guide_pattern_404_when_not_found(tmp_path, monkeypatch):
 
     r = client.put("/api/training/style-guide/pattern/nonexistent_id", json={"id": "nonexistent_id", "priority": 99})
     assert r.status_code == 404
+
+
+# ─── M6.8 T5: Cache clear endpoint ───────────────────────────────────────────
+
+def test_clear_cache_render(tmp_path, monkeypatch):
+    """POST /api/training/clear-cache with cache_type=render clears PNG files from render_cache."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    render_cache = tmp_path / ".aurum" / "training" / "render_cache"
+    render_cache.mkdir(parents=True, exist_ok=True)
+    # Seed some fake PNG files
+    (render_cache / "abc123_0.png").write_bytes(b"fake")
+    (render_cache / "def456_1.png").write_bytes(b"fake2")
+
+    r = client.post("/api/training/clear-cache", json={"cache_type": "render"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["cleared"]["render"] >= 2
+    assert not list(render_cache.glob("*.png"))
+
+
+def test_clear_cache_classifier(tmp_path, monkeypatch):
+    """POST /api/training/clear-cache with cache_type=classifier clears the in-memory classifier cache."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    r = client.post("/api/training/clear-cache", json={"cache_type": "classifier"})
+    assert r.status_code == 200
+    body = r.json()
+    assert "classifier" in body["cleared"]
+
+
+def test_clear_cache_all(tmp_path, monkeypatch):
+    """POST /api/training/clear-cache with cache_type=all clears all caches."""
+    monkeypatch.setenv("HOME", str(tmp_path))
+    render_cache = tmp_path / ".aurum" / "training" / "render_cache"
+    render_cache.mkdir(parents=True, exist_ok=True)
+    (render_cache / "xyz_0.png").write_bytes(b"fake")
+
+    r = client.post("/api/training/clear-cache", json={"cache_type": "all"})
+    assert r.status_code == 200
+    body = r.json()
+    assert "render" in body["cleared"]
+    assert "classifier" in body["cleared"]
+
+
+def test_clear_cache_invalid_type_returns_422():
+    r = client.post("/api/training/clear-cache", json={"cache_type": "unknown_type"})
+    assert r.status_code == 422

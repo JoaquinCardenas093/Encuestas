@@ -39,6 +39,9 @@ log = logging.getLogger(__name__)
 _LRU_MAX = 200
 _cache: OrderedDict[tuple[str, str], str | None] = OrderedDict()
 
+# Public alias for cache clearing via API (M6.8)
+_classifier_cache: dict = _cache  # type: ignore[assignment]
+
 
 def clear_cache() -> None:
     _cache.clear()

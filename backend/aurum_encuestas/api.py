@@ -3,8 +3,10 @@ import logging
 import tempfile
 import uuid
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime as dt
+from datetime import UTC
+from datetime import datetime as dt
 from pathlib import Path
+from typing import Literal
 
 from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
@@ -12,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from .config import add_recent, get_corpus_dir, load_recents
+from .config import add_recent, get_corpus_dir, get_render_cache_dir, load_recents
 from .errors import AurumError
 from .llm_client import generate_analysis, suggest_layout
 from .models import ProjectState
@@ -20,7 +22,13 @@ from .pptx_generator import build_pptx
 from .pptx_template import load_template
 from .project_store import load_project, save_project
 from .render_service import render_slide_to_png
-from .style_guide import migrate_legacy_files
+from .style_guide import (
+    BUILTIN_STYLE_GUIDE,
+    Pattern,
+    load_active_style_guide,
+    migrate_legacy_files,
+    save_style_guide,
+)
 from .xlsx_parser import parse_xlsx
 
 log = logging.getLogger(__name__)
@@ -329,9 +337,6 @@ async def analysis_status(job_id: str):
 # M6.8 T4: Style guide read + manual pattern edit endpoints
 # ────────────────────────────────────────────────────────────────────────────
 
-from .style_guide import BUILTIN_STYLE_GUIDE, load_active_style_guide, save_style_guide
-
-
 @app.get("/api/training/style-guide")
 async def get_style_guide():
     """Return the active style guide (AI-generated or built-in fallback)."""
@@ -373,7 +378,6 @@ async def update_style_guide_pattern(pattern_id: str, req: PatternUpdateRequest)
         raise HTTPException(status_code=404, detail=f"Pattern {pattern_id!r} not found in active style guide.")
 
     # Update the pattern fields from request
-    from .style_guide import Pattern
     existing = sg.patterns[pattern_idx]
     updated_data = existing.model_dump(by_alias=True)
     req_dict = req.model_dump()
@@ -392,3 +396,44 @@ async def update_style_guide_pattern(pattern_id: str, req: PatternUpdateRequest)
 
     save_style_guide(sg)
     return {"ok": True, "pattern_id": pattern_id, "edited_at": sg.manual_edits[pattern_id]}
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# M6.8 T5: Cache clear endpoint
+# ────────────────────────────────────────────────────────────────────────────
+
+class ClearCacheRequest(BaseModel):
+    cache_type: Literal["render", "classifier", "all"]
+
+
+@app.post("/api/training/clear-cache")
+async def clear_cache(req: ClearCacheRequest):
+    """Clear one or all backend caches.
+
+    cache_type options:
+      - "render": deletes all PNG files in ~/.aurum/training/render_cache/
+      - "classifier": clears in-memory pattern classifier LRU dict
+      - "all": both of the above
+    """
+    cleared: dict[str, int] = {}
+
+    if req.cache_type in ("render", "all"):
+        cache_dir = get_render_cache_dir()
+        png_files = list(cache_dir.glob("*.png"))
+        for f in png_files:
+            try:
+                f.unlink()
+            except Exception:
+                pass
+        cleared["render"] = len(png_files)
+
+    if req.cache_type in ("classifier", "all"):
+        try:
+            from .pattern_classifier import _classifier_cache
+            count = len(_classifier_cache)
+            _classifier_cache.clear()
+            cleared["classifier"] = count
+        except (ImportError, AttributeError):
+            cleared["classifier"] = 0
+
+    return {"cleared": cleared, "cache_type": req.cache_type}
