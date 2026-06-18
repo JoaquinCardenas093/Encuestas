@@ -78,6 +78,24 @@ def _detect_question_type(n_options: int, question_text: str) -> str:
     return "multi_large"
 
 
+# Aliases for AI-generated vocabulary (AI uses single_choice/multiple_choice)
+# Map them to our internal names + accept both in trigger evaluation
+_QUESTION_TYPE_ALIASES = {
+    "single_choice": ("binary", "multi_small", "multi_large"),
+    "multiple_choice": ("multi_small", "multi_large"),
+    "binary": ("binary",),
+    "multi_small": ("multi_small",),
+    "multi_large": ("multi_large",),
+    "ranking": ("ranking",),
+    "open": ("open",),
+}
+
+
+def _question_type_matches(actual: str, expected: str) -> bool:
+    """True if actual question_type satisfies expected (with AI alias mapping)."""
+    return actual in _QUESTION_TYPE_ALIASES.get(expected, (expected,))
+
+
 # ────────────────────────────────────────────────────────────────────────────
 # Field extractors
 # ────────────────────────────────────────────────────────────────────────────
@@ -185,12 +203,16 @@ def evaluate_trigger(trigger: Trigger, context: dict) -> bool:
         log.debug("evaluate_trigger: unknown field %r — returning False", field)
         return False
 
-    # $eq
+    # $eq (with question_type alias mapping)
     if trigger.eq is not None:
+        if field == "question_type" and isinstance(value, str) and isinstance(trigger.eq, str):
+            return _question_type_matches(value, trigger.eq)
         return value == trigger.eq
 
     # $neq
     if trigger.neq is not None:
+        if field == "question_type" and isinstance(value, str) and isinstance(trigger.neq, str):
+            return not _question_type_matches(value, trigger.neq)
         return value != trigger.neq
 
     # $gt
@@ -221,12 +243,16 @@ def evaluate_trigger(trigger: Trigger, context: dict) -> bool:
         except (TypeError, ValueError):
             return False
 
-    # $in
+    # $in (with question_type alias mapping)
     if trigger.in_ is not None:
+        if field == "question_type" and isinstance(value, str):
+            return any(_question_type_matches(value, expected) for expected in trigger.in_ if isinstance(expected, str))
         return value in trigger.in_
 
     # $nin
     if trigger.nin is not None:
+        if field == "question_type" and isinstance(value, str):
+            return not any(_question_type_matches(value, expected) for expected in trigger.nin if isinstance(expected, str))
         return value not in trigger.nin
 
     log.warning("evaluate_trigger: leaf trigger for field %r has no operator — returning False", field)
