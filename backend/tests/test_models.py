@@ -30,7 +30,7 @@ def test_slide_separator():
 
 
 def test_slide_shell_with_chart():
-    chart = Chart(id="c1", question_id="q1", breakdown_id="sexo", chart_type="PIE", multi_series=False)
+    chart = Chart(id="c1", question_id="q1", breakdown_id="sexo", chart_type="PIE")
     s = Slide(id="s2", type="shell", charts=[chart])
     assert len(s.charts) == 1
     assert s.charts[0].chart_type == "PIE"
@@ -57,12 +57,12 @@ def test_project_state_roundtrip():
 # ── M6.1 new field tests ──────────────────────────────────────────────────────
 
 def test_chart_colors_defaults_to_empty_list():
-    c = Chart(id="c1", question_id="q1", breakdown_id="general", chart_type="PIE", multi_series=False)
+    c = Chart(id="c1", question_id="q1", breakdown_id="general", chart_type="PIE")
     assert c.colors == []
 
 
 def test_chart_colors_accepts_hex_list():
-    c = Chart(id="c1", question_id="q1", breakdown_id="general", chart_type="PIE", multi_series=False, colors=["#7F7F7F", "#BFBFBF"])
+    c = Chart(id="c1", question_id="q1", breakdown_id="general", chart_type="PIE", colors=["#7F7F7F", "#BFBFBF"])
     assert len(c.colors) == 2
     assert c.colors[0] == "#7F7F7F"
 

@@ -12,7 +12,7 @@ from aurum_encuestas.style_guide import BUILTIN_STYLE_GUIDE, Pattern, StyleGuide
 # ────────────────────────────────────────────────────────────────────────────
 
 def _chart(question_id="q1", breakdown_id="general", chart_type="PIE"):
-    return {"id": "c1", "question_id": question_id, "breakdown_id": breakdown_id, "chart_type": chart_type, "multi_series": False, "colors": []}
+    return {"id": "c1", "question_id": question_id, "breakdown_id": breakdown_id, "chart_type": chart_type, "colors": []}
 
 
 def _slide_config(
