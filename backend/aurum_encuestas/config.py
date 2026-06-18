@@ -55,3 +55,33 @@ def add_recent(path: str, name: str) -> None:
 
 def load_recents() -> list[dict]:
     return load_config().recents
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# M6 directory helpers
+# ────────────────────────────────────────────────────────────────────────────
+
+def get_corpus_dir() -> Path:
+    """~/.aurum/training/corpus/ — flat list of training PPTs."""
+    d = get_training_dir() / "corpus"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def get_style_guide_path() -> Path:
+    """~/.aurum/training/style_guide.json — AI-generated global style guide."""
+    return get_training_dir() / "style_guide.json"
+
+
+def get_render_cache_dir() -> Path:
+    """~/.aurum/training/render_cache/ — PNG slides cache (max 500MB LRU)."""
+    d = get_training_dir() / "render_cache"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def get_ai_logs_dir() -> Path:
+    """~/.aurum/training/ai_analysis_logs/ — per-analysis JSON logs."""
+    d = get_training_dir() / "ai_analysis_logs"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
