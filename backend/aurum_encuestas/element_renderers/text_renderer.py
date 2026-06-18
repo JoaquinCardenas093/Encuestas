@@ -35,7 +35,7 @@ def render(slide, element: dict, ctx: RenderContext) -> None:
     tf = tb_shape.text_frame
     tf.word_wrap = True
 
-    style = element.get("style", {})
+    style = element.get("style") or {}
     padding = style.get("padding", 0)
     if padding:
         try:

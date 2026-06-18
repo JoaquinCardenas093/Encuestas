@@ -17,7 +17,7 @@ def render(slide, element: dict, ctx: RenderContext) -> None:
     """Render a shape element (line or rectangle) onto slide."""
     from .chart_renderer import _resolve_position
     x, y, cx, cy = _resolve_position(element.get("position", {}), ctx)
-    style = element.get("style", {})
+    style = element.get("style") or {}
     shape_type = element.get("shape_type", "rectangle")
 
     color_role = style.get("color", "primary")

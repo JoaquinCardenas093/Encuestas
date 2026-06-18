@@ -294,6 +294,24 @@ async def recents_endpoint():
     return {"recents": load_recents()}
 
 
+@app.get("/api/config/recent-colors")
+async def recent_colors_endpoint():
+    from .color_resolver import get_recent_colors
+    return {"recent_colors": get_recent_colors()}
+
+
+class UpdateRecentColorRequest(BaseModel):
+    hex: str
+
+
+@app.post("/api/config/recent-colors")
+async def update_recent_color_endpoint(req: UpdateRecentColorRequest):
+    from .color_resolver import update_recent
+    update_recent(req.hex)
+    from .color_resolver import get_recent_colors
+    return {"recent_colors": get_recent_colors()}
+
+
 # ────────────────────────────────────────────────────────────────────────────
 # M6.7: Async AI analysis job endpoints
 # ────────────────────────────────────────────────────────────────────────────

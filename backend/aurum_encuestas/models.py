@@ -3,9 +3,11 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 ChartType = Literal[
-    "PIE", "DONUT", "BAR", "COLUMN",
+    "PIE", "DONUT",
+    "BAR", "COLUMN", "BAR_HORIZONTAL",
     "BAR_STACKED", "COLUMN_STACKED",
     "LINE", "AREA", "RADAR",
+    "TABLE_WITH_MINIBARS", "TABLE_SIMPLE",
 ]
 
 AnalysisScope = Literal["slide", "question", "chart"]
