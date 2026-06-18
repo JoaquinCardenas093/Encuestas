@@ -52,6 +52,7 @@ export interface Slide {
   charts: Chart[]
   analyses: Analysis[]
   auto_notes: string | null
+  matched_pattern?: string | null   // set by backend on preview; null = fallback heurístico
 }
 
 export interface ProjectInputs {

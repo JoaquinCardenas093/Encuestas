@@ -156,6 +156,18 @@ export default function ConfigPanel({ slideId }: Props) {
             onClose={() => setAnalysisModalOpen(false)}
             onAdd={(a) => addAnalysis(slide.id, a)}
           />
+          {/* Pattern matched indicator */}
+          {slide.matched_pattern ? (
+            <div className="flex items-center gap-2 text-xs text-green-400 mt-3 mb-1 bg-green-900/20 border border-green-800/40 rounded px-3 py-2">
+              <span className="font-mono">{slide.matched_pattern}</span>
+              <span className="text-green-300">✓ matched</span>
+            </div>
+          ) : (
+            <div className="text-xs text-neutral-500 italic mt-3 mb-1">
+              Layout: fallback heurístico
+            </div>
+          )}
+
           <button
             onClick={async () => {
               const free_area = { x: 600000, y: 1200000, cx: 11000000, cy: 5000000 }
@@ -173,7 +185,6 @@ export default function ConfigPanel({ slideId }: Props) {
           >
             ✨ AI sugiere layout
           </button>
-          <p className="text-[10px] text-neutral-500 mt-1 italic">Layout actual: heurística A (default)</p>
         </>
       )}
     </aside>
