@@ -274,3 +274,129 @@ def classify(slide_config: dict, parsed_db: dict, style_guide: StyleGuide) -> Pa
         _cache.popitem(last=False)  # evict oldest
 
     return matched
+
+
+def classify_pattern(slide_config: Any, patterns: list) -> "Pattern | None":
+    """Classify a slide_config against a list of patterns (no parsed_db required).
+
+    Convenience alias used by pptx_generator. Builds a dict-compatible slide_config
+    from a SlideConfig object and delegates to classify().
+    """
+    from .style_guide import StyleGuide, BUILTIN_STYLE_GUIDE
+
+    # Build a minimal slide_config dict for extract_context
+    if hasattr(slide_config, "charts"):
+        # It's a SlideConfig object — convert to dict
+        charts_dicts = []
+        for c in (slide_config.charts or []):
+            if hasattr(c, "model_dump"):
+                charts_dicts.append(c.model_dump())
+            elif hasattr(c, "__dict__"):
+                charts_dicts.append(dict(c.__dict__))
+            else:
+                charts_dicts.append(c)
+        analyses_dicts = []
+        for a in (slide_config.analyses or []):
+            if hasattr(a, "model_dump"):
+                analyses_dicts.append(a.model_dump())
+            elif hasattr(a, "__dict__"):
+                analyses_dicts.append(dict(a.__dict__))
+            else:
+                analyses_dicts.append(a)
+        sc_dict = {"charts": charts_dicts, "analyses": analyses_dicts}
+    elif isinstance(slide_config, dict):
+        sc_dict = slide_config
+    else:
+        sc_dict = {}
+
+    # Build a temporary StyleGuide wrapping the patterns list
+    try:
+        sg = StyleGuide.model_validate({"patterns": [p.model_dump() for p in patterns]})
+    except Exception:
+        # If patterns are already StyleGuide Pattern objects or unserialisable, use built-in
+        sg = BUILTIN_STYLE_GUIDE
+        if not patterns:
+            return None
+
+    return classify(sc_dict, {}, sg)
+
+
+def build_slide_config(slide_def: Any, parsed_db: Any, db_path: str = "") -> Any:
+    """Build a SlideConfig object from a Slide model + ParsedDB for classifier and renderer.
+
+    Returns an object with .charts (enriched with .question and .data), .analyses,
+    .n_charts, .n_analyses, .parsed_db.
+
+    Enriched chart objects have:
+      .question — Question model from parsed_db (with .options)
+      .data     — {breakdown_category: {option: {count, pct}}} dict
+    """
+    from dataclasses import dataclass, field, make_dataclass
+    from typing import Any as _Any
+
+    @dataclass
+    class SlideConfig:
+        charts: list = field(default_factory=list)
+        analyses: list = field(default_factory=list)
+        template_shapes: dict = field(default_factory=dict)
+        n_charts: int = 0
+        question_type: str = "binary"
+        n_breakdowns: int = 0
+        n_analyses: int = 0
+        parsed_db: _Any = None
+
+    @dataclass
+    class EnrichedChart:
+        """Chart with resolved question + data for use by element_renderers."""
+        id: str
+        question_id: str
+        breakdown_id: str
+        chart_type: str
+        multi_series: bool
+        colors: list
+        question: _Any = None   # Question model from parsed_db
+        data: dict = field(default_factory=dict)
+
+    raw_charts = getattr(slide_def, "charts", []) or []
+    analyses = getattr(slide_def, "analyses", []) or []
+
+    # Enrich charts with question + data from parsed_db
+    enriched_charts = []
+    for chart in raw_charts:
+        question = None
+        chart_data: dict = {}
+        if parsed_db and hasattr(parsed_db, "questions"):
+            question = next(
+                (q for q in parsed_db.questions if q.id == chart.question_id), None
+            )
+        if question is not None and db_path and parsed_db and hasattr(parsed_db, "data_blocks"):
+            try:
+                from .data_extractor import extract_chart_data
+                chart_data = extract_chart_data(
+                    db_path,
+                    question,
+                    chart.breakdown_id,
+                    parsed_db.data_blocks if isinstance(parsed_db.data_blocks, dict) else {},
+                )
+            except Exception as exc:
+                log.debug("build_slide_config: could not extract chart data for %r: %s", chart.id, exc)
+        enriched_charts.append(
+            EnrichedChart(
+                id=chart.id,
+                question_id=chart.question_id,
+                breakdown_id=chart.breakdown_id,
+                chart_type=chart.chart_type,
+                multi_series=getattr(chart, "multi_series", False),
+                colors=getattr(chart, "colors", []),
+                question=question,
+                data=chart_data,
+            )
+        )
+
+    return SlideConfig(
+        charts=enriched_charts,
+        analyses=analyses,
+        n_charts=len(enriched_charts),
+        n_analyses=len(analyses),
+        parsed_db=parsed_db,
+    )

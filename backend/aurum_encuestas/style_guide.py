@@ -571,6 +571,11 @@ def migrate_legacy_files() -> None:
 # load_active helper
 # ────────────────────────────────────────────────────────────────────────────
 
+def load_active_style_guide() -> StyleGuide:
+    """Alias for load_active — returns the active StyleGuide."""
+    return load_active()
+
+
 def load_active() -> StyleGuide:
     """Return the active StyleGuide.
 

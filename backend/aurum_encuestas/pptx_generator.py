@@ -155,45 +155,88 @@ def build_pptx(state: ProjectState, out_path: str) -> None:
     prs.save(out_path)
 
 
-def _add_slide_content(slide, slide_def: Slide, state: ProjectState, free_area: dict) -> None:
-    """Add charts + analyses to a shell slide.
+import logging as _logging
+_log = _logging.getLogger(__name__)
 
-    M6.2: Tries new M6 pipeline stubs first (classify → render_pattern). Since classify
-    returns None (stub), falls through to legacy heuristic chart insertion.
+
+def _add_slide_content(slide, slide_def: Slide, state: ProjectState, free_area: dict) -> None:
+    """Add charts + analyses to a shell slide using M6.6 classify→render pipeline.
+
+    Pipeline:
+      1. Load active style guide (fallback to BUILTIN_STYLE_GUIDE)
+      2. Build slide_config from slide_def
+      3. Classify → find matching pattern
+      4. Build RenderContext
+      5. Dispatch to pattern_renderer.render_pattern
+
+    If no pattern matched and BUILTIN_STYLE_GUIDE has patterns, use the first one.
+    Falls back to legacy heuristic only when no pattern is available at all.
     """
+    from .style_guide import load_active, BUILTIN_STYLE_GUIDE
+    from .pattern_classifier import classify, build_slide_config
+    from .pattern_renderer import render_pattern
+    from .color_resolver import build_render_context
+
+    # 1. Load style guide
+    try:
+        style_guide = load_active()
+    except Exception:
+        style_guide = BUILTIN_STYLE_GUIDE
+
+    # 2. Build slide_config (enriches charts with .question and .data)
+    db_path = state.inputs.db_path if state.inputs else ""
+    slide_config = build_slide_config(slide_def, state.parsed_db, db_path=db_path)
+
+    # 3. Classify
+    matched_pattern = None
+    try:
+        _sc_dict = {
+            "charts": [c.model_dump() for c in slide_def.charts],
+            "analyses": [a.model_dump() for a in slide_def.analyses],
+        }
+        matched_pattern = classify(_sc_dict, {}, style_guide)
+    except Exception as exc:
+        _log.warning("_add_slide_content: classify failed: %s", exc)
+
+    # Fallback to first built-in pattern if no match
+    if matched_pattern is None:
+        fallback_patterns = style_guide.patterns or BUILTIN_STYLE_GUIDE.patterns
+        if fallback_patterns:
+            matched_pattern = fallback_patterns[0]
+
+    if matched_pattern is None:
+        _log.warning("_add_slide_content: no pattern matched and no fallback — using legacy insertion")
+        _add_slide_content_legacy(slide, slide_def, state, free_area)
+        return
+
+    # 4. Build RenderContext
+    chart_colors_override = state.palette or {}
+    ctx = build_render_context(
+        style_guide=style_guide,
+        slide_config=slide_config,
+        chart_colors_override=chart_colors_override,
+        free_area=free_area,
+    )
+
+    # 5. Render
+    try:
+        render_pattern(
+            pattern=matched_pattern,
+            slide=slide,
+            ctx=ctx,
+            style_guide=style_guide,
+            all_patterns=style_guide.patterns,
+        )
+    except Exception as exc:
+        _log.error("_add_slide_content: render_pattern failed: %s", exc, exc_info=True)
+
+
+def _add_slide_content_legacy(slide, slide_def: Slide, state: ProjectState, free_area: dict) -> None:
+    """Legacy heuristic chart insertion — fallback when no pattern available."""
     n_chart_an = sum(1 for a in slide_def.analyses if a.scope == "chart")
     n_q_an = sum(1 for a in slide_def.analyses if a.scope == "question")
     has_slide_an = any(a.scope == "slide" for a in slide_def.analyses)
 
-    # M6 pipeline (stubs — will be fully implemented in M6.6)
-    from .style_guide import load_active
-    from .pattern_classifier import classify
-    from .pattern_renderer import render_pattern
-
-    _style_guide = load_active()
-    _slide_config = {
-        "n_charts": len(slide_def.charts),
-        "charts": [c.model_dump() for c in slide_def.charts],
-        "analyses": [a.model_dump() for a in slide_def.analyses],
-        "free_area": free_area,
-    }
-    _matched_pattern = classify(_slide_config, {}, _style_guide)
-    if _matched_pattern is not None:
-        render_pattern(
-            pattern=_matched_pattern,
-            slide=slide,
-            slide_config=_slide_config,
-            parsed_db={},
-            free_area=free_area,
-            chart_colors=[],
-            project_palette=state.palette,
-            style_guide=_style_guide,
-        )
-        # Pattern renderer handled all elements; legacy insertion skipped.
-        return
-
-    # Legacy chart insertion (temp fallback during M6.2 while stubs are no-ops)
-    # classify() returns None, so this block always runs until M6.6.
     from .llm_client import _compute_layout_heuristic
     layout_result = _compute_layout_heuristic(
         n_charts=len(slide_def.charts),
@@ -204,16 +247,13 @@ def _add_slide_content(slide, slide_def: Slide, state: ProjectState, free_area: 
         free_area=free_area,
     )
     layout = {"elements": layout_result["elements"]}
-    layout_chart_style = {}
 
-    # Insert charts and analysis textboxes per layout elements
     for el in layout["elements"]:
         role = el["role"]
         if role.startswith("chart_") and not role.startswith("chart_analysis"):
             i = int(role.split("_")[1])
-            chart_def = slide_def.charts[i]
-            specific_style = layout_chart_style.get(f"chart_{i}")
-            _add_chart(slide, chart_def, state, el, specific_style)
+            if i < len(slide_def.charts):
+                _add_chart(slide, slide_def.charts[i], state, el, None)
         elif role.startswith("chart_analysis_"):
             i = int(role.split("_")[2])
             chart_analyses = [a for a in slide_def.analyses if a.scope == "chart"]

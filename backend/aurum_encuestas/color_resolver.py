@@ -203,6 +203,71 @@ def get_recent_colors() -> list[str]:
         return []
 
 
+def build_render_context(
+    style_guide: Any,
+    slide_config: Any,
+    chart_colors_override: Any,
+    free_area: dict,
+) -> "RenderContext":
+    """Build a fully-resolved RenderContext for a slide.
+
+    Args:
+        style_guide: active StyleGuide (provides palette + typography)
+        slide_config: object with .charts and .analyses lists
+        chart_colors_override: project palette dict (e.g. state.palette) or list of hex
+        free_area: dict with {x, y, cx, cy} in EMU
+
+    Returns:
+        RenderContext ready for element_renderers
+    """
+    from .element_renderers.render_context import RenderContext
+    from typing import Any as _Any
+
+    # Resolve typography from style_guide
+    try:
+        typo = style_guide.global_.typography
+        typography = {
+            "font_family": typo.font_family,
+            "title_size": typo.title_size,
+            "label_size": typo.label_size,
+            "body_size": typo.body_size,
+        }
+    except Exception:
+        typography = {"font_family": "Calibri", "title_size": 16, "label_size": 9, "body_size": 10}
+
+    # Build chart_colors list from override dict or use palette
+    if isinstance(chart_colors_override, list):
+        chart_colors = chart_colors_override
+    elif isinstance(chart_colors_override, dict):
+        chart_colors = list(chart_colors_override.values()) if chart_colors_override else []
+    else:
+        chart_colors = []
+
+    # If no chart_colors provided, fall back to style_guide palette
+    if not chart_colors:
+        try:
+            chart_colors = list(style_guide.global_.suggested_palette or [])
+        except Exception:
+            chart_colors = list(_BUILTIN_DEFAULTS)
+
+    # Resolve named color roles
+    resolved_colors: dict[str, str] = {}
+    role_names = ["primary", "secondary", "background", "accent", "dark", "light"]
+    project_palette = chart_colors_override if isinstance(chart_colors_override, dict) else None
+    for idx, role in enumerate(role_names):
+        resolved_colors[role] = resolve(role, chart_colors, project_palette, style_guide, idx)
+
+    return RenderContext(
+        free_area=free_area,
+        chart_colors=chart_colors,
+        resolved_colors=resolved_colors,
+        typography=typography,
+        slide_config=slide_config,
+        style_guide=style_guide,
+        resolved_anchors={},
+    )
+
+
 def update_recent(hex_color: str) -> None:
     """Add hex_color to the front of recent_colors in ~/.aurum/config.json.
 
