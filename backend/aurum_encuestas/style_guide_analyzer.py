@@ -305,6 +305,57 @@ def _semantic_repair(data: dict, repairs: list[str], errors: list[str]) -> dict:
                     repairs.append(f"Pattern {pid!r}: chart_type {ct!r} not in available_chart_types → BAR_HORIZONTAL")
                     el["chart_type"] = "BAR_HORIZONTAL"
 
+                # Map chart.sort variants AI commonly uses to valid enum values
+                sort_val = el.get("sort")
+                _sort_map = {
+                    "descending": "desc_by_value",
+                    "desc": "desc_by_value",
+                    "ascending": "asc_by_value",
+                    "asc": "asc_by_value",
+                    "category": "category_order",
+                    "by_category": "category_order",
+                }
+                if sort_val in _sort_map:
+                    repairs.append(f"Pattern {pid!r}: chart.sort {sort_val!r} → {_sort_map[sort_val]!r}")
+                    el["sort"] = _sort_map[sort_val]
+                elif sort_val and sort_val not in ("none", "desc_by_value", "asc_by_value", "category_order"):
+                    repairs.append(f"Pattern {pid!r}: unknown chart.sort {sort_val!r} → 'none'")
+                    el["sort"] = "none"
+
+            # Map shape.shape_type variants — AI invents 'line_dashed', 'rectangle_dashed_border' etc.
+            if el.get("kind") == "shape":
+                st = el.get("shape_type", "")
+                if st and st not in ("line", "rectangle"):
+                    if "line" in st:
+                        repairs.append(f"Pattern {pid!r}: shape_type {st!r} → 'line'")
+                        el["shape_type"] = "line"
+                    elif "rect" in st or "box" in st:
+                        repairs.append(f"Pattern {pid!r}: shape_type {st!r} → 'rectangle'")
+                        el["shape_type"] = "rectangle"
+                    else:
+                        repairs.append(f"Pattern {pid!r}: unknown shape_type {st!r} → 'rectangle'")
+                        el["shape_type"] = "rectangle"
+
+            # Synthesize text.content_source when missing — common AI omission
+            if el.get("kind") == "text" and not el.get("content_source"):
+                # Try to infer from id keyword or fall back to empty static
+                eid = (el.get("id") or "").lower()
+                inferred: dict = {"type": "static", "text": ""}
+                if any(k in eid for k in ("analysis", "interpret", "insight", "narrative")):
+                    inferred = {"type": "analysis", "scope": "slide"}
+                elif any(k in eid for k in ("question", "title", "section", "header")):
+                    inferred = {"type": "computed", "kind": "question_text"}
+                elif any(k in eid for k in ("notes", "footnote", "obs", "respuesta")):
+                    inferred = {"type": "computed", "kind": "notes"}
+                repairs.append(f"Pattern {pid!r} text {el.get('id')!r}: synthesized content_source = {inferred}")
+                el["content_source"] = inferred
+
+            # Synthesize image.source_ref when missing
+            if el.get("kind") == "image" and not el.get("source_ref"):
+                role = el.get("image_role") or el.get("id") or ""
+                repairs.append(f"Pattern {pid!r} image {el.get('id')!r}: synthesized source_ref from {role!r}")
+                el["source_ref"] = role
+
             repaired_elements.append(el)
 
         if "implementation" not in p:
