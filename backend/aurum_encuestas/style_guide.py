@@ -273,7 +273,11 @@ class StyleGuide(_Base):
     manual_edits: dict[str, str] = Field(default_factory=dict)
     global_: GlobalConfig = Field(default_factory=GlobalConfig, alias="global")
     available_chart_types: list[str] = Field(
-        default_factory=lambda: ["PIE", "BAR_HORIZONTAL", "TABLE_WITH_MINIBARS"]
+        default_factory=lambda: [
+            "PIE", "PIE_GROUPED",
+            "BAR_HORIZONTAL", "BAR_HORIZONTAL_GROUPED",
+            "TABLE_WITH_MINIBARS",
+        ]
     )
     patterns: list[Pattern] = Field(default_factory=list)
 
@@ -308,7 +312,11 @@ BUILTIN_STYLE_GUIDE = StyleGuide.model_validate({
         "suggested_palette": ["#7F7F7F", "#404040", "#EEC245", "#C00000", "#FFC000"],
         "vibe": "Minimalista profesional. Greys dominan, yellow #EEC245 acentúa la barra destacada (último bar). Red+Yellow para PIEs binarios.",
     },
-    "available_chart_types": ["PIE", "BAR_HORIZONTAL", "TABLE_WITH_MINIBARS"],
+    "available_chart_types": [
+        "PIE", "PIE_GROUPED",
+        "BAR_HORIZONTAL", "BAR_HORIZONTAL_GROUPED",
+        "TABLE_WITH_MINIBARS",
+    ],
     "patterns": [
         # ── 0: binary_general ─────────────────────────────────────────────
         # Single binary question, no breakdowns (or only General)

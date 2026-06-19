@@ -4,14 +4,15 @@ import userEvent from "@testing-library/user-event"
 import AddChartModal from "../src/pages/Editor/modals/AddChartModal"
 import type { ParsedDB } from "../src/types"
 
-// Mock the styleGuide store so available_chart_types includes TABLE_WITH_MINIBARS
-// (simulating a production style guide that has been trained with that type)
+// Mock the styleGuide store so available_chart_types is the Fase B 5-type builtin list
 vi.mock("../src/store/styleGuide", () => ({
   useStyleGuideStore: (selector: (s: any) => any) =>
     selector({
       styleGuide: {
         available_chart_types: [
-          "PIE", "DONUT", "BAR_HORIZONTAL", "BAR_CLUSTERED", "COLUMN_CLUSTERED", "TABLE_WITH_MINIBARS",
+          "PIE", "PIE_GROUPED",
+          "BAR_HORIZONTAL", "BAR_HORIZONTAL_GROUPED",
+          "TABLE_WITH_MINIBARS",
         ],
         global: { suggested_palette: [] },
       },
@@ -70,6 +71,66 @@ describe("AddChartModal — TABLE_WITH_MINIBARS visibility", () => {
     sample_size: 500,
     data_blocks: { counts_cols: [], pct_row_cols: [], pct_col_cols: [] },
   }
+
+  it("one real breakdown shows all 5 chart_types", async () => {
+    const u = userEvent.setup()
+    render(<AddChartModal open={true} onClose={() => {}} onApply={() => {}} db={baseDb as any} />)
+    await u.click(screen.getByLabelText(/Rango de edad/i))
+    const dropdown = screen.getByLabelText(/Tipo de chart/i) as HTMLSelectElement
+    const values = Array.from(dropdown.options).map((o) => o.value)
+    expect(values).toEqual([
+      "PIE", "PIE_GROUPED",
+      "BAR_HORIZONTAL", "BAR_HORIZONTAL_GROUPED",
+      "TABLE_WITH_MINIBARS",
+    ])
+  })
+
+  it("no real breakdown hides grouped types and TABLE", () => {
+    render(<AddChartModal open={true} onClose={() => {}} onApply={() => {}} db={baseDb as any} />)
+    const dropdown = screen.getByLabelText(/Tipo de chart/i) as HTMLSelectElement
+    const values = Array.from(dropdown.options).map((o) => o.value)
+    expect(values).not.toContain("TABLE_WITH_MINIBARS")
+    expect(values).not.toContain("PIE_GROUPED")
+    expect(values).not.toContain("BAR_HORIZONTAL_GROUPED")
+  })
+
+  it("show_legend checkbox renders only for BAR_HORIZONTAL_GROUPED or TABLE_WITH_MINIBARS", async () => {
+    const u = userEvent.setup()
+    render(<AddChartModal open={true} onClose={() => {}} onApply={() => {}} db={baseDb as any} />)
+    expect(screen.queryByLabelText(/Mostrar leyenda/i)).toBeNull()
+    await u.click(screen.getByLabelText(/Rango de edad/i))
+    const dropdown = screen.getByLabelText(/Tipo de chart/i) as HTMLSelectElement
+    await u.selectOptions(dropdown, "BAR_HORIZONTAL_GROUPED")
+    expect(screen.getByLabelText(/Mostrar leyenda/i)).toBeInTheDocument()
+    await u.selectOptions(dropdown, "PIE_GROUPED")
+    expect(screen.queryByLabelText(/Mostrar leyenda/i)).toBeNull()
+  })
+
+  it("grid_cols input renders only for PIE_GROUPED", async () => {
+    const u = userEvent.setup()
+    render(<AddChartModal open={true} onClose={() => {}} onApply={() => {}} db={baseDb as any} />)
+    await u.click(screen.getByLabelText(/Rango de edad/i))
+    const dropdown = screen.getByLabelText(/Tipo de chart/i) as HTMLSelectElement
+    await u.selectOptions(dropdown, "PIE_GROUPED")
+    expect(screen.getByLabelText(/Columnas por fila/i)).toBeInTheDocument()
+    await u.selectOptions(dropdown, "PIE")
+    expect(screen.queryByLabelText(/Columnas por fila/i)).toBeNull()
+  })
+
+  it("apply sends new fields", async () => {
+    const u = userEvent.setup()
+    const applied: any[] = []
+    render(<AddChartModal open={true} onClose={() => {}} onApply={(r) => applied.push(r)} db={baseDb as any} />)
+    await u.click(screen.getByLabelText(/Rango de edad/i))
+    const dropdown = screen.getByLabelText(/Tipo de chart/i) as HTMLSelectElement
+    await u.selectOptions(dropdown, "BAR_HORIZONTAL_GROUPED")
+    await u.type(screen.getByPlaceholderText(/Ej: Plazo/i), "Plazo del crédito")
+    await u.click(screen.getByLabelText(/Mostrar leyenda/i))
+    await u.click(screen.getByText(/Aplicar/i))
+    expect(applied[0].title).toBe("Plazo del crédito")
+    expect(applied[0].show_legend).toBe(true)
+    expect(applied[0].chartType).toBe("BAR_HORIZONTAL_GROUPED")
+  })
 
   it("hides TABLE_WITH_MINIBARS when no breakdown is selected", () => {
     render(<AddChartModal open={true} onClose={() => {}} onApply={() => {}} db={baseDb as any} />)

@@ -5,12 +5,20 @@ import { ColorPicker } from "../../../components/ColorPicker"
 import { autoDeriveColors } from "../../../utils/colorUtils"
 import { useStyleGuideStore } from "../../../store/styleGuide"
 
-const BUILTIN_CHART_TYPES = ["PIE", "BAR_HORIZONTAL", "TABLE_WITH_MINIBARS"]
+const BUILTIN_CHART_TYPES = [
+  "PIE", "PIE_GROUPED",
+  "BAR_HORIZONTAL", "BAR_HORIZONTAL_GROUPED",
+  "TABLE_WITH_MINIBARS",
+]
 
 interface ApplyResult {
   questionId: string
   breakdownIds: string[]
   chartType: ChartType
+  show_legend: boolean
+  grid_cols: number | null
+  title: string | null
+  cat_titles: Record<string, string> | null
   colors: string[]
 }
 
@@ -35,7 +43,13 @@ export default function AddChartModal({ open, onClose, onApply, db }: Props) {
   )
   const nReal = realBreakdownIds.length
   const chartTypes = useMemo(() => {
-    if (nReal === 0) return allChartTypes.filter((t) => t !== "TABLE_WITH_MINIBARS")
+    if (nReal === 0) {
+      return allChartTypes.filter((t) =>
+        t !== "TABLE_WITH_MINIBARS" &&
+        t !== "PIE_GROUPED" &&
+        t !== "BAR_HORIZONTAL_GROUPED"
+      )
+    }
     if (nReal >= 2) return ["TABLE_WITH_MINIBARS"]
     return allChartTypes
   }, [allChartTypes.join(","), nReal])
@@ -45,6 +59,16 @@ export default function AddChartModal({ open, onClose, onApply, db }: Props) {
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [advancedColors, setAdvancedColors] = useState<string[]>([])
   const [openAdvancedPicker, setOpenAdvancedPicker] = useState<number | null>(null)
+  const [title, setTitle] = useState("")
+  const [showLegend, setShowLegend] = useState(false)
+  const [gridCols, setGridCols] = useState<number | null>(null)
+  const [catTitles, setCatTitles] = useState<Record<string, string>>({})
+
+  const breakdownCats = useMemo(() => {
+    if (nReal !== 1) return [] as string[]
+    const bdId = realBreakdownIds[0]
+    return db?.breakdowns.find((b) => b.id === bdId)?.categories ?? []
+  }, [db, realBreakdownIds, nReal])
 
   // Sync chartType when available chart types change or filter changes
   useEffect(() => {
@@ -60,6 +84,10 @@ export default function AddChartModal({ open, onClose, onApply, db }: Props) {
       setPrimaryColor("")
       setShowAdvanced(false)
       setAdvancedColors([])
+      setTitle("")
+      setShowLegend(false)
+      setGridCols(null)
+      setCatTitles({})
     }
   }, [open, db])
 
@@ -89,10 +117,15 @@ export default function AddChartModal({ open, onClose, onApply, db }: Props) {
         ? autoDeriveColors(primaryColor, nOptions)
         : []
 
+    const catTitlesPayload = Object.keys(catTitles).length ? catTitles : null
     onApply({
       questionId,
       breakdownIds: realBreakdownIds,
       chartType,
+      show_legend: showLegend,
+      grid_cols: gridCols,
+      title: title.trim() || null,
+      cat_titles: catTitlesPayload,
       colors: finalColors,
     })
     onClose()
@@ -157,7 +190,17 @@ export default function AddChartModal({ open, onClose, onApply, db }: Props) {
         aria-label="Tipo de chart"
         value={chartType}
         disabled={nReal >= 2}
-        onChange={(e) => setChartType(e.target.value as ChartType)}
+        onChange={(e) => {
+          const newType = e.target.value as ChartType
+          setChartType(newType)
+          if (newType !== "BAR_HORIZONTAL_GROUPED" && newType !== "TABLE_WITH_MINIBARS") {
+            setShowLegend(false)
+          }
+          if (newType !== "PIE_GROUPED") {
+            setGridCols(null)
+            setCatTitles({})
+          }
+        }}
         className="w-full mb-3 bg-neutral-900 border border-neutral-700 rounded px-3 py-2 text-sm disabled:opacity-60"
       >
         {chartTypes.map((t) => (
@@ -168,6 +211,64 @@ export default function AddChartModal({ open, onClose, onApply, db }: Props) {
       </select>
       {nReal >= 2 && (
         <p className="text-xs text-neutral-500 mt-1">Con 2+ breakdowns solo se permite TABLE_WITH_MINIBARS.</p>
+      )}
+
+      <label className="block text-xs text-neutral-400 mb-1">Título (opcional)</label>
+      <input
+        type="text"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        className="w-full mb-3 bg-neutral-900 border border-neutral-700 rounded px-3 py-2 text-sm"
+        placeholder="Ej: Plazo del crédito"
+      />
+
+      {(chartType === "BAR_HORIZONTAL_GROUPED" || chartType === "TABLE_WITH_MINIBARS") && (
+        <label className="flex items-center gap-2 text-sm mb-3">
+          <input
+            type="checkbox"
+            checked={showLegend}
+            onChange={(e) => setShowLegend(e.target.checked)}
+          />
+          Mostrar leyenda
+        </label>
+      )}
+
+      {chartType === "PIE_GROUPED" && (
+        <>
+          <label htmlFor="grid-cols-input" className="block text-xs text-neutral-400 mb-1">
+            Columnas por fila (vacío = auto)
+          </label>
+          <input
+            id="grid-cols-input"
+            type="number"
+            min={1}
+            value={gridCols ?? ""}
+            onChange={(e) =>
+              setGridCols(e.target.value === "" ? null : Math.max(1, parseInt(e.target.value, 10)))
+            }
+            className="w-full mb-3 bg-neutral-900 border border-neutral-700 rounded px-3 py-2 text-sm"
+          />
+        </>
+      )}
+
+      {chartType === "PIE_GROUPED" && nReal === 1 && breakdownCats.length > 0 && (
+        <div className="mb-3">
+          <label className="block text-xs text-neutral-400 mb-2">
+            Títulos por categoría (opcional)
+          </label>
+          {breakdownCats.map((cat) => (
+            <div key={cat} className="flex items-center gap-2 mb-1">
+              <span className="text-xs text-neutral-500 w-32 truncate">{cat}</span>
+              <input
+                type="text"
+                value={catTitles[cat] ?? ""}
+                onChange={(e) => setCatTitles({ ...catTitles, [cat]: e.target.value })}
+                className="flex-1 bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-xs"
+                placeholder={cat}
+              />
+            </div>
+          ))}
+        </div>
       )}
 
       {/* Color section */}

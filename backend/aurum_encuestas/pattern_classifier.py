@@ -463,6 +463,10 @@ def build_slide_config(slide_def: Any, parsed_db: Any, db_path: str = "") -> Any
         # Populated for every chart so segmented tables can render group-merged
         # headers without needing N separate chart_ref_index queries.
         all_breakdowns_data: dict = field(default_factory=dict)
+        show_legend: bool = False
+        grid_cols: int | None = None
+        title: str | None = None
+        cat_titles: dict | None = None
 
     raw_charts = getattr(slide_def, "charts", []) or []
     analyses = getattr(slide_def, "analyses", []) or []
@@ -499,6 +503,10 @@ def build_slide_config(slide_def: Any, parsed_db: Any, db_path: str = "") -> Any
                 question=question,
                 data=chart_data,
                 all_breakdowns_data=all_bds,
+                show_legend=getattr(chart, "show_legend", False),
+                grid_cols=getattr(chart, "grid_cols", None),
+                title=getattr(chart, "title", None),
+                cat_titles=getattr(chart, "cat_titles", None),
             )
         )
 

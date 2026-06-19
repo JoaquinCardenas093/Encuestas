@@ -504,3 +504,29 @@ def test_n_breakdowns_uses_breakdown_ids_length():
     ctx = extract_context(cfg, db=None)
     # 3 unique real breakdowns across slide: edad, sexo, nse
     assert ctx["n_breakdowns"] == 3
+
+
+def test_enriched_chart_propagates_phase_b_fields():
+    from aurum_encuestas.pattern_classifier import build_slide_config
+    from aurum_encuestas.models import Chart, Question, Breakdown, ParsedDB
+    from types import SimpleNamespace
+
+    chart = Chart(
+        id="c1", question_id="q1", breakdown_ids=["edad"],
+        chart_type="PIE_GROUPED",
+        show_legend=True, grid_cols=2,
+        title="Plazo del crédito",
+        cat_titles={"18-39": "Jóvenes", "40-59": "Adultos"},
+    )
+    slide_def = SimpleNamespace(charts=[chart], analyses=[])
+    parsed = ParsedDB(
+        questions=[Question(id="q1", code="Q1", text="t", options=["Sí","No"], confidence=0.9)],
+        breakdowns=[Breakdown(id="edad", label="Edad", categories=["18-39","40-59"])],
+        sample_size=500, data_blocks={"counts_cols":[],"pct_row_cols":[],"pct_col_cols":[]},
+    )
+    cfg = build_slide_config(slide_def, parsed_db=parsed, db_path=None)
+    ec = cfg.charts[0]
+    assert ec.show_legend is True
+    assert ec.grid_cols == 2
+    assert ec.title == "Plazo del crédito"
+    assert ec.cat_titles == {"18-39": "Jóvenes", "40-59": "Adultos"}

@@ -15,6 +15,36 @@ log = logging.getLogger(__name__)
 
 _ALIGN_MAP = {"left": PP_ALIGN.LEFT, "center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT}
 
+_SEGMENTED_CELLS_FASE_B: dict = {
+    "group_header": {
+        "style": {"fill": "secondary", "text_color": "background",
+                  "font_size": 11, "bold": True, "align_h": "center"},
+    },
+    "category_header": {
+        "style": {"fill": "primary", "text_color": "background",
+                  "font_size": 10, "bold": True, "align_h": "center"},
+    },
+    "counts_row": {
+        "style": {"fill": "primary", "text_color": "background",
+                  "font_size": 11, "bold": True, "align_h": "center"},
+        "label_first_col": "",
+    },
+    "option_row": {
+        "style": {"fill": "primary", "text_color": "#FFFFFF",
+                  "font_size": 10, "align_h": "center"},
+        "label_col_width_rel": 0.0,
+        "value_format": "percentage",
+        "value_decimals": 1,
+        "minibar": {
+            "enabled": True,
+            "color_role": "secondary",
+            "height_rel_to_cell": 0.25,
+            "show_percent_text": True,
+            "percent_text_position": "left_of_bar",
+        },
+    },
+}
+
 
 def render(slide, element: dict, ctx: RenderContext) -> None:
     """Dispatch to the correct table structure builder."""
@@ -216,89 +246,62 @@ def _render_segmented_breakdowns(slide, element: dict, ctx: RenderContext) -> No
         log.debug("table_renderer segmented: no breakdown groups — skipping")
         return
 
+    # Unified Fase B style: single source of truth for all branches.
+    group_hdr_cfg = _SEGMENTED_CELLS_FASE_B["group_header"]
+    cat_hdr_cfg   = _SEGMENTED_CELLS_FASE_B["category_header"]
+    counts_cfg    = _SEGMENTED_CELLS_FASE_B["counts_row"]
+    option_cfg    = _SEGMENTED_CELLS_FASE_B["option_row"]
+
+    # Resolve source_chart for show_legend + question.options
+    data_source_local = element.get("data_source", {}) or {}
+    chart_ref_index_local = data_source_local.get("chart_ref_index", 0)
+    charts_list_local = getattr(ctx.slide_config, "charts", []) or []
+    source_chart_local = charts_list_local[chart_ref_index_local] if 0 <= chart_ref_index_local < len(charts_list_local) else None
+    show_legend = bool(getattr(source_chart_local, "show_legend", False)) if source_chart_local else False
+    question_local = getattr(source_chart_local, "question", None) if source_chart_local else None
+    legend_options = list(question_local.options) if question_local else options
+
+    legend_block_w = int(box_cx * 0.10) if show_legend else 0
+    if show_legend and legend_options:
+        _render_external_legend_block(
+            slide, box_x, box_y, legend_block_w, box_cy,
+            options=legend_options, label_first="Observaciones", ctx=ctx,
+        )
+
+    table_x = box_x + legend_block_w
+    table_cx = box_cx - legend_block_w
+
     # Single-panel image-style mode: when only ONE breakdown was requested,
     # render a single, centered, image-faithful mini-table (matches the
     # 'Rango de edad' reference screenshot). Overrides the multi-panel
     # weight-packing logic below.
     if len(panels) == 1:
         only = panels[0]
-        # Image-faithful style overrides (palette role names map to:
-        #   primary=#7F7F7F mid grey, secondary=#404040 dark, background=#EEC245 yellow)
-        single_group_hdr = {
-            "style": {"fill": "secondary", "text_color": "background", "font_size": 11, "bold": True, "align_h": "center"},
-        }
-        single_cat_hdr = {
-            "style": {"fill": "primary", "text_color": "background", "font_size": 10, "bold": True, "align_h": "center"},
-        }
-        single_counts = {
-            "style": {"fill": "primary", "text_color": "background", "font_size": 11, "bold": True, "align_h": "center"},
-            "label_first_col": "",
-        }
-        single_option = {
-            "style": {"fill": "primary", "text_color": "#FFFFFF", "font_size": 10, "align_h": "left"},
-            "label_style": {"fill": "primary", "text_color": "#FFFFFF", "font_size": 11, "bold": True, "align_h": "center"},
-            "label_col_width_rel": 0.18,
-            "value_format": "percentage",
-            "value_decimals": 1,
-            "minibar": {
-                "enabled": True,
-                "color_role": "secondary",
-                "height_rel_to_cell": 0.25,
-                "show_percent_text": True,
-                "percent_text_position": "left_of_bar",
-            },
-        }
         _render_panel(
             slide=slide,
             panel=only,
             options=options,
-            x=box_x, y=box_y, cx=box_cx, cy=box_cy,
+            x=table_x, y=box_y, cx=table_cx, cy=box_cy,
             ctx=ctx,
-            group_hdr_cfg=single_group_hdr,
-            cat_hdr_cfg=single_cat_hdr,
-            counts_cfg=single_counts,
-            option_cfg=single_option,
+            group_hdr_cfg=group_hdr_cfg,
+            cat_hdr_cfg=cat_hdr_cfg,
+            counts_cfg=counts_cfg,
+            option_cfg=option_cfg,
             font_cap={"group_header": None, "category_header": None, "counts_row": None, "option_row": None},
         )
         return
 
-    # Pack panels into rows. Weight = 1 label col + N category cols.
-    # MAX_ROW_WEIGHT 14 lets Edad(3)+Sexo(3)+NSE(6)=12 fit on row 1, Punto(6) wraps.
-    # Panels whose breakdown has a user-added chart get their OWN row so the
-    # mini-chart has room next to the table.
+    # Pack panels into rows. Weight depends on label_col_width_rel.
+    # MAX_ROW_WEIGHT 14 lets typical multi-bd combos fit on row 1.
+    # Fase B weight = len(cats) per panel (label col suppressed).
+    # Examples: Edad(2)+Sexo(2)+NSE(5)=9, Punto(6) wraps.
     MAX_ROW_WEIGHT = element.get("max_row_weight", 14)
     panel_rows: list[list[dict]] = _pack_panels_into_rows(
         panels, MAX_ROW_WEIGHT,
+        label_col_width_rel=_SEGMENTED_CELLS_FASE_B["option_row"]["label_col_width_rel"],
     )
 
-    cells_cfg = element.get("cells", {})
-    group_hdr_cfg = cells_cfg.get("group_header", {})
-    cat_hdr_cfg = cells_cfg.get("category_header", {})
-    counts_cfg = cells_cfg.get("counts_row", {})
-    option_cfg = cells_cfg.get("option_row", {})
-
-    # ── Pattern-config overrides for #14-style fidelity ─────────────────────
-    # AI-generated patterns often pick "primary" (= brand color) for the group
-    # header fill, which clashes when the brand is bright (orange/yellow).
-    # Force grey to match the reference deck's neutral table style.
-    g_style_override = dict(group_hdr_cfg.get("style") or {})
-    g_style_override["fill"] = "secondary"        # was: primary → orange
-    g_style_override["text_color"] = "background"
-    group_hdr_cfg = {**group_hdr_cfg, "style": g_style_override}
-    # Always enable minibars; force grey color and a short bar anchored below
-    # the percentage text (so the value reads cleanly without overlap).
-    option_cfg = {
-        **option_cfg,
-        "minibar": {
-            **(option_cfg.get("minibar") or {}),
-            "enabled": True,
-            "color_role": "secondary",
-            "show_percent_text": False,
-            "height_rel_to_cell": 0.25,
-        },
-    }
-
-    H_GAP_EMU = int(0.012 * box_cx)  # gap between panels in a row
+    H_GAP_EMU = int(0.012 * table_cx)  # gap between panels in a row
     V_GAP_EMU = int(0.030 * box_cy)  # gap between rows
     n_rows = len(panel_rows)
     # Each panel renders 5 sub-rows (group_header + cat_header + counts + N option
@@ -312,13 +315,14 @@ def _render_segmented_breakdowns(slide, element: dict, ctx: RenderContext) -> No
     row_h_fit = (box_cy - V_GAP_EMU * (n_rows - 1)) // max(n_rows, 1)
     row_h = max(panel_needed, row_h_fit)
 
+    use_label = _SEGMENTED_CELLS_FASE_B["option_row"]["label_col_width_rel"] > 0.001
     cur_y = box_y
     for row in panel_rows:
-        row_weight = sum(1 + len(p["cats"]) for p in row)
-        avail_w = box_cx - H_GAP_EMU * (len(row) - 1)
-        cur_x = box_x
+        row_weight = sum((1 + len(p["cats"])) if use_label else len(p["cats"]) for p in row)
+        avail_w = table_cx - H_GAP_EMU * (len(row) - 1)
+        cur_x = table_x
         for p in row:
-            w = 1 + len(p["cats"])
+            w = (1 + len(p["cats"])) if use_label else len(p["cats"])
             panel_w = int(avail_w * (w / row_weight)) if row_weight else avail_w
             _render_panel(
                 slide=slide,
@@ -330,21 +334,75 @@ def _render_segmented_breakdowns(slide, element: dict, ctx: RenderContext) -> No
                 cat_hdr_cfg=cat_hdr_cfg,
                 counts_cfg=counts_cfg,
                 option_cfg=option_cfg,
+                font_cap={"group_header": None, "category_header": None,
+                          "counts_row": None, "option_row": None},
             )
             cur_x += panel_w + H_GAP_EMU
         cur_y += row_h + V_GAP_EMU
 
 
+def _render_external_legend_block(
+    slide, x: int, y: int, w: int, h: int,
+    options: list[str], label_first: str, ctx,
+) -> None:
+    """Vertical label block left of segmented table.
+
+    Rows (aligned to panel layout):
+      0  spacer (matches group_header band, fill=secondary)
+      1  spacer (matches category_header band, fill=primary)
+      2  label_first (e.g. "Observaciones"), right-aligned
+      3+ option labels (Sí, No, ...), right-aligned
+    """
+    n_rows = 3 + len(options)
+    try:
+        tbl_shape = slide.shapes.add_table(n_rows, 1, Emu(x), Emu(y), Emu(w), Emu(h))
+        tbl = tbl_shape.table
+    except Exception as exc:
+        log.error("external legend block add_table failed: %s", exc)
+        return
+
+    # Force uniform row heights matching the panel's row distribution
+    row_h = h // n_rows
+    for r in range(n_rows):
+        try:
+            tbl.rows[r].height = Emu(row_h)
+        except Exception:
+            pass
+
+    _set_cell(tbl.cell(0, 0), "", ctx, {"fill": "secondary"})
+    _set_cell(tbl.cell(1, 0), "", ctx, {"fill": "primary"})
+    _set_cell(tbl.cell(2, 0), label_first, ctx, {
+        "fill": "primary", "text_color": "background",
+        "font_size": 11, "bold": True, "align_h": "right",
+    })
+    for i, opt in enumerate(options):
+        _set_cell(tbl.cell(3 + i, 0), opt, ctx, {
+            "fill": "primary", "text_color": "#FFFFFF",
+            "font_size": 10, "bold": True, "align_h": "right",
+        })
+
+
 def _pack_panels_into_rows(
     panels: list[dict],
     max_row_weight: int,
+    label_col_width_rel: float = 0.18,
 ) -> list[list[dict]]:
-    """Greedy row packing by weight (1 + len(cats))."""
+    """Greedy row packing by weight.
+
+    Weight per panel:
+      - label_col_width_rel > 0: 1 + len(cats)  (label col counts)
+      - else (Fase B):           len(cats)
+    """
+    use_label = label_col_width_rel > 0.001
+
+    def weight(p: dict) -> int:
+        return (1 + len(p["cats"])) if use_label else len(p["cats"])
+
     rows: list[list[dict]] = []
     current: list[dict] = []
     current_w = 0
     for p in panels:
-        w = 1 + len(p["cats"])
+        w = weight(p)
         if current and current_w + w > max_row_weight:
             rows.append(current)
             current = [p]
@@ -368,7 +426,6 @@ def _render_panel(
     """Render one mini-table (1 breakdown group) at (x,y,cx,cy) EMU."""
     cats: list[tuple[str, dict]] = panel["cats"]  # [(cat_label, opt_cells_dict)]
     n_cat = len(cats)
-    n_cols = 1 + n_cat
     N_HEADER_ROWS = 3
     n_rows = N_HEADER_ROWS + len(options)
 
@@ -376,14 +433,21 @@ def _render_panel(
     chart_x = chart_y = chart_h = chart_w = 0
     table_w = cx
 
-    # Pre-compute label col width (so cells row 2 can decide whether to print
-    # the long "Observaciones" label or leave the cell blank).
-    label_col_w_rel_pre = option_cfg.get("label_col_width_rel") or 0.18
-    MIN_LABEL_EMU = 500000  # ~0.55 cm
-    label_w = max(MIN_LABEL_EMU, int(label_col_w_rel_pre * table_w))
-    if label_w > table_w * 0.4:
-        label_w = int(table_w * 0.4)
-        chart_x = chart_w = 0  # unused
+    # Pre-compute label col width.  When label_col_width_rel <= 0, skip it
+    # entirely so data columns start at col 0 (Fase B no-label-col mode).
+    label_col_w_rel = option_cfg.get("label_col_width_rel", 0.18)
+    if label_col_w_rel <= 0.001:
+        n_cols = n_cat
+        label_w = 0
+    else:
+        n_cols = 1 + n_cat
+        MIN_LABEL_EMU = 500000  # ~0.55 cm
+        label_w = max(MIN_LABEL_EMU, int(label_col_w_rel * table_w))
+        if label_w > table_w * 0.4:
+            label_w = int(table_w * 0.4)
+            chart_x = chart_w = 0  # unused
+
+    first_data_col = 0 if label_w == 0 else 1
 
     try:
         table_shape = slide.shapes.add_table(n_rows, n_cols, Emu(x), Emu(y), Emu(table_w), Emu(table_h_local))
@@ -416,8 +480,9 @@ def _render_panel(
     c_style   = {**(cat_hdr_cfg.get("style", {}) or {}),   "font_size": _capped("category_header", 8, 8)}
     cnt_style = {**(counts_cfg.get("style", {}) or {}),    "font_size": _capped("counts_row", 7, 7)}
     opt_style = {**(option_cfg.get("style", {}) or {}),    "font_size": _capped("option_row", 7, 7)}
+    opt_label_style = {**opt_style}
 
-    # Row 0 — group_header (spans all data cols + label col)
+    # Row 0 — group_header (spans all cols)
     _set_cell(tbl.cell(0, 0), panel["label"], ctx, g_style)
     for col_idx in range(1, n_cols):
         _set_cell(tbl.cell(0, col_idx), "", ctx, g_style)
@@ -427,21 +492,23 @@ def _render_panel(
         log.debug("group_header merge failed for %s: %s", panel.get("label"), exc)
 
     # Row 1 — category_header
-    _set_cell(tbl.cell(1, 0), "", ctx, c_style)
-    for col_idx, (cat_label, _) in enumerate(cats, start=1):
-        _set_cell(tbl.cell(1, col_idx), cat_label, ctx, c_style)
+    if label_w > 0:
+        _set_cell(tbl.cell(1, 0), "", ctx, c_style)
+    for c, (cat_label, _) in enumerate(cats):
+        _set_cell(tbl.cell(1, first_data_col + c), cat_label, ctx, c_style)
 
     # Row 2 — counts_row.  Use full "Observaciones" only when label col is wide
     # enough to render it on one line. Narrow panels (Edad/Sexo 2-cat) leave
     # the label cell empty to match the reference deck style.
-    if label_w >= 1600000:  # ~1.7 cm — enough for "Observaciones" single-line
-        counts_label = counts_cfg.get("label_first_col", "Observaciones")
-    else:
-        counts_label = ""
-    _set_cell(tbl.cell(2, 0), counts_label, ctx, cnt_style)
-    for col_idx, (_, opt_cells) in enumerate(cats, start=1):
-        total = sum((opt_cells.get(opt) or {}).get("count", 0) for opt in options)
-        _set_cell(tbl.cell(2, col_idx), str(int(total)), ctx, cnt_style)
+    if label_w > 0:
+        if label_w >= 1600000:  # ~1.7 cm — enough for "Observaciones" single-line
+            counts_label = counts_cfg.get("label_first_col", "Observaciones")
+        else:
+            counts_label = ""
+        _set_cell(tbl.cell(2, 0), counts_label, ctx, cnt_style)
+    for c, (_, opt_cells) in enumerate(cats):
+        total = sum(int((opt_cells.get(opt) or {}).get("count") or 0) for opt in options)
+        _set_cell(tbl.cell(2, first_data_col + c), str(total) if total else "", ctx, cnt_style)
 
     # Rows 3+ — option rows
     value_format = option_cfg.get("value_format", "percentage")
@@ -450,8 +517,9 @@ def _render_panel(
 
     for opt_idx, option in enumerate(options):
         row_idx = N_HEADER_ROWS + opt_idx
-        _set_cell(tbl.cell(row_idx, 0), option, ctx, opt_style)
-        for col_idx, (_, opt_cells) in enumerate(cats, start=1):
+        if label_w > 0:
+            _set_cell(tbl.cell(row_idx, 0), option, ctx, opt_label_style)
+        for c, (_, opt_cells) in enumerate(cats):
             cd = opt_cells.get(option) or {}
             pct = cd.get("pct", 0) or 0
             count = cd.get("count", 0) or 0
@@ -461,16 +529,24 @@ def _render_panel(
                 val_str = str(int(count))
             else:
                 val_str = f"{pct * 100:.{value_decimals}f}% ({int(count)})"
-            _set_cell(tbl.cell(row_idx, col_idx), val_str, ctx, opt_style)
+            _set_cell(tbl.cell(row_idx, first_data_col + c), val_str, ctx, opt_style)
 
-    # Column widths — label_w already computed above; just split remaining.
-    data_w = (table_w - label_w) // max(n_cat, 1)
-    try:
-        tbl.columns[0].width = label_w
-        for i in range(1, n_cols):
-            tbl.columns[i].width = data_w
-    except Exception as exc:
-        log.debug("Could not set column widths for %s: %s", panel.get("label"), exc)
+    # Column widths
+    if label_w > 0:
+        data_w = (table_w - label_w) // max(n_cat, 1)
+        try:
+            tbl.columns[0].width = label_w
+            for i in range(1, n_cols):
+                tbl.columns[i].width = data_w
+        except Exception as exc:
+            log.debug("Could not set column widths for %s: %s", panel.get("label"), exc)
+    else:
+        data_w = table_w // max(n_cat, 1)
+        try:
+            for i in range(n_cols):
+                tbl.columns[i].width = data_w
+        except Exception as exc:
+            log.debug("Could not set column widths for %s: %s", panel.get("label"), exc)
 
     # Force explicit row heights so libreoffice/PowerPoint don't auto-grow rows
     # beyond the declared table cy (which causes the last option rows to spill
@@ -483,6 +559,8 @@ def _render_panel(
         log.debug("Could not set row heights for %s: %s", panel.get("label"), exc)
 
     # Minibar overlays — local to this mini-table
+    # When label col is absent, data cols start at index 0, so minibar overlay
+    # must enumerate starting at first_data_col (0 instead of 1).
     if minibar_cfg.get("enabled", False):
         legacy_data = {}
         legacy_keys = []
@@ -495,6 +573,7 @@ def _render_panel(
             minibar_cfg, opt_style, ctx,
             table_x=x, table_y=y, table_cx=table_w, table_cy=cy,
             n_header_rows=N_HEADER_ROWS,
+            first_data_col=first_data_col,
         )
 
     # Mini-chart suppressed — every breakdown renders as table-only for #14
@@ -614,6 +693,7 @@ def _render_minibar_overlays(
     minibar_cfg: dict, opt_style: dict, ctx: RenderContext,
     table_x: int, table_y: int, table_cx: int, table_cy: int,
     n_header_rows: int,
+    first_data_col: int = 1,
 ) -> None:
     """Add MSO rectangle overlays on option row cells to represent minibar values."""
     color_role = minibar_cfg.get("color_role", "primary")
@@ -645,7 +725,7 @@ def _render_minibar_overlays(
             bar_y = cell_y_abs + cell_h - bar_h - int(cell_h * 0.05)
 
             option = options[opt_idx]
-            for col_idx, bd_key in enumerate(breakdown_keys, start=1):
+            for col_idx, bd_key in enumerate(breakdown_keys, start=first_data_col):
                 if col_idx >= len(col_x_offsets):
                     continue
                 cell_x_abs = table_x + col_x_offsets[col_idx]
