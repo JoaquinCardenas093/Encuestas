@@ -81,7 +81,7 @@ export default function AddAnalysisModal({ open, slide, db, onClose, onAdd }: Pr
             <option value="">— Seleccionar —</option>
             {slide.charts.map((c) => {
               const q = db.questions.find((q) => q.id === c.question_id)
-              const b = db.breakdowns.find((b) => b.id === c.breakdown_id)
+              const b = db.breakdowns.find((b) => b.id === (c.breakdown_ids[0] ?? "general"))
               return <option key={c.id} value={c.id}>{q?.code} · {b?.label} · {c.chart_type}</option>
             })}
           </select>
@@ -119,7 +119,7 @@ function _buildContext(scope: AnalysisScope, targetId: string, slide: Slide, db:
 
   const firstChart = charts[0]
   const q = firstChart ? db.questions.find((q) => q.id === firstChart.question_id) : null
-  const b = firstChart ? db.breakdowns.find((b) => b.id === firstChart.breakdown_id) : null
+  const b = firstChart ? db.breakdowns.find((b) => b.id === (firstChart.breakdown_ids[0] ?? "general")) : null
 
   return {
     section_title: slide.title || "",

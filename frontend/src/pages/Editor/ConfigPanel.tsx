@@ -9,7 +9,7 @@ import type { ChartType } from "../../types"
 import { useStyleGuideStore } from "../../store/styleGuide"
 
 const BUILTIN_CHART_TYPES: ChartType[] = [
-  "PIE", "DONUT", "BAR_HORIZONTAL", "BAR_CLUSTERED", "COLUMN_CLUSTERED",
+  "PIE", "PIE_GROUPED", "BAR_HORIZONTAL", "BAR_HORIZONTAL_GROUPED", "TABLE_WITH_MINIBARS",
 ]
 
 interface Props {
@@ -59,7 +59,7 @@ function ColorSlot({ optionIdx, optionLabel, color, open, onToggle, onClose, onC
 export default function ConfigPanel({ slideId }: Props) {
   const state = useProjectStore((s) => s.state)
   const parsedDb = useProjectStore((s) => s.parsedDb)
-  const addCharts = useProjectStore((s) => s.addCharts)
+  const addChart = useProjectStore((s) => s.addChart)
   const removeChart = useProjectStore((s) => s.removeChart)
   const updateChartType = useProjectStore((s) => s.updateChartType)
   const styleGuide = useStyleGuideStore((s) => s.styleGuide)
@@ -101,22 +101,26 @@ export default function ConfigPanel({ slideId }: Props) {
           <h4 className="text-xs uppercase text-neutral-500 mb-2">Charts ({slide.charts.length})</h4>
           {slide.charts.map((c) => {
             const q = parsedDb?.questions.find((q) => q.id === c.question_id)
-            const b = parsedDb?.breakdowns.find((b) => b.id === c.breakdown_id)
+            const realBds = (c.breakdown_ids || []).filter((b) => b !== "general")
+            const nReal = realBds.length
+            const allCT = CHART_TYPES
+            const chartTypeOptions =
+              nReal === 0 ? allCT.filter((t) => t !== "TABLE_WITH_MINIBARS")
+              : nReal >= 2 ? (["TABLE_WITH_MINIBARS"] as ChartType[])
+              : allCT
+            const b = parsedDb?.breakdowns.find((b) => b.id === (c.breakdown_ids[0] ?? "general"))
             const options = q?.options ?? []
             return (
               <div key={c.id} className="bg-neutral-800 border border-neutral-700 rounded p-2 mb-2 flex flex-col gap-2">
                 <div className="flex items-center gap-2">
                   <span className="bg-blue-700 text-white text-xs px-1.5 rounded">{q?.code || c.question_id}</span>
-                  <span className="text-xs flex-1 truncate">{b?.label || c.breakdown_id}</span>
+                  <span className="text-xs flex-1 truncate">{b?.label || c.breakdown_ids[0] || "general"}</span>
                   <select
                     value={c.chart_type}
                     onChange={(e) => updateChartType(slide.id, c.id, e.target.value as ChartType)}
                     className="text-xs bg-neutral-900 border border-neutral-700 rounded px-1 py-0.5"
                   >
-                    {(c.breakdown_id && c.breakdown_id !== 'general'
-                      ? CHART_TYPES
-                      : CHART_TYPES.filter((t) => t !== 'TABLE_WITH_MINIBARS')
-                    ).map((t) => (
+                    {chartTypeOptions.map((t) => (
                       <option key={t} value={t}>
                         {t}
                       </option>
@@ -167,7 +171,7 @@ export default function ConfigPanel({ slideId }: Props) {
             open={chartModalOpen}
             onClose={() => setChartModalOpen(false)}
             onApply={(r) =>
-              addCharts(slide.id, r.questionId, r.breakdownIds, r.chartType)
+              addChart(slide.id, r.questionId, r.breakdownIds, r.chartType)
             }
             db={parsedDb}
           />
