@@ -98,3 +98,82 @@ def test_project_state_no_style_set_field():
         slides=[],
     )
     assert not hasattr(ps, "style_set")
+
+
+# ── Task 1: 5-type ChartType + breakdown_ids + legacy reject ─────────────────
+
+import pytest
+from pydantic import ValidationError
+
+
+_NEW_CHART_TYPES = ["PIE", "PIE_GROUPED", "BAR_HORIZONTAL", "BAR_HORIZONTAL_GROUPED", "TABLE_WITH_MINIBARS"]
+_REMOVED_CHART_TYPES = [
+    "DONUT", "BAR_CLUSTERED", "BAR_STACKED",
+    "COLUMN_CLUSTERED", "COLUMN_STACKED",
+    "LINE", "AREA", "RADAR", "TABLE_SIMPLE", "BAR", "COLUMN",
+]
+
+
+def test_chart_rejects_legacy_breakdown_id_field():
+    payload = {
+        "id": "c1", "question_id": "q1",
+        "breakdown_id": "edad",                    # legacy field
+        "chart_type": "PIE",
+    }
+    with pytest.raises(ValidationError) as ei:
+        Chart.model_validate(payload)
+    msg = str(ei.value)
+    assert "breakdown_id" in msg and "breakdown_ids" in msg
+
+
+@pytest.mark.parametrize("ct", _REMOVED_CHART_TYPES)
+def test_chart_rejects_removed_chart_type(ct):
+    payload = {"id": "c1", "question_id": "q1", "breakdown_ids": [], "chart_type": ct}
+    with pytest.raises(ValidationError) as ei:
+        Chart.model_validate(payload)
+    assert ct in str(ei.value)
+
+
+@pytest.mark.parametrize("ct", _NEW_CHART_TYPES)
+def test_chart_accepts_5_new_chart_types(ct):
+    c = Chart.model_validate({"id": "c1", "question_id": "q1", "breakdown_ids": [], "chart_type": ct})
+    assert c.chart_type == ct
+
+
+def test_chart_accepts_empty_breakdown_ids():
+    c = Chart.model_validate({"id": "c1", "question_id": "q1", "breakdown_ids": [], "chart_type": "PIE"})
+    assert c.breakdown_ids == []
+
+
+def test_chart_accepts_single_breakdown_id_list():
+    c = Chart.model_validate({"id": "c1", "question_id": "q1", "breakdown_ids": ["edad"], "chart_type": "BAR_HORIZONTAL"})
+    assert c.breakdown_ids == ["edad"]
+
+
+def test_chart_accepts_multi_breakdown_ids():
+    c = Chart.model_validate({
+        "id": "c1", "question_id": "q1",
+        "breakdown_ids": ["edad", "sexo", "nse"],
+        "chart_type": "TABLE_WITH_MINIBARS",
+    })
+    assert c.breakdown_ids == ["edad", "sexo", "nse"]
+
+
+def test_chart_default_new_fields():
+    c = Chart.model_validate({"id": "c1", "question_id": "q1", "breakdown_ids": [], "chart_type": "PIE"})
+    assert c.show_legend is False
+    assert c.grid_cols is None
+    assert c.title is None
+
+
+def test_chart_accepts_new_fields_set():
+    c = Chart.model_validate({
+        "id": "c1", "question_id": "q1", "breakdown_ids": [],
+        "chart_type": "PIE_GROUPED",
+        "show_legend": True,
+        "grid_cols": 2,
+        "title": "Plazo del crédito",
+    })
+    assert c.show_legend is True
+    assert c.grid_cols == 2
+    assert c.title == "Plazo del crédito"
