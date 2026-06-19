@@ -252,6 +252,25 @@ def _render_segmented_breakdowns(slide, element: dict, ctx: RenderContext) -> No
     counts_cfg    = _SEGMENTED_CELLS_FASE_B["counts_row"]
     option_cfg    = _SEGMENTED_CELLS_FASE_B["option_row"]
 
+    # Resolve source_chart for show_legend + question.options
+    data_source_local = element.get("data_source", {}) or {}
+    chart_ref_index_local = data_source_local.get("chart_ref_index", 0)
+    charts_list_local = getattr(ctx.slide_config, "charts", []) or []
+    source_chart_local = charts_list_local[chart_ref_index_local] if 0 <= chart_ref_index_local < len(charts_list_local) else None
+    show_legend = bool(getattr(source_chart_local, "show_legend", False)) if source_chart_local else False
+    question_local = getattr(source_chart_local, "question", None) if source_chart_local else None
+    legend_options = list(question_local.options) if question_local else options
+
+    legend_block_w = int(box_cx * 0.10) if show_legend else 0
+    if show_legend and legend_options:
+        _render_external_legend_block(
+            slide, box_x, box_y, legend_block_w, box_cy,
+            options=legend_options, label_first="Observaciones", ctx=ctx,
+        )
+
+    table_x = box_x + legend_block_w
+    table_cx = box_cx - legend_block_w
+
     # Single-panel image-style mode: when only ONE breakdown was requested,
     # render a single, centered, image-faithful mini-table (matches the
     # 'Rango de edad' reference screenshot). Overrides the multi-panel
@@ -262,7 +281,7 @@ def _render_segmented_breakdowns(slide, element: dict, ctx: RenderContext) -> No
             slide=slide,
             panel=only,
             options=options,
-            x=box_x, y=box_y, cx=box_cx, cy=box_cy,
+            x=table_x, y=box_y, cx=table_cx, cy=box_cy,
             ctx=ctx,
             group_hdr_cfg=group_hdr_cfg,
             cat_hdr_cfg=cat_hdr_cfg,
@@ -280,7 +299,7 @@ def _render_segmented_breakdowns(slide, element: dict, ctx: RenderContext) -> No
         label_col_width_rel=_SEGMENTED_CELLS_FASE_B["option_row"]["label_col_width_rel"],
     )
 
-    H_GAP_EMU = int(0.012 * box_cx)  # gap between panels in a row
+    H_GAP_EMU = int(0.012 * table_cx)  # gap between panels in a row
     V_GAP_EMU = int(0.030 * box_cy)  # gap between rows
     n_rows = len(panel_rows)
     # Each panel renders 5 sub-rows (group_header + cat_header + counts + N option
@@ -298,8 +317,8 @@ def _render_segmented_breakdowns(slide, element: dict, ctx: RenderContext) -> No
     cur_y = box_y
     for row in panel_rows:
         row_weight = sum((1 + len(p["cats"])) if use_label else len(p["cats"]) for p in row)
-        avail_w = box_cx - H_GAP_EMU * (len(row) - 1)
-        cur_x = box_x
+        avail_w = table_cx - H_GAP_EMU * (len(row) - 1)
+        cur_x = table_x
         for p in row:
             w = (1 + len(p["cats"])) if use_label else len(p["cats"])
             panel_w = int(avail_w * (w / row_weight)) if row_weight else avail_w
@@ -318,6 +337,39 @@ def _render_segmented_breakdowns(slide, element: dict, ctx: RenderContext) -> No
             )
             cur_x += panel_w + H_GAP_EMU
         cur_y += row_h + V_GAP_EMU
+
+
+def _render_external_legend_block(
+    slide, x: int, y: int, w: int, h: int,
+    options: list[str], label_first: str, ctx,
+) -> None:
+    """Vertical label block left of segmented table.
+
+    Rows (aligned to panel layout):
+      0  spacer (matches group_header band, fill=secondary)
+      1  spacer (matches category_header band, fill=primary)
+      2  label_first (e.g. "Observaciones"), right-aligned
+      3+ option labels (Sí, No, ...), right-aligned
+    """
+    n_rows = 3 + len(options)
+    try:
+        tbl_shape = slide.shapes.add_table(n_rows, 1, Emu(x), Emu(y), Emu(w), Emu(h))
+        tbl = tbl_shape.table
+    except Exception as exc:
+        log.error("external legend block add_table failed: %s", exc)
+        return
+
+    _set_cell(tbl.cell(0, 0), "", ctx, {"fill": "secondary"})
+    _set_cell(tbl.cell(1, 0), "", ctx, {"fill": "primary"})
+    _set_cell(tbl.cell(2, 0), label_first, ctx, {
+        "fill": "primary", "text_color": "background",
+        "font_size": 11, "bold": True, "align_h": "right",
+    })
+    for i, opt in enumerate(options):
+        _set_cell(tbl.cell(3 + i, 0), opt, ctx, {
+            "fill": "primary", "text_color": "#FFFFFF",
+            "font_size": 10, "bold": True, "align_h": "right",
+        })
 
 
 def _pack_panels_into_rows(

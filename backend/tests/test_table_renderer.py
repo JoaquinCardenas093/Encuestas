@@ -185,3 +185,47 @@ def test_pack_panels_weight_uses_cats_only_when_label_col_zero():
     # Total weight without label col = 2+2+5 = 9 ≤ 12 → single row.
     assert len(rows) == 1
     assert len(rows[0]) == 3
+
+
+def test_segmented_breakdowns_show_legend_renders_external_block(edad_chart, render_ctx):
+    """show_legend=True → leftmost shape is the external legend block;
+    panel tables shift right."""
+    from pptx import Presentation
+    from aurum_encuestas.element_renderers.table_renderer import render
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    edad_chart.show_legend = True
+    render(slide, {
+        "kind":"table","id":"t","position":{"x_rel":0.05,"y_rel":0.1,"w_rel":0.9,"h_rel":0.8},
+        "structure":"segmented_breakdowns",
+        "data_source":{"chart_ref_index":0,"breakdown_groups":["edad"]},
+    }, render_ctx)
+    tables = [sh for sh in slide.shapes if sh.has_table]
+    assert len(tables) == 2, f"expected legend block + 1 panel = 2 tables, got {len(tables)}"
+    # Leftmost table is the legend block
+    leftmost = min(tables, key=lambda t: t.left)
+    block_tbl = leftmost.table
+    # 3 + len(options) rows = 3 + 2 = 5
+    assert len(list(block_tbl.rows)) == 5
+    # 1 col
+    assert len(list(block_tbl.columns)) == 1
+    # Row 2 = "Observaciones"
+    assert block_tbl.cell(2, 0).text_frame.text.strip() == "Observaciones"
+    # Rows 3,4 = options
+    assert {block_tbl.cell(3,0).text_frame.text.strip(),
+            block_tbl.cell(4,0).text_frame.text.strip()} == {"Sí","No"}
+
+
+def test_segmented_breakdowns_show_legend_false_no_external_block(edad_chart, render_ctx):
+    from pptx import Presentation
+    from aurum_encuestas.element_renderers.table_renderer import render
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    edad_chart.show_legend = False
+    render(slide, {
+        "kind":"table","id":"t","position":{"x_rel":0.05,"y_rel":0.1,"w_rel":0.9,"h_rel":0.8},
+        "structure":"segmented_breakdowns",
+        "data_source":{"chart_ref_index":0,"breakdown_groups":["edad"]},
+    }, render_ctx)
+    tables = [sh for sh in slide.shapes if sh.has_table]
+    assert len(tables) == 1, f"expected only the panel, got {len(tables)} tables"
