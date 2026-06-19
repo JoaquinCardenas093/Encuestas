@@ -47,6 +47,132 @@ _LEGEND_POSITION_MAP = {
 }
 
 
+def _compute_grid_dims(n: int, grid_cols: int | None) -> tuple[int, int]:
+    """Return (rows, cols) for PIE_GROUPED grid.
+
+    User-set grid_cols overrides auto rule (rows=1 if N<=3 else 2 if N<=6 else 3).
+    """
+    if grid_cols and grid_cols >= 1:
+        cols = grid_cols
+        rows = (n + cols - 1) // cols
+        return rows, cols
+    rows = 1 if n <= 3 else (2 if n <= 6 else 3)
+    cols = (n + rows - 1) // rows
+    return rows, cols
+
+
+def _add_title_textbox(slide, x: int, y: int, w: int, h: int, text: str, ctx) -> None:
+    """Centered bold title text-box above a PIE_GROUPED grid."""
+    from pptx.enum.text import PP_ALIGN
+    tb = slide.shapes.add_textbox(Emu(x), Emu(y), Emu(w), Emu(h))
+    tf = tb.text_frame
+    tf.word_wrap = True
+    p = tf.paragraphs[0]
+    p.alignment = PP_ALIGN.CENTER
+    run = p.add_run()
+    run.text = text
+    run.font.size = Pt(ctx.typography.get("title_size", 16))
+    run.font.bold = True
+    run.font.name = ctx.typography.get("font_family", "Calibri")
+
+
+def _render_pie_grouped(slide, element: dict, source_chart, ctx) -> None:
+    """Render PIE_GROUPED as N pie chart shapes inside a grid bbox.
+
+    Each cat of source_chart.breakdown_ids[0] becomes one pie. Per-pie title
+    uses cat_titles[cat] or cat label. Optional chart.title renders as a
+    text-box above the grid.
+    """
+    x, y, cx, cy = _resolve_position(element.get("position", {}), ctx)
+
+    bds = list(getattr(source_chart, "breakdown_ids", []) or [])
+    primary_bd = bds[0] if bds else None
+    all_bds = getattr(source_chart, "all_breakdowns_data", {}) or {}
+    bd_data = all_bds.get(primary_bd, {}) if primary_bd else {}
+    categories = bd_data.get("categories", {}) or {}
+
+    if not categories:
+        log.warning("PIE_GROUPED with empty breakdown — skipping render")
+        return
+
+    cat_list = list(categories.keys())
+    n = len(cat_list)
+    rows, cols = _compute_grid_dims(n, getattr(source_chart, "grid_cols", None))
+    cat_titles = getattr(source_chart, "cat_titles", None) or {}
+    question = getattr(source_chart, "question", None)
+    options = list(question.options) if question else []
+
+    title_str = (getattr(source_chart, "title", None) or "").strip()
+    title_band_h = 400_000 if title_str else 0
+    if title_str:
+        _add_title_textbox(slide, x, y, cx, title_band_h, title_str, ctx)
+
+    grid_y = y + title_band_h
+    grid_h = cy - title_band_h
+    gap_x = int(0.02 * cx)
+    gap_y = int(0.06 * grid_h)
+    cell_w = (cx - gap_x * (cols - 1)) // cols
+    cell_h = (grid_h - gap_y * (rows - 1)) // rows
+
+    fallback_colors = list(ctx.chart_colors or [])
+    per_chart_colors = list(getattr(source_chart, "colors", []) or [])
+
+    for i, cat in enumerate(cat_list):
+        r, c = divmod(i, cols)
+        cell_x = x + c * (cell_w + gap_x)
+        cell_y = grid_y + r * (cell_h + gap_y)
+
+        cd = CategoryChartData()
+        cd.categories = options
+        values = [float((categories[cat].get(opt) or {}).get("pct", 0) or 0) for opt in options]
+        cd.add_series("", values)
+
+        try:
+            chart_shape = slide.shapes.add_chart(
+                XL_CHART_TYPE.PIE,
+                Emu(cell_x), Emu(cell_y),
+                Emu(cell_w), Emu(cell_h),
+                cd,
+            )
+        except Exception as exc:
+            log.error("PIE_GROUPED: add_chart failed for cat %r: %s", cat, exc)
+            continue
+        sub_chart = chart_shape.chart
+        sub_chart.has_legend = False
+
+        # Per-slice colors
+        n_pts = len(options)
+        effective_colors: list[str] = []
+        for j in range(max(n_pts, len(per_chart_colors), len(fallback_colors))):
+            if j < len(per_chart_colors) and per_chart_colors[j]:
+                effective_colors.append(per_chart_colors[j])
+            elif fallback_colors:
+                effective_colors.append(fallback_colors[j % len(fallback_colors)])
+            else:
+                effective_colors.append("#7F7F7F")
+        _apply_series_colors(sub_chart, effective_colors)
+
+        # Labels: category + percentage inside slice
+        _apply_labels(sub_chart, {
+            "show_category_name": True, "show_percentage": True,
+            "show_value": False, "format": "0.0%",
+            "position": "outside_end",
+        }, ctx)
+
+        # Per-pie title via cat_titles override
+        sub_title = cat_titles.get(cat) or cat
+        sub_chart.has_title = True
+        sub_chart.chart_title.text_frame.text = sub_title
+
+        # Pie rotation (existing rule)
+        sorted_vals = sorted(values, reverse=True)
+        if sorted_vals:
+            total = sum(v for v in sorted_vals if v) or 1.0
+            dom = (sorted_vals[0] or 0) / total
+            angle = 180 if abs(dom - 0.5) < 0.05 else int(round(-90 - dom * 180)) % 360
+            _set_pie_first_slice_angle(sub_chart, angle)
+
+
 def render(slide, element: dict, ctx: RenderContext) -> None:
     """Render a chart element onto slide in-place."""
     # Resolve data source first so we can read the source chart's user-selected
@@ -69,6 +195,11 @@ def render(slide, element: dict, ctx: RenderContext) -> None:
     ui_chart_type = (getattr(source_chart, "chart_type", None) or "").strip()
     pattern_chart_type = (element.get("chart_type") or "").strip()
     chart_type_str = ui_chart_type or pattern_chart_type or "BAR_HORIZONTAL"
+
+    if chart_type_str == "PIE_GROUPED":
+        _render_pie_grouped(slide, element, source_chart, ctx)
+        return
+
     xl_chart_type = _CHART_TYPE_MAP.get(chart_type_str)
     if xl_chart_type is None:
         log.warning("Unknown chart_type %r — falling back to BAR_CLUSTERED", chart_type_str)

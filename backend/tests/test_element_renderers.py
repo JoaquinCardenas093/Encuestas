@@ -659,3 +659,135 @@ def test_grouped_fallback_warning_removed(caplog):
                        "data_source":{"chart_ref_index":0,"value_field":"pct"}}, ctx)
     assert not any("Fase B" in r.message for r in caplog.records), \
         f"unexpected Fase B warning still emitted: {[r.message for r in caplog.records]}"
+
+
+# ---------------------------------------------------------------------------
+# T5 (task-5): PIE_GROUPED grid render
+# ---------------------------------------------------------------------------
+
+
+def test_compute_grid_dims_auto_rule():
+    from aurum_encuestas.element_renderers.chart_renderer import _compute_grid_dims
+    assert _compute_grid_dims(1, None) == (1, 1)
+    assert _compute_grid_dims(2, None) == (1, 2)
+    assert _compute_grid_dims(3, None) == (1, 3)
+    assert _compute_grid_dims(4, None) == (2, 2)
+    assert _compute_grid_dims(5, None) == (2, 3)
+    assert _compute_grid_dims(6, None) == (2, 3)
+    assert _compute_grid_dims(7, None) == (3, 3)
+    assert _compute_grid_dims(9, None) == (3, 3)
+
+
+def test_compute_grid_dims_user_override():
+    from aurum_encuestas.element_renderers.chart_renderer import _compute_grid_dims
+    assert _compute_grid_dims(6, 2) == (3, 2)
+    assert _compute_grid_dims(6, 3) == (2, 3)
+    assert _compute_grid_dims(5, 1) == (5, 1)
+
+
+def _make_pie_grouped_ctx(n_cats=3):
+    from types import SimpleNamespace
+    from aurum_encuestas.element_renderers.render_context import RenderContext
+    q = SimpleNamespace(options=["Sí","No"])
+    cats = {f"cat{i}": {"Sí":{"pct":0.5,"count":50},"No":{"pct":0.5,"count":50}} for i in range(n_cats)}
+    src = SimpleNamespace(
+        question=q, breakdown_ids=["entidad"], chart_type="PIE_GROUPED",
+        show_legend=False, title=None, grid_cols=None, cat_titles=None, colors=[],
+        data={}, all_breakdowns_data={"entidad":{"label":"Entidad","categories":cats}},
+    )
+    ctx = RenderContext(
+        slide_config=SimpleNamespace(charts=[src]),
+        chart_colors=["#7F7F7F","#404040","#EEC245","#C00000","#FFC000"],
+        resolved_colors={"primary":"#7F7F7F","secondary":"#404040","background":"#EEC245"},
+        free_area={"x":0,"y":0,"cx":12_192_000,"cy":6_858_000},
+        typography={"label_size":9,"body_size":10,"title_size":16,"font_family":"Calibri"},
+        style_guide=None, resolved_anchors={},
+    )
+    return src, ctx
+
+
+def test_pie_grouped_renders_n_pie_shapes():
+    from pptx import Presentation
+    from pptx.enum.chart import XL_CHART_TYPE
+    from aurum_encuestas.element_renderers.chart_renderer import render
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    _src, ctx = _make_pie_grouped_ctx(n_cats=3)
+    render(slide, {"kind":"chart","id":"c","position":{"x_rel":0,"y_rel":0,"w_rel":1,"h_rel":1},
+                   "data_source":{"chart_ref_index":0,"value_field":"pct"}}, ctx)
+    chart_shapes = [sh for sh in slide.shapes if sh.has_chart]
+    assert len(chart_shapes) == 3
+    for sh in chart_shapes:
+        assert sh.chart.chart_type == XL_CHART_TYPE.PIE
+
+
+def test_pie_grouped_user_grid_cols_overrides_auto():
+    from pptx import Presentation
+    from aurum_encuestas.element_renderers.chart_renderer import render
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    src, ctx = _make_pie_grouped_ctx(n_cats=6)
+    src.grid_cols = 2
+    render(slide, {"kind":"chart","id":"c","position":{"x_rel":0,"y_rel":0,"w_rel":1,"h_rel":1},
+                   "data_source":{"chart_ref_index":0,"value_field":"pct"}}, ctx)
+    chart_shapes = [sh for sh in slide.shapes if sh.has_chart]
+    assert len(chart_shapes) == 6
+    # Row 1 has 2 shapes at same Y; Row 2 same; Row 3 same → 3 distinct Y values.
+    y_set = {sh.top for sh in chart_shapes}
+    assert len(y_set) == 3
+
+
+def test_pie_grouped_cat_titles_override():
+    from pptx import Presentation
+    from aurum_encuestas.element_renderers.chart_renderer import render
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    src, ctx = _make_pie_grouped_ctx(n_cats=2)
+    src.cat_titles = {"cat0": "Banco", "cat1": "MAF"}
+    render(slide, {"kind":"chart","id":"c","position":{"x_rel":0,"y_rel":0,"w_rel":1,"h_rel":1},
+                   "data_source":{"chart_ref_index":0,"value_field":"pct"}}, ctx)
+    chart_shapes = [sh for sh in slide.shapes if sh.has_chart]
+    titles = {sh.chart.chart_title.text_frame.text for sh in chart_shapes}
+    assert titles == {"Banco", "MAF"}
+
+
+def test_pie_grouped_chart_title_renders_textbox_above_grid():
+    from pptx import Presentation
+    from aurum_encuestas.element_renderers.chart_renderer import render
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    src, ctx = _make_pie_grouped_ctx(n_cats=2)
+    src.title = "Plazo del crédito"
+    render(slide, {"kind":"chart","id":"c","position":{"x_rel":0,"y_rel":0,"w_rel":1,"h_rel":1},
+                   "data_source":{"chart_ref_index":0,"value_field":"pct"}}, ctx)
+    textboxes = [sh for sh in slide.shapes if sh.has_text_frame and not sh.has_chart]
+    assert any("Plazo del crédito" in tb.text_frame.text for tb in textboxes)
+
+
+def test_pie_grouped_empty_breakdown_warns(caplog):
+    import logging
+    from pptx import Presentation
+    from types import SimpleNamespace
+    from aurum_encuestas.element_renderers.chart_renderer import render
+    from aurum_encuestas.element_renderers.render_context import RenderContext
+
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    q = SimpleNamespace(options=["Sí","No"])
+    src = SimpleNamespace(
+        question=q, breakdown_ids=["edad"], chart_type="PIE_GROUPED",
+        show_legend=False, title=None, grid_cols=None, cat_titles=None, colors=[],
+        data={}, all_breakdowns_data={},   # ← missing breakdown
+    )
+    ctx = RenderContext(
+        slide_config=SimpleNamespace(charts=[src]),
+        chart_colors=["#7F7F7F"], resolved_colors={},
+        free_area={"x":0,"y":0,"cx":12_192_000,"cy":6_858_000},
+        typography={"label_size":9,"body_size":10,"title_size":16,"font_family":"Calibri"},
+        style_guide=None, resolved_anchors={},
+    )
+    with caplog.at_level(logging.WARNING):
+        render(slide, {"kind":"chart","id":"c","position":{"x_rel":0,"y_rel":0,"w_rel":1,"h_rel":1},
+                       "data_source":{"chart_ref_index":0,"value_field":"pct"}}, ctx)
+    assert not any(sh.has_chart for sh in slide.shapes)
+    assert any("PIE_GROUPED" in r.message and "empty" in r.message.lower() for r in caplog.records)
