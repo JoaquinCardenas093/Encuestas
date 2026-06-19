@@ -23,12 +23,16 @@ interface Props {
 
 export default function AddChartModal({ open, onClose, onApply, db }: Props) {
   const styleGuide = useStyleGuideStore((s) => s.styleGuide)
-  const chartTypes = styleGuide?.available_chart_types?.length
+  const allChartTypes = styleGuide?.available_chart_types?.length
     ? styleGuide.available_chart_types
     : BUILTIN_CHART_TYPES
 
   const [questionId, setQuestionId] = useState<string>("")
   const [breakdownIds, setBreakdownIds] = useState<Set<string>>(new Set())
+  const hasRealBreakdown = Array.from(breakdownIds).some((bid) => bid !== 'general')
+  const chartTypes = hasRealBreakdown
+    ? allChartTypes
+    : allChartTypes.filter((t) => t !== 'TABLE_WITH_MINIBARS')
   const [chartType, setChartType] = useState<ChartType>((chartTypes[0] ?? "PIE") as ChartType)
   const [colorPickerOpen, setColorPickerOpen] = useState(false)
   const [primaryColor, setPrimaryColor] = useState("")

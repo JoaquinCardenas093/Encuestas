@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import AddChartModal from "../src/pages/Editor/modals/AddChartModal"
 import type { ParsedDB } from "../src/types"
 
@@ -29,7 +30,10 @@ const DB: ParsedDB = {
   questions: [
     { id: "q1", code: "P1", text: "¿Usa el producto?", options: ["Sí", "No"], confidence: 1.0 },
   ],
-  breakdowns: [{ id: "general", label: "General", categories: ["Total"] }],
+  breakdowns: [
+    { id: "general", label: "General", categories: ["Total"] },
+    { id: "sexo", label: "Sexo", categories: ["H", "M"] },
+  ],
   sample_size: 500,
   data_blocks: { counts_cols: [], pct_row_cols: [], pct_col_cols: [] },
 }
@@ -39,15 +43,19 @@ beforeEach(() => {
 })
 
 describe("AddChartModal — M6 chart types", () => {
-  it("shows chart type options sourced from styleGuide.available_chart_types", () => {
+  it("shows chart type options sourced from styleGuide.available_chart_types", async () => {
     render(<AddChartModal open db={DB} onClose={vi.fn()} onApply={vi.fn()} />)
     const select = screen.getByRole("combobox", { name: /tipo de chart/i })
     expect(select).toBeInTheDocument()
     expect(screen.getByRole("option", { name: /PIE/i })).toBeInTheDocument()
     expect(screen.getByRole("option", { name: /DONUT/i })).toBeInTheDocument()
-    expect(screen.getByRole("option", { name: /TABLE_WITH_MINIBARS/i })).toBeInTheDocument()
     // BAR_HORIZONTAL not in styleGuide — should NOT appear
     expect(screen.queryByRole("option", { name: /BAR_HORIZONTAL/i })).toBeNull()
+    // TABLE_WITH_MINIBARS is hidden until a real (non-general) breakdown is selected
+    expect(screen.queryByRole("option", { name: /TABLE_WITH_MINIBARS/i })).toBeNull()
+    // Select a real breakdown — TABLE_WITH_MINIBARS should now appear
+    await userEvent.click(screen.getByLabelText(/Sexo/i))
+    expect(screen.getByRole("option", { name: /TABLE_WITH_MINIBARS/i })).toBeInTheDocument()
   })
 
   it("falls back to 5 built-in chart types when styleGuide not loaded", () => {

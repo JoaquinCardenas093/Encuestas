@@ -113,7 +113,10 @@ export default function ConfigPanel({ slideId }: Props) {
                     onChange={(e) => updateChartType(slide.id, c.id, e.target.value as ChartType)}
                     className="text-xs bg-neutral-900 border border-neutral-700 rounded px-1 py-0.5"
                   >
-                    {CHART_TYPES.map((t) => (
+                    {(c.breakdown_id && c.breakdown_id !== 'general'
+                      ? CHART_TYPES
+                      : CHART_TYPES.filter((t) => t !== 'TABLE_WITH_MINIBARS')
+                    ).map((t) => (
                       <option key={t} value={t}>
                         {t}
                       </option>

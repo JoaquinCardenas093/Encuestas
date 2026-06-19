@@ -119,7 +119,10 @@ def _set_cell(cell, text: str, ctx: RenderContext, style: dict) -> None:
     run.font.name = font_family
 
     text_color_role = style.get("text_color", "primary")
-    hex_text = ctx.resolved_colors.get(text_color_role, "#000000")
+    if isinstance(text_color_role, str) and text_color_role.startswith("#"):
+        hex_text = text_color_role
+    else:
+        hex_text = ctx.resolved_colors.get(text_color_role, "#000000")
     try:
         run.font.color.rgb = RGBColor.from_string(hex_text.lstrip("#"))
     except Exception:
@@ -127,7 +130,10 @@ def _set_cell(cell, text: str, ctx: RenderContext, style: dict) -> None:
 
     fill_role = style.get("fill")
     if fill_role:
-        fill_hex = ctx.resolved_colors.get(fill_role)
+        if isinstance(fill_role, str) and fill_role.startswith("#"):
+            fill_hex = fill_role
+        else:
+            fill_hex = ctx.resolved_colors.get(fill_role)
         if fill_hex:
             try:
                 cell.fill.solid()
@@ -208,6 +214,53 @@ def _render_segmented_breakdowns(slide, element: dict, ctx: RenderContext) -> No
 
     if not panels:
         log.debug("table_renderer segmented: no breakdown groups — skipping")
+        return
+
+    # Single-panel image-style mode: when only ONE breakdown was requested,
+    # render a single, centered, image-faithful mini-table (matches the
+    # 'Rango de edad' reference screenshot). Overrides the multi-panel
+    # weight-packing logic below.
+    if len(panels) == 1:
+        only = panels[0]
+        # Image-faithful style overrides (palette role names map to:
+        #   primary=#7F7F7F mid grey, secondary=#404040 dark, background=#EEC245 yellow)
+        single_group_hdr = {
+            "style": {"fill": "secondary", "text_color": "background", "font_size": 11, "bold": True, "align_h": "center"},
+        }
+        single_cat_hdr = {
+            "style": {"fill": "primary", "text_color": "background", "font_size": 10, "bold": True, "align_h": "center"},
+        }
+        single_counts = {
+            "style": {"fill": "primary", "text_color": "background", "font_size": 11, "bold": True, "align_h": "center"},
+            "label_first_col": "",
+        }
+        single_option = {
+            "style": {"fill": "primary", "text_color": "#FFFFFF", "font_size": 10, "align_h": "left"},
+            "label_style": {"fill": "primary", "text_color": "#FFFFFF", "font_size": 11, "bold": True, "align_h": "center"},
+            "label_col_width_rel": 0.18,
+            "value_format": "percentage",
+            "value_decimals": 1,
+            "minibar": {
+                "enabled": True,
+                "color_role": "secondary",
+                "height_rel_to_cell": 0.25,
+                "show_percent_text": True,
+                "percent_text_position": "left_of_bar",
+            },
+        }
+        _render_panel(
+            slide=slide,
+            panel=only,
+            options=options,
+            x=box_x, y=box_y, cx=box_cx, cy=box_cy,
+            ctx=ctx,
+            group_hdr_cfg=single_group_hdr,
+            cat_hdr_cfg=single_cat_hdr,
+            counts_cfg=single_counts,
+            option_cfg=single_option,
+            matching_chart=None,
+            font_cap={"group_header": None, "category_header": None, "counts_row": None, "option_row": None},
+        )
         return
 
     # Map breakdown_id → user chart targeting this breakdown (used by packing
@@ -329,6 +382,7 @@ def _render_panel(
     group_hdr_cfg: dict, cat_hdr_cfg: dict,
     counts_cfg: dict, option_cfg: dict,
     matching_chart=None,
+    font_cap: dict | None = None,
 ) -> None:
     """Render one mini-table (1 breakdown group) at (x,y,cx,cy) EMU.
 
@@ -370,10 +424,27 @@ def _render_panel(
     # Cap sub-row font sizes so 5 sub-rows fit inside compact panel heights
     # (libreoffice expands cells when content is taller than declared height,
     # pushing later option rows below the panel and breaking the layout).
-    g_style = {**group_hdr_cfg.get("style", {}), "font_size": min(group_hdr_cfg.get("style", {}).get("font_size") or 9, 9)}
-    c_style = {**cat_hdr_cfg.get("style", {}), "font_size": min(cat_hdr_cfg.get("style", {}).get("font_size") or 8, 8)}
-    cnt_style = {**counts_cfg.get("style", {}), "font_size": min(counts_cfg.get("style", {}).get("font_size") or 7, 7)}
-    opt_style = {**option_cfg.get("style", {}), "font_size": min(option_cfg.get("style", {}).get("font_size") or 7, 7)}
+    # font_cap=None → multi-panel compact caps (9/8/7/7pt).
+    # font_cap with None values per role → single-panel mode, bypass caps.
+    def _capped(role: str, default_size: int, default_cap: int) -> int:
+        if role == "group_header":
+            raw = (group_hdr_cfg.get("style") or {}).get("font_size")
+        elif role == "category_header":
+            raw = (cat_hdr_cfg.get("style") or {}).get("font_size")
+        elif role == "counts_row":
+            raw = (counts_cfg.get("style") or {}).get("font_size")
+        else:
+            raw = (option_cfg.get("style") or {}).get("font_size")
+        size = raw if raw is not None else default_size
+        cap = (font_cap or {}).get(role, default_cap)
+        if cap is None:
+            return size
+        return min(size, cap)
+
+    g_style   = {**(group_hdr_cfg.get("style", {}) or {}), "font_size": _capped("group_header", 9, 9)}
+    c_style   = {**(cat_hdr_cfg.get("style", {}) or {}),   "font_size": _capped("category_header", 8, 8)}
+    cnt_style = {**(counts_cfg.get("style", {}) or {}),    "font_size": _capped("counts_row", 7, 7)}
+    opt_style = {**(option_cfg.get("style", {}) or {}),    "font_size": _capped("option_row", 7, 7)}
 
     # Row 0 — group_header (spans all data cols + label col)
     _set_cell(tbl.cell(0, 0), panel["label"], ctx, g_style)

@@ -253,3 +253,56 @@ def test_n_charts_grid_renders_three_chart_shapes():
 
     n_chart_shapes = sum(1 for sh in slide.shapes if sh.has_chart)
     assert n_chart_shapes == 3, f"expected 3 chart shapes, got {n_chart_shapes}"
+
+
+def test_chart_with_table_type_routes_to_table_renderer():
+    """When source_chart.chart_type == TABLE_WITH_MINIBARS, the dispatch hook
+    must produce a table shape (has_table True) instead of a chart shape."""
+    from pptx import Presentation
+    from types import SimpleNamespace
+    from aurum_encuestas.pattern_renderer import render_pattern
+    from aurum_encuestas.style_guide import BUILTIN_STYLE_GUIDE
+    from aurum_encuestas.element_renderers.render_context import RenderContext
+
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    q = SimpleNamespace(options=["Sí", "No"])
+    source_chart = SimpleNamespace(
+        question=q,
+        breakdown_id="edad",
+        chart_type="TABLE_WITH_MINIBARS",
+        colors=[],
+        data={"General": {"Sí": {"pct": 0.92, "count": 460}, "No": {"pct": 0.08, "count": 40}}},
+        all_breakdowns_data={
+            "edad": {
+                "label": "Rango de edad",
+                "categories": {
+                    "De 18 a 39 años": {"Sí": {"pct": 0.92, "count": 230}, "No": {"pct": 0.08, "count": 20}},
+                    "De 40 a 59 años": {"Sí": {"pct": 0.912, "count": 228}, "No": {"pct": 0.088, "count": 22}},
+                },
+            },
+        },
+    )
+    slide_config = SimpleNamespace(charts=[source_chart], analyses=[], n_charts=1)
+    ctx = RenderContext(
+        slide_config=slide_config,
+        chart_colors=["#7F7F7F", "#404040", "#EEC245", "#C00000", "#FFC000"],
+        resolved_colors={
+            "primary": "#7F7F7F", "secondary": "#404040", "background": "#EEC245",
+            "accent": "#C00000", "dark": "#FFC000", "light": "#7F7F7F",
+        },
+        free_area={"x": 487680, "y": 1097280, "cx": 11216640, "cy": 5212080},
+        typography={"label_size": 9, "body_size": 10, "title_size": 16, "font_family": "Calibri"},
+        style_guide=BUILTIN_STYLE_GUIDE,
+        resolved_anchors={},
+    )
+
+    # binary_general matches: 1 chart, binary question, no breakdowns
+    pattern = next(p for p in BUILTIN_STYLE_GUIDE.patterns if p.id == "binary_general")
+    render_pattern(pattern, slide, ctx, BUILTIN_STYLE_GUIDE, list(BUILTIN_STYLE_GUIDE.patterns))
+
+    has_table = any(sh.has_table for sh in slide.shapes)
+    has_chart = any(sh.has_chart for sh in slide.shapes)
+    assert has_table, f"expected a table shape, got shapes: {[str(sh.shape_type) for sh in slide.shapes]}"
+    assert not has_chart, "expected NO chart shape when chart_type is TABLE_WITH_MINIBARS"

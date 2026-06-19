@@ -86,3 +86,74 @@ def test_e2e_three_breakdown_demographics_slide(tmp_path):
         assert sh.height >= 0.50 * prs.slide_height, (
             f"chart height {sh.height} < 50% of slide height {prs.slide_height}"
         )
+
+
+def test_e2e_table_with_minibars_renders_single_panel_table(tmp_path, monkeypatch):
+    """End-to-end: a Chart with chart_type=TABLE_WITH_MINIBARS and breakdown_id=edad
+    flows through build_pptx and produces a table shape on the rendered slide."""
+    from pptx import Presentation
+    from pptx.util import Inches
+    from aurum_encuestas.pptx_generator import build_pptx
+    from aurum_encuestas.models import (
+        ProjectState, ProjectInputs, Slide, Chart, ParsedDB, Question, Breakdown,
+    )
+
+    # Synthetic template with shell slide + separator slide (build_pptx requires both)
+    tpl = tmp_path / "tpl.pptx"
+    p = Presentation()
+    p.slide_width = Inches(13.33)
+    p.slide_height = Inches(7.5)
+    blank = p.slide_layouts[6]
+    # Shell slide: @Titulo + @Notas markers
+    shell = p.slides.add_slide(blank)
+    shell.shapes.add_textbox(Inches(0.5), Inches(0.2), Inches(12), Inches(0.6)).text_frame.text = "@Titulo"
+    shell.shapes.add_textbox(Inches(0.5), Inches(6.8), Inches(12), Inches(0.5)).text_frame.text = "@Notas"
+    # Separator slide: @Titulo only
+    sep = p.slides.add_slide(blank)
+    sep.shapes.add_textbox(Inches(0.5), Inches(3.5), Inches(12), Inches(0.6)).text_frame.text = "@Titulo"
+    p.save(str(tpl))
+
+    parsed = ParsedDB(
+        questions=[Question(id="q1", code="Q1", text="¿Cliente actual?", options=["Sí", "No"], confidence=0.95)],
+        breakdowns=[
+            Breakdown(id="general", label="General", categories=["Total"]),
+            Breakdown(id="edad", label="Rango de edad", categories=["De 18 a 39 años", "De 40 a 59 años"]),
+        ],
+        sample_size=500,
+        data_blocks={"counts_cols": [], "pct_row_cols": [], "pct_col_cols": []},
+    )
+
+    def fake_extract(*args, **kwargs):
+        return {"General": {"Sí": {"pct": 0.92, "count": 460}, "No": {"pct": 0.08, "count": 40}}}
+
+    def fake_extract_all(*args, **kwargs):
+        return {"edad": {"label": "Rango de edad", "categories": {
+            "De 18 a 39 años": {"Sí": {"pct": 0.92, "count": 230}, "No": {"pct": 0.08, "count": 20}},
+            "De 40 a 59 años": {"Sí": {"pct": 0.912, "count": 228}, "No": {"pct": 0.088, "count": 22}},
+        }}}
+
+    monkeypatch.setattr("aurum_encuestas.data_extractor.extract_chart_data", fake_extract)
+    monkeypatch.setattr("aurum_encuestas.data_extractor.extract_all_breakdowns_data", fake_extract_all)
+
+    state = ProjectState(
+        project_name="e2e-table",
+        inputs=ProjectInputs(db_path="/dev/null", template_path=str(tpl)),
+        parsed_db=parsed,
+        slides=[
+            Slide(
+                id="s1", type="shell", title="Demografía",
+                charts=[Chart(id="c1", question_id="q1", breakdown_id="edad",
+                              chart_type="TABLE_WITH_MINIBARS", colors=[])],
+                analyses=[],
+            ),
+        ],
+    )
+
+    out = tmp_path / "out.pptx"
+    build_pptx(state, str(out))
+
+    prs = Presentation(str(out))
+    slides_with_tables = [s for s in prs.slides if any(sh.has_table for sh in s.shapes)]
+    assert slides_with_tables, "expected at least one table shape rendered"
+    slides_with_charts = [s for s in prs.slides if any(sh.has_chart for sh in s.shapes)]
+    assert not slides_with_charts, "expected NO chart shape (TABLE_WITH_MINIBARS routes to table)"
