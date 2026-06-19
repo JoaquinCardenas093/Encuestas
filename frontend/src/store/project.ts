@@ -62,7 +62,7 @@ interface Store {
   removeSlide(slideId: string): void
   updateSeparatorTitle(slideId: string, title: string): void
 
-  addCharts(slideId: string, questionId: string, breakdownIds: string[], chartType: import("../types").ChartType): void
+  addChart(slideId: string, questionId: string, breakdownIds: string[], chartType: import("../types").ChartType): void
   removeChart(slideId: string, chartId: string): void
   updateChartType(slideId: string, chartId: string, chartType: import("../types").ChartType): void
   updateChartColors(slideId: string, chartId: string, colors: string[]): void
@@ -160,19 +160,22 @@ export const useProjectStore = create<Store>()(
         })
       },
 
-      addCharts(slideId, questionId, breakdownIds, chartType) {
+      addChart(slideId, questionId, breakdownIds, chartType) {
         const s = get().state
         if (!s) return
         const slides = s.slides.map((sl) => {
           if (sl.id !== slideId) return sl
-          const newCharts = breakdownIds.map((bid) => ({
+          const newChart = {
             id: uid("ch"),
             question_id: questionId,
-            breakdown_id: bid,
+            breakdown_ids: breakdownIds,
             chart_type: chartType,
-            colors: [],
-          }))
-          return { ...sl, charts: [...sl.charts, ...newCharts] }
+            show_legend: false,
+            grid_cols: null,
+            title: null,
+            colors: [] as string[],
+          }
+          return { ...sl, charts: [...sl.charts, newChart] }
         })
         set({ state: { ...s, slides } })
       },

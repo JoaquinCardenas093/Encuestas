@@ -1,10 +1,9 @@
 export type ChartType =
-  | "PIE" | "DONUT"
-  | "BAR" | "COLUMN" | "BAR_HORIZONTAL"
-  | "BAR_CLUSTERED" | "COLUMN_CLUSTERED"
-  | "BAR_STACKED" | "COLUMN_STACKED"
-  | "LINE" | "AREA" | "RADAR"
-  | "TABLE_WITH_MINIBARS" | "TABLE_SIMPLE"
+  | "PIE"
+  | "PIE_GROUPED"
+  | "BAR_HORIZONTAL"
+  | "BAR_HORIZONTAL_GROUPED"
+  | "TABLE_WITH_MINIBARS"
 
 export type AnalysisScope = "slide" | "question" | "chart"
 export type SlideType = "separator" | "shell"
@@ -33,9 +32,12 @@ export interface ParsedDB {
 export interface Chart {
   id: string
   question_id: string
-  breakdown_id: string
+  breakdown_ids: string[]    // [] = general
   chart_type: ChartType
-  colors: string[]   // per-slice/series colors; empty array = cascade to project/style-guide/built-in
+  show_legend: boolean
+  grid_cols: number | null
+  title: string | null
+  colors: string[]
 }
 
 export interface Analysis {

@@ -229,3 +229,28 @@ describe("M6 migration — .aurum.json backward compat", () => {
     expect(chart.colors).toEqual([])
   })
 })
+
+describe("T7 — addChart single-record action", () => {
+  it("addChart creates ONE chart with breakdown_ids list", () => {
+    const { setState, getState } = useProjectStore  // adapt to actual hook
+    // Set up a minimal state with one slide
+    setState({
+      state: {
+        version: 1, app_name: "AurumEncuestas", project_name: "t",
+        inputs: { db_path: "", template_path: "" },
+        parsed_db: null,
+        slides: [{ id: "s1", type: "shell", title: "T", charts: [], analyses: [] }],
+        history: { past: [], future: [] },
+        palette: null,
+      },
+    } as any)
+    getState().addChart("s1", "q1", ["edad", "sexo"], "TABLE_WITH_MINIBARS")
+    const slide = getState().state!.slides.find((s) => s.id === "s1")!
+    expect(slide.charts.length).toBe(1)
+    expect(slide.charts[0].breakdown_ids).toEqual(["edad", "sexo"])
+    expect(slide.charts[0].chart_type).toBe("TABLE_WITH_MINIBARS")
+    expect(slide.charts[0].show_legend).toBe(false)
+    expect(slide.charts[0].grid_cols).toBeNull()
+    expect(slide.charts[0].title).toBeNull()
+  })
+})
