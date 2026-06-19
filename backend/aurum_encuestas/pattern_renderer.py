@@ -109,8 +109,9 @@ def render_pattern(
             if 0 <= ref_idx < len(charts_list):
                 source_chart = charts_list[ref_idx]
                 sc_chart_type = (getattr(source_chart, "chart_type", "") or "").strip()
-                sc_bd = (getattr(source_chart, "breakdown_id", "") or "").lower()
-                if sc_chart_type == "TABLE_WITH_MINIBARS" and sc_bd and sc_bd != "general":
+                sc_bds = list(getattr(source_chart, "breakdown_ids", []) or [])
+                sc_bds_real = [b for b in sc_bds if b and b.lower() != "general"]
+                if sc_chart_type == "TABLE_WITH_MINIBARS" and sc_bds_real:
                     element = _synthesize_table_element(element, source_chart)
                     kind = "table"
         renderer_module_path = _KIND_RENDERERS.get(kind)
@@ -365,13 +366,12 @@ def _el_to_dict(el: Any) -> dict:
 
 
 def _synthesize_table_element(chart_el: dict, source_chart) -> dict:
-    """Convert a chart element to a single-panel segmented_breakdowns table.
-
-    Called by render_pattern when source_chart.chart_type == TABLE_WITH_MINIBARS.
-    Inherits id/position from the original chart element so layout stays
-    pattern-driven; targets only the source_chart's own breakdown_id.
-    """
-    bd_id = getattr(source_chart, "breakdown_id", None)
+    """Convert a chart element to a segmented_breakdowns table element
+    targeting every real breakdown carried by source_chart.breakdown_ids."""
+    bds = [
+        b for b in (getattr(source_chart, "breakdown_ids", []) or [])
+        if b and b.lower() != "general"
+    ]
     return {
         "kind": "table",
         "id": chart_el.get("id"),
@@ -379,7 +379,7 @@ def _synthesize_table_element(chart_el: dict, source_chart) -> dict:
         "structure": "segmented_breakdowns",
         "data_source": {
             "chart_ref_index": chart_el.get("data_source", {}).get("chart_ref_index", 0),
-            "breakdown_groups": [bd_id] if bd_id and bd_id.lower() != "general" else [],
+            "breakdown_groups": bds,
         },
     }
 
