@@ -69,11 +69,6 @@ def render(slide, element: dict, ctx: RenderContext) -> None:
     ui_chart_type = (getattr(source_chart, "chart_type", None) or "").strip()
     pattern_chart_type = (element.get("chart_type") or "").strip()
     chart_type_str = ui_chart_type or pattern_chart_type or "BAR_HORIZONTAL"
-    if chart_type_str in ("PIE_GROUPED", "BAR_HORIZONTAL_GROUPED"):
-        log.warning(
-            "chart_type %s grouped render is Fase B — emitting single-series fallback",
-            chart_type_str,
-        )
     xl_chart_type = _CHART_TYPE_MAP.get(chart_type_str)
     if xl_chart_type is None:
         log.warning("Unknown chart_type %r — falling back to BAR_CLUSTERED", chart_type_str)
@@ -134,25 +129,24 @@ def render(slide, element: dict, ctx: RenderContext) -> None:
             angle = int(round(-90 - dom_frac * 180)) % 360
         _set_pie_first_slice_angle(chart, angle)
 
-    # Apply legend — pies/donuts force no legend (category names already in labels)
-    legend_str = element.get("legend", "none")
-    if is_pie:
-        legend_str = "none"
-    if legend_str == "none":
-        chart.has_legend = False
-    else:
-        chart.has_legend = True
-        pos = _LEGEND_POSITION_MAP.get(legend_str, XL_LEGEND_POSITION.RIGHT)
-        chart.legend.position = pos
-        chart.legend.include_in_layout = False
-
-    # Chart title
-    title_text = element.get("title")
-    if title_text:
+    # Chart title (all single-shape types)
+    title_str = (getattr(source_chart, "title", None) or "").strip()
+    if title_str:
         chart.has_title = True
-        chart.chart_title.text_frame.text = title_text
+        chart.chart_title.text_frame.text = title_str
     else:
         chart.has_title = False
+
+    # Legend (Fase B):
+    show_legend = bool(getattr(source_chart, "show_legend", False))
+    if is_pie:
+        chart.has_legend = False
+    elif chart_type_str == "BAR_HORIZONTAL_GROUPED" and show_legend:
+        chart.has_legend = True
+        chart.legend.position = XL_LEGEND_POSITION.BOTTOM
+        chart.legend.include_in_layout = False
+    else:
+        chart.has_legend = False
 
 
 def render_chart_at(

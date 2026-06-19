@@ -536,38 +536,126 @@ def test_build_chart_data_single_breakdown_uses_that_breakdown():
     assert len(all_values) == 4
 
 
-def test_grouped_chart_type_logs_warning_and_falls_back(caplog):
-    """PIE_GROUPED / BAR_HORIZONTAL_GROUPED log a warning and render
-    as single-mode fallback (PIE / BAR_CLUSTERED)."""
-    import logging
+def test_chart_title_renders_on_chart_when_set():
     from pptx import Presentation
+    from types import SimpleNamespace
     from aurum_encuestas.element_renderers.chart_renderer import render
     from aurum_encuestas.element_renderers.render_context import RenderContext
-    from types import SimpleNamespace
 
     prs = Presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     q = SimpleNamespace(options=["A","B"])
-    source = SimpleNamespace(
-        question=q, breakdown_ids=[], chart_type="PIE_GROUPED", colors=[],
+    src = SimpleNamespace(
+        question=q, breakdown_ids=[], chart_type="BAR_HORIZONTAL",
+        title="Plazo del crédito",
+        colors=[], show_legend=False, grid_cols=None, cat_titles=None,
         data={"General": {"A":{"pct":0.5},"B":{"pct":0.5}}},
     )
-    slide_config = SimpleNamespace(charts=[source])
     ctx = RenderContext(
-        slide_config=slide_config,
+        slide_config=SimpleNamespace(charts=[src]),
         chart_colors=["#7F7F7F","#404040","#EEC245","#C00000","#FFC000"],
         resolved_colors={"primary":"#7F7F7F","secondary":"#404040","background":"#EEC245"},
-        free_area={"x":0,"y":0,"cx":6_000_000,"cy":4_000_000},
+        free_area={"x":0,"y":0,"cx":12_192_000,"cy":6_858_000},
+        typography={"label_size":9,"body_size":10,"title_size":16,"font_family":"Calibri"},
+        style_guide=None, resolved_anchors={},
+    )
+    render(slide, {"kind":"chart","id":"c","position":{"x_rel":0,"y_rel":0,"w_rel":1,"h_rel":1},
+                   "data_source":{"chart_ref_index":0,"value_field":"pct"}}, ctx)
+    chart_shape = next(sh for sh in slide.shapes if sh.has_chart)
+    assert chart_shape.chart.has_title is True
+    assert "Plazo del crédito" in chart_shape.chart.chart_title.text_frame.text
+
+
+def test_bar_horizontal_grouped_legend_bottom_when_show_legend():
+    from pptx import Presentation
+    from pptx.enum.chart import XL_LEGEND_POSITION
+    from types import SimpleNamespace
+    from aurum_encuestas.element_renderers.chart_renderer import render
+    from aurum_encuestas.element_renderers.render_context import RenderContext
+
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    q = SimpleNamespace(options=["A","B"])
+    src = SimpleNamespace(
+        question=q, breakdown_ids=["entidad"], chart_type="BAR_HORIZONTAL_GROUPED",
+        show_legend=True, title=None, grid_cols=None, cat_titles=None,
+        colors=[],
+        data={
+            "General": {"A":{"pct":0.5},"B":{"pct":0.5}},
+            "Banco":   {"A":{"pct":0.4},"B":{"pct":0.6}},
+            "MAF":     {"A":{"pct":0.7},"B":{"pct":0.3}},
+        },
+    )
+    ctx = RenderContext(
+        slide_config=SimpleNamespace(charts=[src]),
+        chart_colors=["#7F7F7F","#404040","#EEC245","#C00000","#FFC000"],
+        resolved_colors={"primary":"#7F7F7F","secondary":"#404040","background":"#EEC245"},
+        free_area={"x":0,"y":0,"cx":12_192_000,"cy":6_858_000},
+        typography={"label_size":9,"body_size":10,"title_size":16,"font_family":"Calibri"},
+        style_guide=None, resolved_anchors={},
+    )
+    render(slide, {"kind":"chart","id":"c","position":{"x_rel":0,"y_rel":0,"w_rel":1,"h_rel":1},
+                   "data_source":{"chart_ref_index":0,"value_field":"pct"}}, ctx)
+    chart_shape = next(sh for sh in slide.shapes if sh.has_chart)
+    assert chart_shape.chart.has_legend is True
+    assert chart_shape.chart.legend.position == XL_LEGEND_POSITION.BOTTOM
+
+
+def test_bar_horizontal_grouped_no_legend_when_show_legend_false():
+    from pptx import Presentation
+    from types import SimpleNamespace
+    from aurum_encuestas.element_renderers.chart_renderer import render
+    from aurum_encuestas.element_renderers.render_context import RenderContext
+
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    q = SimpleNamespace(options=["A","B"])
+    src = SimpleNamespace(
+        question=q, breakdown_ids=["entidad"], chart_type="BAR_HORIZONTAL_GROUPED",
+        show_legend=False, title=None, grid_cols=None, cat_titles=None,
+        colors=[],
+        data={"General":{"A":{"pct":0.5},"B":{"pct":0.5}},
+              "Banco":{"A":{"pct":0.4},"B":{"pct":0.6}}},
+    )
+    ctx = RenderContext(
+        slide_config=SimpleNamespace(charts=[src]),
+        chart_colors=["#7F7F7F","#404040","#EEC245","#C00000","#FFC000"],
+        resolved_colors={"primary":"#7F7F7F","secondary":"#404040","background":"#EEC245"},
+        free_area={"x":0,"y":0,"cx":12_192_000,"cy":6_858_000},
+        typography={"label_size":9,"body_size":10,"title_size":16,"font_family":"Calibri"},
+        style_guide=None, resolved_anchors={},
+    )
+    render(slide, {"kind":"chart","id":"c","position":{"x_rel":0,"y_rel":0,"w_rel":1,"h_rel":1},
+                   "data_source":{"chart_ref_index":0,"value_field":"pct"}}, ctx)
+    chart_shape = next(sh for sh in slide.shapes if sh.has_chart)
+    assert chart_shape.chart.has_legend is False
+
+
+def test_grouped_fallback_warning_removed(caplog):
+    import logging
+    from pptx import Presentation
+    from types import SimpleNamespace
+    from aurum_encuestas.element_renderers.chart_renderer import render
+    from aurum_encuestas.element_renderers.render_context import RenderContext
+
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    q = SimpleNamespace(options=["A","B"])
+    src = SimpleNamespace(
+        question=q, breakdown_ids=["entidad"], chart_type="BAR_HORIZONTAL_GROUPED",
+        show_legend=False, title=None, grid_cols=None, cat_titles=None, colors=[],
+        data={"Banco":{"A":{"pct":0.4},"B":{"pct":0.6}}},
+    )
+    ctx = RenderContext(
+        slide_config=SimpleNamespace(charts=[src]),
+        chart_colors=["#7F7F7F","#404040","#EEC245","#C00000","#FFC000"],
+        resolved_colors={"primary":"#7F7F7F","secondary":"#404040","background":"#EEC245"},
+        free_area={"x":0,"y":0,"cx":12_192_000,"cy":6_858_000},
         typography={"label_size":9,"body_size":10,"title_size":16,"font_family":"Calibri"},
         style_guide=None, resolved_anchors={},
     )
     with caplog.at_level(logging.WARNING):
-        render(slide, {
-            "kind":"chart","id":"c",
-            "position":{"x_rel":0,"y_rel":0,"w_rel":1,"h_rel":1},
-            "data_source":{"chart_ref_index":0,"value_field":"pct"},
-        }, ctx)
-    assert any("PIE_GROUPED" in r.message and "Fase B" in r.message for r in caplog.records), \
-        f"expected PIE_GROUPED Fase B warning; got: {[r.message for r in caplog.records]}"
-    # Shape was created (fallback succeeded)
-    assert any(sh.has_chart for sh in slide.shapes)
+        render(slide, {"kind":"chart","id":"c","position":{"x_rel":0,"y_rel":0,"w_rel":1,"h_rel":1},
+                       "data_source":{"chart_ref_index":0,"value_field":"pct"}}, ctx)
+    assert not any("Fase B" in r.message for r in caplog.records), \
+        f"unexpected Fase B warning still emitted: {[r.message for r in caplog.records]}"
