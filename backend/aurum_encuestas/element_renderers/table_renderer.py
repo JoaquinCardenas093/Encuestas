@@ -292,7 +292,9 @@ def _render_segmented_breakdowns(slide, element: dict, ctx: RenderContext) -> No
         return
 
     # Pack panels into rows. Weight depends on label_col_width_rel.
-    # MAX_ROW_WEIGHT 14 lets Edad(3)+Sexo(3)+NSE(6)=12 fit on row 1, Punto(6) wraps.
+    # MAX_ROW_WEIGHT 14 lets typical multi-bd combos fit on row 1.
+    # Fase B weight = len(cats) per panel (label col suppressed).
+    # Examples: Edad(2)+Sexo(2)+NSE(5)=9, Punto(6) wraps.
     MAX_ROW_WEIGHT = element.get("max_row_weight", 14)
     panel_rows: list[list[dict]] = _pack_panels_into_rows(
         panels, MAX_ROW_WEIGHT,
@@ -359,6 +361,14 @@ def _render_external_legend_block(
         log.error("external legend block add_table failed: %s", exc)
         return
 
+    # Force uniform row heights matching the panel's row distribution
+    row_h = h // n_rows
+    for r in range(n_rows):
+        try:
+            tbl.rows[r].height = Emu(row_h)
+        except Exception:
+            pass
+
     _set_cell(tbl.cell(0, 0), "", ctx, {"fill": "secondary"})
     _set_cell(tbl.cell(1, 0), "", ctx, {"fill": "primary"})
     _set_cell(tbl.cell(2, 0), label_first, ctx, {
@@ -375,7 +385,6 @@ def _render_external_legend_block(
 def _pack_panels_into_rows(
     panels: list[dict],
     max_row_weight: int,
-    charts_by_bd: dict | None = None,
     label_col_width_rel: float = 0.18,
 ) -> list[list[dict]]:
     """Greedy row packing by weight.
@@ -384,7 +393,6 @@ def _pack_panels_into_rows(
       - label_col_width_rel > 0: 1 + len(cats)  (label col counts)
       - else (Fase B):           len(cats)
     """
-    _ = charts_by_bd  # backward-compat API
     use_label = label_col_width_rel > 0.001
 
     def weight(p: dict) -> int:

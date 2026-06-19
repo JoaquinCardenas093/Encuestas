@@ -26,10 +26,14 @@ function _migrateProjectState(raw: unknown): ProjectState {
         ...slide,
         charts: (slide.charts as unknown[]).map((ch) => {
           const chart = ch as Record<string, unknown>
-          if (!("colors" in chart)) {
-            return { ...chart, colors: [] }
+          return {
+            ...chart,
+            show_legend: chart.show_legend ?? false,
+            grid_cols: chart.grid_cols ?? null,
+            title: chart.title ?? null,
+            cat_titles: chart.cat_titles ?? null,
+            colors: chart.colors ?? [],
           }
-          return chart
         }),
       }
     })

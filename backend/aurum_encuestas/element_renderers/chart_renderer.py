@@ -102,7 +102,9 @@ def _render_pie_grouped(slide, element: dict, source_chart, ctx) -> None:
     question = getattr(source_chart, "question", None)
     options = list(question.options) if question else []
 
-    title_str = (getattr(source_chart, "title", None) or "").strip()
+    sc_title = (getattr(source_chart, "title", None) or "").strip()
+    el_title = (element.get("title") or "").strip()
+    title_str = sc_title or el_title
     title_band_h = 400_000 if title_str else 0
     if title_str:
         _add_title_textbox(slide, x, y, cx, title_band_h, title_str, ctx)
@@ -261,7 +263,9 @@ def render(slide, element: dict, ctx: RenderContext) -> None:
         _set_pie_first_slice_angle(chart, angle)
 
     # Chart title (all single-shape types)
-    title_str = (getattr(source_chart, "title", None) or "").strip()
+    sc_title = (getattr(source_chart, "title", None) or "").strip()
+    el_title = (element.get("title") or "").strip()
+    title_str = sc_title or el_title
     if title_str:
         chart.has_title = True
         chart.chart_title.text_frame.text = title_str

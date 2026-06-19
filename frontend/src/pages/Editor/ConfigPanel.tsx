@@ -63,7 +63,6 @@ export default function ConfigPanel({ slideId }: Props) {
   const parsedDb = useProjectStore((s) => s.parsedDb)
   const addChart = useProjectStore((s) => s.addChart)
   const removeChart = useProjectStore((s) => s.removeChart)
-  const updateChartType = useProjectStore((s) => s.updateChartType)
   const updateChartField = useProjectStore((s) => s.updateChartField)
   const styleGuide = useStyleGuideStore((s) => s.styleGuide)
   const CHART_TYPES = (styleGuide?.available_chart_types?.length
@@ -124,7 +123,17 @@ export default function ConfigPanel({ slideId }: Props) {
                   <span className="text-xs flex-1 truncate">{b?.label || c.breakdown_ids[0] || "general"}</span>
                   <select
                     value={c.chart_type}
-                    onChange={(e) => updateChartType(slide.id, c.id, e.target.value as ChartType)}
+                    onChange={(e) => {
+                      const newType = e.target.value as ChartType
+                      updateChartField(slide.id, c.id, "chart_type", newType)
+                      if (newType !== "BAR_HORIZONTAL_GROUPED" && newType !== "TABLE_WITH_MINIBARS") {
+                        updateChartField(slide.id, c.id, "show_legend", false)
+                      }
+                      if (newType !== "PIE_GROUPED") {
+                        updateChartField(slide.id, c.id, "grid_cols", null)
+                        updateChartField(slide.id, c.id, "cat_titles", null)
+                      }
+                    }}
                     className="text-xs bg-neutral-900 border border-neutral-700 rounded px-1 py-0.5"
                   >
                     {chartTypeOptions.map((t) => (
@@ -147,9 +156,10 @@ export default function ConfigPanel({ slideId }: Props) {
                   <input
                     type="text"
                     value={c.title ?? ""}
-                    onChange={(e) =>
-                      updateChartField(slide.id, c.id, "title", e.target.value.trim() || null)
-                    }
+                    onChange={(e) => {
+                      const v = e.target.value
+                      updateChartField(slide.id, c.id, "title", v === "" ? null : v)
+                    }}
                     placeholder="Ej: Plazo del crédito"
                     className="bg-neutral-900 border border-neutral-700 rounded px-2 py-0.5 text-xs"
                   />

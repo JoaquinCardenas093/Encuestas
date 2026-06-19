@@ -190,7 +190,17 @@ export default function AddChartModal({ open, onClose, onApply, db }: Props) {
         aria-label="Tipo de chart"
         value={chartType}
         disabled={nReal >= 2}
-        onChange={(e) => setChartType(e.target.value as ChartType)}
+        onChange={(e) => {
+          const newType = e.target.value as ChartType
+          setChartType(newType)
+          if (newType !== "BAR_HORIZONTAL_GROUPED" && newType !== "TABLE_WITH_MINIBARS") {
+            setShowLegend(false)
+          }
+          if (newType !== "PIE_GROUPED") {
+            setGridCols(null)
+            setCatTitles({})
+          }
+        }}
         className="w-full mb-3 bg-neutral-900 border border-neutral-700 rounded px-3 py-2 text-sm disabled:opacity-60"
       >
         {chartTypes.map((t) => (
