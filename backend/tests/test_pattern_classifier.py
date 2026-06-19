@@ -467,3 +467,39 @@ def test_three_charts_matches_n_charts_grid_pattern():
     )
     pattern = classify_slide(slide_config, BUILTIN_STYLE_GUIDE)
     assert pattern is not None and pattern.id == "n_charts_grid"
+
+
+def test_enriched_chart_carries_breakdown_ids_list():
+    """build_slide_config propagates Chart.breakdown_ids list verbatim."""
+    from aurum_encuestas.pattern_classifier import build_slide_config
+    from aurum_encuestas.models import Chart, ParsedDB, Question, Breakdown
+    from types import SimpleNamespace
+
+    chart = Chart(id="c1", question_id="q1", breakdown_ids=["edad", "sexo"], chart_type="TABLE_WITH_MINIBARS")
+    slide_def = SimpleNamespace(charts=[chart], analyses=[])
+    parsed = ParsedDB(
+        questions=[Question(id="q1", code="Q1", text="t", options=["Sí","No"], confidence=0.9)],
+        breakdowns=[Breakdown(id="edad", label="Edad", categories=["18-39","40-59"]),
+                    Breakdown(id="sexo", label="Sexo", categories=["F","M"])],
+        sample_size=500, data_blocks={"counts_cols":[],"pct_row_cols":[],"pct_col_cols":[]},
+    )
+    cfg = build_slide_config(slide_def, parsed_db=parsed, db_path=None)
+    assert len(cfg.charts) == 1
+    assert cfg.charts[0].breakdown_ids == ["edad", "sexo"]
+
+
+def test_n_breakdowns_uses_breakdown_ids_length():
+    """Trigger context n_breakdowns reflects total unique non-general breakdown_ids
+    across all charts on the slide."""
+    from aurum_encuestas.pattern_classifier import extract_context
+    cfg = {
+        "charts": [
+            {"question_id": "q1", "breakdown_ids": ["edad"]},
+            {"question_id": "q1", "breakdown_ids": ["sexo", "nse"]},
+            {"question_id": "q2", "breakdown_ids": []},
+        ],
+        "analyses": [],
+    }
+    ctx = extract_context(cfg, db=None)
+    # 3 unique real breakdowns across slide: edad, sexo, nse
+    assert ctx["n_breakdowns"] == 3
