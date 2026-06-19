@@ -100,12 +100,12 @@ def _question_type_matches(actual: str, expected: str) -> bool:
 # Field extractors
 # ────────────────────────────────────────────────────────────────────────────
 
-def extract_context(slide_config: dict, parsed_db: dict) -> dict:
+def extract_context(slide_config: dict, db: dict = None) -> dict:
     """Derive trigger-evaluable context fields from a slide_config + parsed_db.
 
     slide_config shape:
         {
-            "charts": [{"question_id": ..., "breakdown_id": ..., ...}, ...],
+            "charts": [{"question_id": ..., "breakdown_ids": [...], ...}, ...],
             "analyses": [{"scope": "chart"|"question"|"slide", ...}, ...],
             "_meta": {                         # optional pre-computed hints
                 "n_options": int,
@@ -113,12 +113,13 @@ def extract_context(slide_config: dict, parsed_db: dict) -> dict:
                 "breakdowns": list[str],
             }
         }
-    parsed_db shape (subset used here):
+    db shape (subset used here):
         {
             "questions": [{"id": ..., "options": [...], "text": ...}, ...],
             "breakdowns": [{"id": ..., ...}, ...],
         }
     """
+    parsed_db = db or {}
     charts = slide_config.get("charts", [])
     analyses = slide_config.get("analyses", [])
     meta = slide_config.get("_meta", {})
@@ -145,9 +146,14 @@ def extract_context(slide_config: dict, parsed_db: dict) -> dict:
     # breakdowns_used
     breakdowns_used: list[str] = list(meta.get("breakdowns", []))
     if not breakdowns_used:
-        # derive from charts
-        breakdowns_used = list({c.get("breakdown_id") for c in charts if c.get("breakdown_id")})
-    if not breakdowns_used and parsed_db.get("breakdowns"):
+        # derive from charts using breakdown_ids list
+        bd_set: set[str] = set()
+        for c in charts:
+            for bd in (c.get("breakdown_ids") or []):
+                if bd and bd.lower() != "general":
+                    bd_set.add(bd)
+        breakdowns_used = sorted(bd_set)
+    if not breakdowns_used and not charts and parsed_db.get("breakdowns"):
         breakdowns_used = [b["id"] for b in parsed_db["breakdowns"]]
 
     n_breakdowns = len(breakdowns_used)
@@ -448,7 +454,7 @@ def build_slide_config(slide_def: Any, parsed_db: Any, db_path: str = "") -> Any
         """Chart with resolved question + data for use by element_renderers."""
         id: str
         question_id: str
-        breakdown_id: str
+        breakdown_ids: list[str]
         chart_type: str
         colors: list
         question: _Any = None   # Question model from parsed_db
@@ -475,8 +481,9 @@ def build_slide_config(slide_def: Any, parsed_db: Any, db_path: str = "") -> Any
             data_blocks = parsed_db.data_blocks if isinstance(parsed_db.data_blocks, dict) else {}
             try:
                 from .data_extractor import extract_all_breakdowns_data, extract_chart_data
+                primary_bd = chart.breakdown_ids[0] if chart.breakdown_ids else "general"
                 chart_data = extract_chart_data(
-                    db_path, question, chart.breakdown_id, data_blocks,
+                    db_path, question, primary_bd, data_blocks,
                 )
                 bd_list = getattr(parsed_db, "breakdowns", []) or []
                 all_bds = extract_all_breakdowns_data(db_path, question, bd_list, data_blocks)
@@ -486,7 +493,7 @@ def build_slide_config(slide_def: Any, parsed_db: Any, db_path: str = "") -> Any
             EnrichedChart(
                 id=chart.id,
                 question_id=chart.question_id,
-                breakdown_id=chart.breakdown_id,
+                breakdown_ids=list(chart.breakdown_ids),
                 chart_type=chart.chart_type,
                 colors=getattr(chart, "colors", []),
                 question=question,

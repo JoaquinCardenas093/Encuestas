@@ -25,6 +25,11 @@ _CHART_TYPE_MAP: dict[str, int] = {
     "COLUMN_STACKED":    XL_CHART_TYPE.COLUMN_STACKED,
     "LINE":              XL_CHART_TYPE.LINE,
     "AREA":              XL_CHART_TYPE.AREA,
+    # Fase A defensive: grouped render is Fase B. UI doesn't expose these
+    # types yet, but a hand-crafted JSON could carry them. Fall back to
+    # single-mode shape so the slide doesn't crash.
+    "PIE_GROUPED":             XL_CHART_TYPE.PIE,
+    "BAR_HORIZONTAL_GROUPED":  XL_CHART_TYPE.BAR_CLUSTERED,
 }
 
 _LABEL_POSITION_MAP = {
@@ -64,6 +69,11 @@ def render(slide, element: dict, ctx: RenderContext) -> None:
     ui_chart_type = (getattr(source_chart, "chart_type", None) or "").strip()
     pattern_chart_type = (element.get("chart_type") or "").strip()
     chart_type_str = ui_chart_type or pattern_chart_type or "BAR_HORIZONTAL"
+    if chart_type_str in ("PIE_GROUPED", "BAR_HORIZONTAL_GROUPED"):
+        log.warning(
+            "chart_type %s grouped render is Fase B — emitting single-series fallback",
+            chart_type_str,
+        )
     xl_chart_type = _CHART_TYPE_MAP.get(chart_type_str)
     if xl_chart_type is None:
         log.warning("Unknown chart_type %r — falling back to BAR_CLUSTERED", chart_type_str)
@@ -243,22 +253,22 @@ def _set_pie_first_slice_angle(chart, angle_deg: int) -> None:
 
 
 def _build_chart_data(source_chart, value_field: str, sort: str):
-    """Extract CategoryChartData from a chart for its breakdown_id.
+    """Extract CategoryChartData from a chart using breakdown_ids list.
 
-    Single-series mode (breakdown_id in {"general", "", None}): plot the
-    General/Total row.
+    Single-series mode (breakdown_ids=[] or first element == "general"): plot
+    the General/Total row.
 
-    Multi-series mode (any other breakdown_id): one series per breakdown
-    category (e.g. Hombre/Mujer for sexo). General row is excluded so we
-    never double-plot it alongside the breakdown categories.
+    Multi-series mode (any other first breakdown_ids element): one series per
+    breakdown category (e.g. Hombre/Mujer for sexo). General row is excluded
+    so we never double-plot it alongside the breakdown categories.
     """
     cd = CategoryChartData()
     question = getattr(source_chart, "question", None)
     options = list(question.options) if question else []
     data = getattr(source_chart, "data", {}) or {}
-    breakdown_id = (getattr(source_chart, "breakdown_id", "") or "").lower()
-
-    is_general = breakdown_id in ("", "general")
+    bds = list(getattr(source_chart, "breakdown_ids", []) or [])
+    primary = bds[0] if bds else ""
+    is_general = (not primary) or primary.lower() == "general"
 
     if is_general:
         primary = data.get("General") or data.get("Total") or (next(iter(data.values())) if data else {})

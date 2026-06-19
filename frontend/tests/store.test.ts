@@ -59,32 +59,33 @@ describe("store chart operations", () => {
 
   it("addChart appends one chart", () => {
     const shellId = useProjectStore.getState().state!.slides[1].id
-    useProjectStore.getState().addCharts(shellId, "q1", ["general"], "PIE")
+    useProjectStore.getState().addChart(shellId, "q1", [], "PIE")
     const shell = useProjectStore.getState().state!.slides[1]
     expect(shell.charts.length).toBe(1)
     expect(shell.charts[0].chart_type).toBe("PIE")
   })
 
-  it("addCharts multi-select breakdowns creates N charts", () => {
+  it("addChart single-record stores breakdown_ids list", () => {
     const shellId = useProjectStore.getState().state!.slides[1].id
-    useProjectStore.getState().addCharts(shellId, "q1", ["general", "sexo", "edad"], "BAR")
+    useProjectStore.getState().addChart(shellId, "q1", ["sexo", "edad"], "TABLE_WITH_MINIBARS")
     const shell = useProjectStore.getState().state!.slides[1]
-    expect(shell.charts.length).toBe(3)
-    expect(shell.charts.every((c) => c.chart_type === "BAR")).toBe(true)
+    expect(shell.charts.length).toBe(1)
+    expect(shell.charts[0].breakdown_ids).toEqual(["sexo", "edad"])
+    expect(shell.charts[0].chart_type).toBe("TABLE_WITH_MINIBARS")
   })
 
   it("updateChartType changes one chart", () => {
     const shellId = useProjectStore.getState().state!.slides[1].id
-    useProjectStore.getState().addCharts(shellId, "q1", ["general", "sexo"], "PIE")
+    useProjectStore.getState().addChart(shellId, "q1", ["sexo"], "PIE")
     const chart0 = useProjectStore.getState().state!.slides[1].charts[0]
-    useProjectStore.getState().updateChartType(shellId, chart0.id, "BAR")
+    useProjectStore.getState().updateChartType(shellId, chart0.id, "BAR_HORIZONTAL")
     const updated = useProjectStore.getState().state!.slides[1].charts[0]
-    expect(updated.chart_type).toBe("BAR")
+    expect(updated.chart_type).toBe("BAR_HORIZONTAL")
   })
 
   it("resetSlide clears charts and analyses", () => {
     const shellId = useProjectStore.getState().state!.slides[1].id
-    useProjectStore.getState().addCharts(shellId, "q1", ["general"], "PIE")
+    useProjectStore.getState().addChart(shellId, "q1", [], "PIE")
     useProjectStore.getState().resetSlide(shellId)
     expect(useProjectStore.getState().state!.slides[1].charts).toEqual([])
   })
@@ -96,7 +97,7 @@ describe("store chart operations", () => {
 
   it("updateChartColors sets colors array on chart", () => {
     const shellId = useProjectStore.getState().state!.slides[1].id
-    useProjectStore.getState().addCharts(shellId, "q1", ["general"], "PIE")
+    useProjectStore.getState().addChart(shellId, "q1", [], "PIE")
     const chartId = useProjectStore.getState().state!.slides[1].charts[0].id
     useProjectStore.getState().updateChartColors(shellId, chartId, ["#7F7F7F", "#BFBFBF"])
     const colors = useProjectStore.getState().state!.slides[1].charts[0].colors
@@ -227,5 +228,30 @@ describe("M6 migration — .aurum.json backward compat", () => {
     useProjectStore.getState().loadProjectState(projectWithOldChart as unknown as import("../src/types").ProjectState)
     const chart = useProjectStore.getState().state!.slides[0].charts[0]
     expect(chart.colors).toEqual([])
+  })
+})
+
+describe("T7 — addChart single-record action", () => {
+  it("addChart creates ONE chart with breakdown_ids list", () => {
+    const { setState, getState } = useProjectStore  // adapt to actual hook
+    // Set up a minimal state with one slide
+    setState({
+      state: {
+        version: 1, app_name: "AurumEncuestas", project_name: "t",
+        inputs: { db_path: "", template_path: "" },
+        parsed_db: null,
+        slides: [{ id: "s1", type: "shell", title: "T", charts: [], analyses: [] }],
+        history: { past: [], future: [] },
+        palette: null,
+      },
+    } as any)
+    getState().addChart("s1", "q1", ["edad", "sexo"], "TABLE_WITH_MINIBARS")
+    const slide = getState().state!.slides.find((s) => s.id === "s1")!
+    expect(slide.charts.length).toBe(1)
+    expect(slide.charts[0].breakdown_ids).toEqual(["edad", "sexo"])
+    expect(slide.charts[0].chart_type).toBe("TABLE_WITH_MINIBARS")
+    expect(slide.charts[0].show_legend).toBe(false)
+    expect(slide.charts[0].grid_cols).toBeNull()
+    expect(slide.charts[0].title).toBeNull()
   })
 })

@@ -258,18 +258,9 @@ def _render_segmented_breakdowns(slide, element: dict, ctx: RenderContext) -> No
             cat_hdr_cfg=single_cat_hdr,
             counts_cfg=single_counts,
             option_cfg=single_option,
-            matching_chart=None,
             font_cap={"group_header": None, "category_header": None, "counts_row": None, "option_row": None},
         )
         return
-
-    # Map breakdown_id → user chart targeting this breakdown (used by packing
-    # and panel rendering). Excludes the general/main chart.
-    pre_charts_by_bd: dict[str, object] = {}
-    for c in charts_list:
-        bid = getattr(c, "breakdown_id", None)
-        if bid and bid.lower() != "general":
-            pre_charts_by_bd[bid] = c
 
     # Pack panels into rows. Weight = 1 label col + N category cols.
     # MAX_ROW_WEIGHT 14 lets Edad(3)+Sexo(3)+NSE(6)=12 fit on row 1, Punto(6) wraps.
@@ -277,7 +268,7 @@ def _render_segmented_breakdowns(slide, element: dict, ctx: RenderContext) -> No
     # mini-chart has room next to the table.
     MAX_ROW_WEIGHT = element.get("max_row_weight", 14)
     panel_rows: list[list[dict]] = _pack_panels_into_rows(
-        panels, MAX_ROW_WEIGHT, pre_charts_by_bd,
+        panels, MAX_ROW_WEIGHT,
     )
 
     cells_cfg = element.get("cells", {})
@@ -321,7 +312,6 @@ def _render_segmented_breakdowns(slide, element: dict, ctx: RenderContext) -> No
     row_h_fit = (box_cy - V_GAP_EMU * (n_rows - 1)) // max(n_rows, 1)
     row_h = max(panel_needed, row_h_fit)
 
-    user_chart_by_bd = pre_charts_by_bd
     cur_y = box_y
     for row in panel_rows:
         row_weight = sum(1 + len(p["cats"]) for p in row)
@@ -330,7 +320,6 @@ def _render_segmented_breakdowns(slide, element: dict, ctx: RenderContext) -> No
         for p in row:
             w = 1 + len(p["cats"])
             panel_w = int(avail_w * (w / row_weight)) if row_weight else avail_w
-            matching_chart = user_chart_by_bd.get(p["group_id"])
             _render_panel(
                 slide=slide,
                 panel=p,
@@ -341,7 +330,6 @@ def _render_segmented_breakdowns(slide, element: dict, ctx: RenderContext) -> No
                 cat_hdr_cfg=cat_hdr_cfg,
                 counts_cfg=counts_cfg,
                 option_cfg=option_cfg,
-                matching_chart=matching_chart,
             )
             cur_x += panel_w + H_GAP_EMU
         cur_y += row_h + V_GAP_EMU
@@ -350,14 +338,8 @@ def _render_segmented_breakdowns(slide, element: dict, ctx: RenderContext) -> No
 def _pack_panels_into_rows(
     panels: list[dict],
     max_row_weight: int,
-    charts_by_bd: dict | None = None,
 ) -> list[list[dict]]:
-    """Greedy row packing by weight (1 + len(cats)).
-
-    Mini-charts now stack vertically inside the same panel column (see
-    _render_panel), so packing doesn't need to special-case chart panels.
-    """
-    _ = charts_by_bd  # accepted for API compat, no longer used
+    """Greedy row packing by weight (1 + len(cats))."""
     rows: list[list[dict]] = []
     current: list[dict] = []
     current_w = 0
@@ -381,26 +363,15 @@ def _render_panel(
     ctx: RenderContext,
     group_hdr_cfg: dict, cat_hdr_cfg: dict,
     counts_cfg: dict, option_cfg: dict,
-    matching_chart=None,
     font_cap: dict | None = None,
 ) -> None:
-    """Render one mini-table (1 breakdown group) at (x,y,cx,cy) EMU.
-
-    If matching_chart is provided (user added a chart targeting this
-    breakdown), the panel splits horizontally: table on the left, mini-chart
-    on the right using the chart's user-selected chart_type.
-    """
+    """Render one mini-table (1 breakdown group) at (x,y,cx,cy) EMU."""
     cats: list[tuple[str, dict]] = panel["cats"]  # [(cat_label, opt_cells_dict)]
     n_cat = len(cats)
     n_cols = 1 + n_cat
     N_HEADER_ROWS = 3
     n_rows = N_HEADER_ROWS + len(options)
 
-    # Layout: every breakdown panel is rendered purely as a table (matches
-    # Aurora reference deck). chart_type selectors per breakdown are
-    # currently ignored at the panel level — they may resurface later as a
-    # row-level minibar variant.
-    _ = matching_chart  # accepted for API compat; mini-chart suppressed
     table_h_local = cy
     chart_x = chart_y = chart_h = chart_w = 0
     table_w = cx

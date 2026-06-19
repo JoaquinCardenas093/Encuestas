@@ -235,11 +235,11 @@ def test_n_charts_grid_renders_three_chart_shapes():
 
     q = SimpleNamespace(options=["A", "B", "C"])
     charts = [
-        SimpleNamespace(question=q, breakdown_id="general", chart_type="PIE",
+        SimpleNamespace(question=q, breakdown_ids=[], chart_type="PIE",
                         data={"General": {"A": {"pct": 0.5}, "B": {"pct": 0.3}, "C": {"pct": 0.2}}}, colors=[]),
-        SimpleNamespace(question=q, breakdown_id="general", chart_type="BAR_CLUSTERED",
+        SimpleNamespace(question=q, breakdown_ids=[], chart_type="BAR_HORIZONTAL",
                         data={"General": {"A": {"pct": 0.4}, "B": {"pct": 0.4}, "C": {"pct": 0.2}}}, colors=[]),
-        SimpleNamespace(question=q, breakdown_id="general", chart_type="BAR_CLUSTERED",
+        SimpleNamespace(question=q, breakdown_ids=[], chart_type="BAR_HORIZONTAL",
                         data={"General": {"A": {"pct": 0.6}, "B": {"pct": 0.3}, "C": {"pct": 0.1}}}, colors=[]),
     ]
     slide_config = SimpleNamespace(charts=charts, analyses=[], n_charts=3)
@@ -270,7 +270,7 @@ def test_chart_with_table_type_routes_to_table_renderer():
     q = SimpleNamespace(options=["Sí", "No"])
     source_chart = SimpleNamespace(
         question=q,
-        breakdown_id="edad",
+        breakdown_ids=["edad"],
         chart_type="TABLE_WITH_MINIBARS",
         colors=[],
         data={"General": {"Sí": {"pct": 0.92, "count": 460}, "No": {"pct": 0.08, "count": 40}}},
@@ -298,7 +298,7 @@ def test_chart_with_table_type_routes_to_table_renderer():
         resolved_anchors={},
     )
 
-    # binary_general matches: 1 chart, binary question, no breakdowns
+    # binary_general matches: 1 chart, binary question, 1 breakdown
     pattern = next(p for p in BUILTIN_STYLE_GUIDE.patterns if p.id == "binary_general")
     render_pattern(pattern, slide, ctx, BUILTIN_STYLE_GUIDE, list(BUILTIN_STYLE_GUIDE.patterns))
 
@@ -306,3 +306,95 @@ def test_chart_with_table_type_routes_to_table_renderer():
     has_chart = any(sh.has_chart for sh in slide.shapes)
     assert has_table, f"expected a table shape, got shapes: {[str(sh.shape_type) for sh in slide.shapes]}"
     assert not has_chart, "expected NO chart shape when chart_type is TABLE_WITH_MINIBARS"
+
+
+# ── Task 5: breakdown_ids list (peek + synthesize) ───────────────────────────
+
+def test_synthesize_table_element_uses_full_breakdown_ids_list():
+    """_synthesize_table_element passes ALL real breakdown_ids as
+    breakdown_groups, not just the first."""
+    from aurum_encuestas.pattern_renderer import _synthesize_table_element
+    from types import SimpleNamespace
+
+    chart_el = {
+        "kind": "chart",
+        "id": "main",
+        "position": {"x_rel": 0.1, "y_rel": 0.1, "w_rel": 0.8, "h_rel": 0.8},
+        "data_source": {"chart_ref_index": 0, "value_field": "pct"},
+    }
+    src = SimpleNamespace(breakdown_ids=["edad", "sexo", "general", "nse"], chart_type="TABLE_WITH_MINIBARS")
+    el = _synthesize_table_element(chart_el, src)
+    assert el["kind"] == "table"
+    assert el["structure"] == "segmented_breakdowns"
+    assert el["data_source"]["breakdown_groups"] == ["edad", "sexo", "nse"]
+
+
+def test_dispatch_does_not_fire_when_breakdown_ids_empty():
+    """chart_type=TABLE_WITH_MINIBARS with breakdown_ids=[] (general) must
+    NOT route to table_renderer — falls through to chart_renderer (which
+    will warn about an unmapped chart_type)."""
+    from pptx import Presentation
+    from types import SimpleNamespace
+    from aurum_encuestas.pattern_renderer import render_pattern
+    from aurum_encuestas.style_guide import BUILTIN_STYLE_GUIDE
+    from aurum_encuestas.element_renderers.render_context import RenderContext
+
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    q = SimpleNamespace(options=["Sí","No"])
+    src = SimpleNamespace(
+        question=q, breakdown_ids=[], chart_type="TABLE_WITH_MINIBARS", colors=[],
+        data={"General": {"Sí":{"pct":0.6},"No":{"pct":0.4}}}, all_breakdowns_data={},
+    )
+    slide_config = SimpleNamespace(charts=[src], analyses=[], n_charts=1)
+    ctx = RenderContext(
+        slide_config=slide_config,
+        chart_colors=["#7F7F7F","#404040","#EEC245","#C00000","#FFC000"],
+        resolved_colors={"primary":"#7F7F7F","secondary":"#404040","background":"#EEC245"},
+        free_area={"x":0,"y":0,"cx":12_192_000,"cy":6_858_000},
+        typography={"label_size":9,"body_size":10,"title_size":16,"font_family":"Calibri"},
+        style_guide=BUILTIN_STYLE_GUIDE, resolved_anchors={},
+    )
+    pattern = next(p for p in BUILTIN_STYLE_GUIDE.patterns if p.id == "binary_general")
+    render_pattern(pattern, slide, ctx, BUILTIN_STYLE_GUIDE, list(BUILTIN_STYLE_GUIDE.patterns))
+    assert not any(sh.has_table for sh in slide.shapes), "should not synthesize table for empty breakdown_ids"
+
+
+def test_dispatch_fires_for_multi_breakdown_ids():
+    """chart_type=TABLE_WITH_MINIBARS with breakdown_ids=['edad','sexo']
+    → table shape rendered with both breakdowns in breakdown_groups."""
+    from pptx import Presentation
+    from types import SimpleNamespace
+    from aurum_encuestas.pattern_renderer import render_pattern
+    from aurum_encuestas.style_guide import BUILTIN_STYLE_GUIDE
+    from aurum_encuestas.element_renderers.render_context import RenderContext
+
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    q = SimpleNamespace(options=["Sí","No"])
+    src = SimpleNamespace(
+        question=q, breakdown_ids=["edad","sexo"], chart_type="TABLE_WITH_MINIBARS", colors=[],
+        data={"General": {"Sí":{"pct":0.6},"No":{"pct":0.4}}},
+        all_breakdowns_data={
+            "edad": {"label":"Edad","categories":{
+                "18-39":{"Sí":{"pct":0.9,"count":40},"No":{"pct":0.1,"count":5}},
+                "40-59":{"Sí":{"pct":0.3,"count":15},"No":{"pct":0.7,"count":35}},
+            }},
+            "sexo": {"label":"Sexo","categories":{
+                "F":{"Sí":{"pct":0.5,"count":30},"No":{"pct":0.5,"count":30}},
+                "M":{"Sí":{"pct":0.7,"count":35},"No":{"pct":0.3,"count":15}},
+            }},
+        },
+    )
+    slide_config = SimpleNamespace(charts=[src], analyses=[], n_charts=1)
+    ctx = RenderContext(
+        slide_config=slide_config,
+        chart_colors=["#7F7F7F","#404040","#EEC245","#C00000","#FFC000"],
+        resolved_colors={"primary":"#7F7F7F","secondary":"#404040","background":"#EEC245"},
+        free_area={"x":0,"y":0,"cx":12_192_000,"cy":6_858_000},
+        typography={"label_size":9,"body_size":10,"title_size":16,"font_family":"Calibri"},
+        style_guide=BUILTIN_STYLE_GUIDE, resolved_anchors={},
+    )
+    pattern = next(p for p in BUILTIN_STYLE_GUIDE.patterns if p.id == "binary_general")
+    render_pattern(pattern, slide, ctx, BUILTIN_STYLE_GUIDE, list(BUILTIN_STYLE_GUIDE.patterns))
+    assert any(sh.has_table for sh in slide.shapes), "expected a table for multi-bd TABLE_WITH_MINIBARS"

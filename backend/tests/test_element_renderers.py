@@ -416,7 +416,7 @@ def test_render_chart_respects_source_chart_chart_type(tmp_path):
     source_chart = SimpleNamespace(
         question=q,
         data={"General": {"Sí": {"pct": 0.6, "count": 60}, "No": {"pct": 0.4, "count": 40}}},
-        chart_type="COLUMN_CLUSTERED",  # ← UI choice
+        chart_type="BAR_HORIZONTAL",  # ← UI choice
         colors=[],
     )
     slide_config = SimpleNamespace(charts=[source_chart])
@@ -437,14 +437,14 @@ def test_render_chart_respects_source_chart_chart_type(tmp_path):
     }
     render(slide, element, ctx)
 
-    # Verify the rendered chart is COLUMN_CLUSTERED (51), not PIE (5)
+    # Verify the rendered chart is BAR_CLUSTERED (XL type for BAR_HORIZONTAL), not PIE (5)
     from pptx.enum.chart import XL_CHART_TYPE
     chart_shape = next(sh for sh in slide.shapes if sh.has_chart)
-    assert chart_shape.chart.chart_type == XL_CHART_TYPE.COLUMN_CLUSTERED
+    assert chart_shape.chart.chart_type == XL_CHART_TYPE.BAR_CLUSTERED
 
 
 # ---------------------------------------------------------------------------
-# T10: breakdown_id-driven multi-series
+# T10: breakdown_ids-driven multi-series
 # ---------------------------------------------------------------------------
 
 
@@ -460,8 +460,8 @@ def test_render_chart_for_breakdown_creates_two_series():
     q = SimpleNamespace(options=["Sí", "No"])
     source_chart = SimpleNamespace(
         question=q,
-        breakdown_id="sexo",
-        chart_type="BAR_CLUSTERED",
+        breakdown_ids=["sexo"],
+        chart_type="BAR_HORIZONTAL",
         data={
             "General": {"Sí": {"pct": 0.55}, "No": {"pct": 0.45}},
             "Hombre":  {"Sí": {"pct": 0.80}, "No": {"pct": 0.20}},
@@ -488,3 +488,86 @@ def test_render_chart_for_breakdown_creates_two_series():
     assert len(series) == 2, f"expected 2 series, got {len(series)}"
     names = {s.name for s in series}
     assert names == {"Hombre", "Mujer"}
+
+
+# ---------------------------------------------------------------------------
+# T4 (task-4): breakdown_ids list + defensive grouped fallback
+# ---------------------------------------------------------------------------
+
+
+def test_build_chart_data_empty_breakdown_ids_uses_general():
+    """breakdown_ids=[] → plot the General/Total row as single series."""
+    from aurum_encuestas.element_renderers.chart_renderer import _build_chart_data
+    from types import SimpleNamespace
+
+    q = SimpleNamespace(options=["Sí","No"])
+    source = SimpleNamespace(
+        question=q,
+        breakdown_ids=[],
+        chart_type="PIE",
+        data={"General": {"Sí":{"pct":0.6,"count":60},"No":{"pct":0.4,"count":40}}},
+        colors=[],
+    )
+    cd, values = _build_chart_data(source, "pct", "desc_by_value")
+    # General branch: one series of N option values
+    assert len(values) == 2
+    assert [c.label for c in cd.categories] == ["Sí", "No"]
+
+
+def test_build_chart_data_single_breakdown_uses_that_breakdown():
+    """breakdown_ids=['edad'] → multi-series, one per Edad category."""
+    from aurum_encuestas.element_renderers.chart_renderer import _build_chart_data
+    from types import SimpleNamespace
+
+    q = SimpleNamespace(options=["Sí","No"])
+    source = SimpleNamespace(
+        question=q,
+        breakdown_ids=["edad"],
+        chart_type="BAR_HORIZONTAL",
+        data={
+            "General": {"Sí":{"pct":0.5},"No":{"pct":0.5}},
+            "18-39":   {"Sí":{"pct":0.9},"No":{"pct":0.1}},
+            "40-59":   {"Sí":{"pct":0.3},"No":{"pct":0.7}},
+        },
+        colors=[],
+    )
+    cd, all_values = _build_chart_data(source, "pct", "desc_by_value")
+    # values from BOTH categories flattened (2 cats × 2 options = 4 entries)
+    assert len(all_values) == 4
+
+
+def test_grouped_chart_type_logs_warning_and_falls_back(caplog):
+    """PIE_GROUPED / BAR_HORIZONTAL_GROUPED log a warning and render
+    as single-mode fallback (PIE / BAR_CLUSTERED)."""
+    import logging
+    from pptx import Presentation
+    from aurum_encuestas.element_renderers.chart_renderer import render
+    from aurum_encuestas.element_renderers.render_context import RenderContext
+    from types import SimpleNamespace
+
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    q = SimpleNamespace(options=["A","B"])
+    source = SimpleNamespace(
+        question=q, breakdown_ids=[], chart_type="PIE_GROUPED", colors=[],
+        data={"General": {"A":{"pct":0.5},"B":{"pct":0.5}}},
+    )
+    slide_config = SimpleNamespace(charts=[source])
+    ctx = RenderContext(
+        slide_config=slide_config,
+        chart_colors=["#7F7F7F","#404040","#EEC245","#C00000","#FFC000"],
+        resolved_colors={"primary":"#7F7F7F","secondary":"#404040","background":"#EEC245"},
+        free_area={"x":0,"y":0,"cx":6_000_000,"cy":4_000_000},
+        typography={"label_size":9,"body_size":10,"title_size":16,"font_family":"Calibri"},
+        style_guide=None, resolved_anchors={},
+    )
+    with caplog.at_level(logging.WARNING):
+        render(slide, {
+            "kind":"chart","id":"c",
+            "position":{"x_rel":0,"y_rel":0,"w_rel":1,"h_rel":1},
+            "data_source":{"chart_ref_index":0,"value_field":"pct"},
+        }, ctx)
+    assert any("PIE_GROUPED" in r.message and "Fase B" in r.message for r in caplog.records), \
+        f"expected PIE_GROUPED Fase B warning; got: {[r.message for r in caplog.records]}"
+    # Shape was created (fallback succeeded)
+    assert any(sh.has_chart for sh in slide.shapes)

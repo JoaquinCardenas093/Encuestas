@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import Modal from "../../../components/Modal"
 import type { ChartType, ParsedDB } from "../../../types"
 import { ColorPicker } from "../../../components/ColorPicker"
 import { autoDeriveColors } from "../../../utils/colorUtils"
 import { useStyleGuideStore } from "../../../store/styleGuide"
 
-const BUILTIN_CHART_TYPES = ["PIE", "DONUT", "BAR_HORIZONTAL", "BAR_CLUSTERED", "COLUMN_CLUSTERED"]
+const BUILTIN_CHART_TYPES = ["PIE", "BAR_HORIZONTAL", "TABLE_WITH_MINIBARS"]
 
 interface ApplyResult {
   questionId: string
@@ -29,10 +29,16 @@ export default function AddChartModal({ open, onClose, onApply, db }: Props) {
 
   const [questionId, setQuestionId] = useState<string>("")
   const [breakdownIds, setBreakdownIds] = useState<Set<string>>(new Set())
-  const hasRealBreakdown = Array.from(breakdownIds).some((bid) => bid !== 'general')
-  const chartTypes = hasRealBreakdown
-    ? allChartTypes
-    : allChartTypes.filter((t) => t !== 'TABLE_WITH_MINIBARS')
+  const realBreakdownIds = useMemo(
+    () => Array.from(breakdownIds).filter((b) => b !== "general"),
+    [breakdownIds],
+  )
+  const nReal = realBreakdownIds.length
+  const chartTypes = useMemo(() => {
+    if (nReal === 0) return allChartTypes.filter((t) => t !== "TABLE_WITH_MINIBARS")
+    if (nReal >= 2) return ["TABLE_WITH_MINIBARS"]
+    return allChartTypes
+  }, [allChartTypes.join(","), nReal])
   const [chartType, setChartType] = useState<ChartType>((chartTypes[0] ?? "PIE") as ChartType)
   const [colorPickerOpen, setColorPickerOpen] = useState(false)
   const [primaryColor, setPrimaryColor] = useState("")
@@ -40,10 +46,12 @@ export default function AddChartModal({ open, onClose, onApply, db }: Props) {
   const [advancedColors, setAdvancedColors] = useState<string[]>([])
   const [openAdvancedPicker, setOpenAdvancedPicker] = useState<number | null>(null)
 
-  // Sync chartType when available chart types change (style guide loads after mount)
+  // Sync chartType when available chart types change or filter changes
   useEffect(() => {
-    setChartType((chartTypes[0] ?? "PIE") as ChartType)
-  }, [chartTypes.join(",")])
+    if (!chartTypes.includes(chartType)) {
+      setChartType(chartTypes[0] as ChartType)
+    }
+  }, [chartTypes.join(","), chartType])
 
   useEffect(() => {
     if (open && db && db.questions.length > 0) {
@@ -73,8 +81,8 @@ export default function AddChartModal({ open, onClose, onApply, db }: Props) {
   }
 
   const handleApply = () => {
-    if (!questionId || breakdownIds.size === 0) return
-    const nOptions = breakdownIds.size
+    if (!questionId) return
+    const nOptions = realBreakdownIds.length || breakdownIds.size
     const finalColors = showAdvanced && advancedColors.some(Boolean)
       ? advancedColors
       : primaryColor
@@ -83,7 +91,7 @@ export default function AddChartModal({ open, onClose, onApply, db }: Props) {
 
     onApply({
       questionId,
-      breakdownIds: Array.from(breakdownIds),
+      breakdownIds: realBreakdownIds,
       chartType,
       colors: finalColors,
     })
@@ -101,7 +109,7 @@ export default function AddChartModal({ open, onClose, onApply, db }: Props) {
             Cancelar
           </button>
           <button
-            disabled={!questionId || breakdownIds.size === 0}
+            disabled={!questionId}
             onClick={handleApply}
             className="px-3 py-1.5 text-sm rounded bg-accent text-neutral-900 font-semibold disabled:opacity-40"
           >
@@ -148,8 +156,9 @@ export default function AddChartModal({ open, onClose, onApply, db }: Props) {
         id="ct-select"
         aria-label="Tipo de chart"
         value={chartType}
+        disabled={nReal >= 2}
         onChange={(e) => setChartType(e.target.value as ChartType)}
-        className="w-full mb-3 bg-neutral-900 border border-neutral-700 rounded px-3 py-2 text-sm"
+        className="w-full mb-3 bg-neutral-900 border border-neutral-700 rounded px-3 py-2 text-sm disabled:opacity-60"
       >
         {chartTypes.map((t) => (
           <option key={t} value={t}>
@@ -157,6 +166,9 @@ export default function AddChartModal({ open, onClose, onApply, db }: Props) {
           </option>
         ))}
       </select>
+      {nReal >= 2 && (
+        <p className="text-xs text-neutral-500 mt-1">Con 2+ breakdowns solo se permite TABLE_WITH_MINIBARS.</p>
+      )}
 
       {/* Color section */}
       <div className="mt-2">

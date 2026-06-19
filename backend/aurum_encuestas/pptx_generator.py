@@ -292,8 +292,9 @@ def _add_slide_content_legacy(slide, slide_def: Slide, state: ProjectState, free
 
 
 def _add_chart(slide, chart_def: Chart, state: ProjectState, el: dict, specific_style: dict | None = None) -> None:
+    primary_bd = chart_def.breakdown_ids[0] if chart_def.breakdown_ids else "general"
     data = extract_chart_data(state.inputs.db_path, _find_question(state, chart_def.question_id),
-                              chart_def.breakdown_id, state.parsed_db.data_blocks if state.parsed_db else {})
+                              primary_bd, state.parsed_db.data_blocks if state.parsed_db else {})
     cd = CategoryChartData()
     # Categories = options, Series = breakdown categories (or single "Total" if general)
     options = _find_question(state, chart_def.question_id).options
@@ -312,7 +313,7 @@ def _add_chart(slide, chart_def: Chart, state: ProjectState, el: dict, specific_
         except (TypeError, ValueError):
             return 0.0
 
-    is_general = chart_def.breakdown_id in (None, "", "general")
+    is_general = (not chart_def.breakdown_ids) or chart_def.breakdown_ids[0].lower() == "general"
     if is_general or len(data) <= 1:
         primary_cat = next((c for c in data if c.lower() in ("total", "general")), None) or (next(iter(data), None) if data else None)
         series = [_value(data.get(primary_cat, {}).get(opt, {})) for opt in options] if primary_cat else [0.0] * len(options)

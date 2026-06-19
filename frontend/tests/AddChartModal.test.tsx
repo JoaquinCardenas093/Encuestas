@@ -39,7 +39,7 @@ describe("AddChartModal", () => {
     expect(screen.getByLabelText(/Sexo/i)).toBeInTheDocument()
   })
 
-  it("Apply calls onApply with selected", async () => {
+  it("Apply calls onApply with selected (real breakdowns only)", async () => {
     let result: any = null
     render(
       <AddChartModal
@@ -51,10 +51,11 @@ describe("AddChartModal", () => {
         db={DB}
       />,
     )
-    await userEvent.click(screen.getByLabelText(/General/i))
+    await userEvent.click(screen.getByLabelText(/Sexo/i))
     await userEvent.click(screen.getByRole("button", { name: /Aplicar/i }))
     expect(result.questionId).toBe("q1")
-    expect(result.breakdownIds).toContain("general")
+    expect(result.breakdownIds).toContain("sexo")
+    expect(result.breakdownIds).not.toContain("general")
   })
 })
 
@@ -64,6 +65,7 @@ describe("AddChartModal — TABLE_WITH_MINIBARS visibility", () => {
     breakdowns: [
       { id: "general", label: "General", categories: ["Total"] },
       { id: "edad", label: "Rango de edad", categories: ["18-39", "40-59"] },
+      { id: "sexo", label: "Sexo", categories: ["H", "M"] },
     ],
     sample_size: 500,
     data_blocks: { counts_cols: [], pct_row_cols: [], pct_col_cols: [] },
@@ -74,5 +76,35 @@ describe("AddChartModal — TABLE_WITH_MINIBARS visibility", () => {
     const dropdown = screen.getByLabelText(/Tipo de chart/i) as HTMLSelectElement
     const optionTexts = Array.from(dropdown.options).map((o) => o.value)
     expect(optionTexts).not.toContain("TABLE_WITH_MINIBARS")
+  })
+
+  it("no real breakdown hides TABLE_WITH_MINIBARS from dropdown", () => {
+    render(<AddChartModal open={true} onClose={() => {}} onApply={() => {}} db={baseDb as any} />)
+    const dropdown = screen.getByLabelText(/Tipo de chart/i) as HTMLSelectElement
+    const values = Array.from(dropdown.options).map((o) => o.value)
+    expect(values).not.toContain("TABLE_WITH_MINIBARS")
+  })
+
+  it("two real breakdowns locks dropdown to TABLE_WITH_MINIBARS", async () => {
+    const u = userEvent.setup()
+    render(<AddChartModal open={true} onClose={() => {}} onApply={() => {}} db={baseDb as any} />)
+    await u.click(screen.getByLabelText(/Rango de edad/i))
+    await u.click(screen.getByLabelText(/Sexo/i))
+    const dropdown = screen.getByLabelText(/Tipo de chart/i) as HTMLSelectElement
+    expect(dropdown.disabled).toBe(true)
+    const values = Array.from(dropdown.options).map((o) => o.value)
+    expect(values).toEqual(["TABLE_WITH_MINIBARS"])
+  })
+
+  it("apply creates one chart with breakdown_ids list", async () => {
+    const u = userEvent.setup()
+    const applied: any[] = []
+    render(<AddChartModal open={true} onClose={() => {}} onApply={(r) => applied.push(r)} db={baseDb as any} />)
+    await u.click(screen.getByLabelText(/Rango de edad/i))
+    await u.click(screen.getByLabelText(/Sexo/i))
+    await u.click(screen.getByText(/Aplicar/i))
+    expect(applied.length).toBe(1)
+    expect(applied[0].breakdownIds).toEqual(["edad", "sexo"])
+    expect(applied[0].chartType).toBe("TABLE_WITH_MINIBARS")
   })
 })

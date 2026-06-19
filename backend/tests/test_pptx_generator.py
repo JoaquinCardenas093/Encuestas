@@ -62,7 +62,7 @@ def test_build_pptx_substitutes_titulo(tmp_path, valid_xlsx_path, valid_template
 
 
 def test_build_pptx_with_chart(tmp_path, valid_xlsx_path, valid_template_path):
-    chart = Chart(id="c1", question_id="q1", breakdown_id="general", chart_type="PIE")
+    chart = Chart(id="c1", question_id="q1", breakdown_ids=[], chart_type="PIE")
     slides = [
         Slide(id="s1", type="separator", title="Sec"),
         Slide(id="s2", type="shell", title="Sec", charts=[chart]),
@@ -113,7 +113,7 @@ def test_build_pptx_applies_font_override(tmp_path, valid_xlsx_path, valid_templ
 
 def test_build_pptx_pipeline_produces_slide_count(tmp_path, valid_xlsx_path, valid_template_path):
     """classify→render pipeline: 1 sep + 1 shell → 2-slide output, no crash."""
-    chart = Chart(id="c1", question_id="q1", breakdown_id="general", chart_type="PIE")
+    chart = Chart(id="c1", question_id="q1", breakdown_ids=[], chart_type="PIE")
     slides = [
         Slide(id="s1", type="separator", title="Pipeline Test"),
         Slide(id="s2", type="shell", title="Pipeline Test", charts=[chart]),
@@ -138,3 +138,38 @@ def test_build_pptx_empty_shell_no_crash(tmp_path, valid_xlsx_path, valid_templa
     assert out.exists()
     prs = Presentation(str(out))
     assert len(prs.slides) == 1
+
+
+def test_add_chart_handles_empty_breakdown_ids_as_general():
+    """Chart with breakdown_ids=[] plots the General row as single series."""
+    from pptx import Presentation
+    from aurum_encuestas.pptx_generator import _add_chart
+    from aurum_encuestas.models import Chart, Question, Breakdown, ParsedDB, ProjectInputs, ProjectState
+    from types import SimpleNamespace
+
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    chart = Chart(id="c1", question_id="q1", breakdown_ids=[], chart_type="PIE")
+    parsed = ParsedDB(
+        questions=[Question(id="q1", code="Q1", text="t", options=["Sí","No"], confidence=0.9)],
+        breakdowns=[Breakdown(id="general", label="General", categories=["Total"])],
+        sample_size=100,
+        data_blocks={"counts_cols":[],"pct_row_cols":[],"pct_col_cols":[]},
+    )
+    state = ProjectState(
+        project_name="t",
+        inputs=ProjectInputs(db_path="", template_path=""),
+        parsed_db=parsed,
+        slides=[],
+    )
+    el = {"x": 0, "y": 0, "cx": 5_000_000, "cy": 3_000_000}
+    # Monkeypatch extract_chart_data through the import path used by _add_chart
+    import aurum_encuestas.pptx_generator as pg
+    orig = pg.extract_chart_data
+    pg.extract_chart_data = lambda *a, **kw: {"General": {"Sí":{"pct":0.6,"count":60},"No":{"pct":0.4,"count":40}}}
+    try:
+        _add_chart(slide, chart, state, el)
+    finally:
+        pg.extract_chart_data = orig
+    assert any(sh.has_chart for sh in slide.shapes)

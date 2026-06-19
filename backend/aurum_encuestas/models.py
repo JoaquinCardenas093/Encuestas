@@ -1,15 +1,18 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 ChartType = Literal[
-    "PIE", "DONUT",
-    "BAR", "COLUMN", "BAR_HORIZONTAL",
-    "BAR_CLUSTERED", "COLUMN_CLUSTERED",
-    "BAR_STACKED", "COLUMN_STACKED",
-    "LINE", "AREA", "RADAR",
-    "TABLE_WITH_MINIBARS", "TABLE_SIMPLE",
+    "PIE", "PIE_GROUPED",
+    "BAR_HORIZONTAL", "BAR_HORIZONTAL_GROUPED",
+    "TABLE_WITH_MINIBARS",
 ]
+
+_ALLOWED_CHART_TYPES = {
+    "PIE", "PIE_GROUPED",
+    "BAR_HORIZONTAL", "BAR_HORIZONTAL_GROUPED",
+    "TABLE_WITH_MINIBARS",
+}
 
 AnalysisScope = Literal["slide", "question", "chart"]
 SlideType = Literal["separator", "shell"]
@@ -45,9 +48,32 @@ class ParsedDB(BaseModel):
 class Chart(BaseModel):
     id: str
     question_id: str
-    breakdown_id: str
+    breakdown_ids: list[str] = Field(default_factory=list)
     chart_type: ChartType
-    colors: list[str] = []          # per-slice/series hex; [] = auto cascade
+    show_legend: bool = False
+    grid_cols: int | None = None
+    title: str | None = None
+    colors: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_legacy(cls, data):
+        if not isinstance(data, dict):
+            return data
+        if "breakdown_id" in data:
+            raise ValueError(
+                "Chart.breakdown_id (str) was removed in the 2026-06-19 catalog "
+                "overhaul. Migrate to breakdown_ids: list[str]. Examples: "
+                "breakdown_id='edad' → breakdown_ids=['edad']; "
+                "breakdown_id='general' → breakdown_ids=[]."
+            )
+        ct = data.get("chart_type")
+        if ct is not None and ct not in _ALLOWED_CHART_TYPES:
+            raise ValueError(
+                f"chart_type {ct!r} was removed from the catalog. "
+                f"Allowed types: {sorted(_ALLOWED_CHART_TYPES)}."
+            )
+        return data
 
 
 class Analysis(BaseModel):

@@ -47,26 +47,27 @@ describe("AddChartModal — M6 chart types", () => {
     render(<AddChartModal open db={DB} onClose={vi.fn()} onApply={vi.fn()} />)
     const select = screen.getByRole("combobox", { name: /tipo de chart/i })
     expect(select).toBeInTheDocument()
-    expect(screen.getByRole("option", { name: /PIE/i })).toBeInTheDocument()
-    expect(screen.getByRole("option", { name: /DONUT/i })).toBeInTheDocument()
+    expect(screen.getByRole("option", { name: "PIE" })).toBeInTheDocument()
+    expect(screen.getByRole("option", { name: "DONUT" })).toBeInTheDocument()
     // BAR_HORIZONTAL not in styleGuide — should NOT appear
-    expect(screen.queryByRole("option", { name: /BAR_HORIZONTAL/i })).toBeNull()
+    expect(screen.queryByRole("option", { name: "BAR_HORIZONTAL" })).toBeNull()
     // TABLE_WITH_MINIBARS is hidden until a real (non-general) breakdown is selected
-    expect(screen.queryByRole("option", { name: /TABLE_WITH_MINIBARS/i })).toBeNull()
+    expect(screen.queryByRole("option", { name: "TABLE_WITH_MINIBARS" })).toBeNull()
     // Select a real breakdown — TABLE_WITH_MINIBARS should now appear
     await userEvent.click(screen.getByLabelText(/Sexo/i))
-    expect(screen.getByRole("option", { name: /TABLE_WITH_MINIBARS/i })).toBeInTheDocument()
+    expect(screen.getByRole("option", { name: "TABLE_WITH_MINIBARS" })).toBeInTheDocument()
   })
 
-  it("falls back to 5 built-in chart types when styleGuide not loaded", () => {
+  it("falls back to built-in chart types when styleGuide not loaded", () => {
     currentMock = mockStyleGuideBuiltin as unknown as typeof mockStyleGuideWithTypes
     render(<AddChartModal open db={DB} onClose={vi.fn()} onApply={vi.fn()} />)
-    // Should have PIE as at minimum (fallback)
-    expect(screen.getByRole("option", { name: /PIE/i })).toBeInTheDocument()
-    expect(screen.getByRole("option", { name: /DONUT/i })).toBeInTheDocument()
-    expect(screen.getByRole("option", { name: /BAR_HORIZONTAL/i })).toBeInTheDocument()
-    expect(screen.getByRole("option", { name: /BAR_CLUSTERED/i })).toBeInTheDocument()
-    expect(screen.getByRole("option", { name: /COLUMN_CLUSTERED/i })).toBeInTheDocument()
+    // Fallback builtin types (Fase A): PIE, BAR_HORIZONTAL
+    // (TABLE_WITH_MINIBARS hidden when no real breakdown selected)
+    expect(screen.getByRole("option", { name: "PIE" })).toBeInTheDocument()
+    expect(screen.getByRole("option", { name: "BAR_HORIZONTAL" })).toBeInTheDocument()
+    expect(screen.queryByRole("option", { name: "PIE_GROUPED" })).toBeNull()
+    expect(screen.queryByRole("option", { name: "BAR_HORIZONTAL_GROUPED" })).toBeNull()
+    expect(screen.queryByRole("option", { name: "TABLE_WITH_MINIBARS" })).toBeNull()
   })
 
   it("includes ColorPicker trigger button", () => {

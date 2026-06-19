@@ -55,7 +55,7 @@ def test_e2e_three_breakdown_demographics_slide(tmp_path):
         pytest.skip("MAF xlsx has <3 non-general breakdowns")
 
     charts = [
-        Chart(id=f"c{i}", question_id=q_id, breakdown_id=b, chart_type="BAR_CLUSTERED", colors=[])
+        Chart(id=f"c{i}", question_id=q_id, breakdown_ids=[b], chart_type="BAR_HORIZONTAL", colors=[])
         for i, b in enumerate(bds)
     ]
     inputs = ProjectInputs(db_path=str(MAF_XLSX), template_path=template_path)
@@ -89,7 +89,7 @@ def test_e2e_three_breakdown_demographics_slide(tmp_path):
 
 
 def test_e2e_table_with_minibars_renders_single_panel_table(tmp_path, monkeypatch):
-    """End-to-end: a Chart with chart_type=TABLE_WITH_MINIBARS and breakdown_id=edad
+    """End-to-end: a Chart with chart_type=TABLE_WITH_MINIBARS and breakdown_ids=["edad"]
     flows through build_pptx and produces a table shape on the rendered slide."""
     from pptx import Presentation
     from pptx.util import Inches
@@ -142,7 +142,7 @@ def test_e2e_table_with_minibars_renders_single_panel_table(tmp_path, monkeypatc
         slides=[
             Slide(
                 id="s1", type="shell", title="Demografía",
-                charts=[Chart(id="c1", question_id="q1", breakdown_id="edad",
+                charts=[Chart(id="c1", question_id="q1", breakdown_ids=["edad"],
                               chart_type="TABLE_WITH_MINIBARS", colors=[])],
                 analyses=[],
             ),
