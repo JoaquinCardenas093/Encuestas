@@ -76,7 +76,7 @@ def test_render_skips_when_chart_ref_index_out_of_range(caplog):
     with caplog.at_level(logging.WARNING):
         render(slide, element, ctx)
     # Returned silently — no shapes added
-    assert not any("oleObj" in (_str_xml(slide)) for _ in [None])
+    assert "oleObj" not in _str_xml(slide)
 
 
 def _str_xml(slide):

@@ -17,7 +17,11 @@ def render(slide, element: dict, ctx) -> None:
     PNG at the same bbox, and embeds both as an OLE graphicFrame on the slide.
     """
     from .chart_renderer import _resolve_position
-    x, y, cx, cy = _resolve_position(element.get("position", {}), ctx)
+    try:
+        x, y, cx, cy = _resolve_position(element.get("position", {}), ctx)
+    except Exception as exc:
+        log.error("ole_table_renderer: position resolve failed: %s", exc)
+        return
 
     data_source = element.get("data_source", {}) or {}
     chart_ref_index = data_source.get("chart_ref_index", 0)

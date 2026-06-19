@@ -5,6 +5,7 @@ a custom preview image. We build the part + relationships + graphicFrame XML
 directly.
 """
 from lxml import etree
+from lxml.etree import cleanup_namespaces
 from pptx.opc.constants import CONTENT_TYPE as CT
 from pptx.opc.constants import RELATIONSHIP_TYPE as RT
 from pptx.opc.package import Part
@@ -81,6 +82,7 @@ def embed_ole_xlsx_with_preview(
 </p:graphicFrame>"""
 
     graphic_frame = etree.fromstring(xml)
+    cleanup_namespaces(graphic_frame, top_nsmap=spTree.nsmap)
     spTree.append(graphic_frame)
 
 
@@ -97,4 +99,4 @@ def _next_partname(package, template: str) -> PackURI:
 
 def _next_shape_id(spTree) -> int:
     ids = [int(el.get("id", "0") or "0") for el in spTree.iter(qn("p:cNvPr"))]
-    return (max(ids) if ids else 1) + 1
+    return (max(ids) + 1) if ids else 1

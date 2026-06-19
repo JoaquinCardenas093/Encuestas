@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 # Registry of element kind → renderer module path
 _KIND_RENDERERS: dict[str, str] = {
     "chart": "aurum_encuestas.element_renderers.chart_renderer",
-    "text":  "aurum_encuestas.element_renderers.text_renderer",
+    "text": "aurum_encuestas.element_renderers.text_renderer",
     "shape": "aurum_encuestas.element_renderers.shape_renderer",
     "image": "aurum_encuestas.element_renderers.image_renderer",
     "table": "aurum_encuestas.element_renderers.table_renderer",

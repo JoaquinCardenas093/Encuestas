@@ -39,11 +39,11 @@ def render_table_preview_png(
         font_lbl = ImageFont.truetype("Calibri Bold", 13)
         font_opt = ImageFont.truetype("Calibri", 12)
     except (IOError, OSError):
-        import PIL.ImageFont as _pil_font
-        try:
-            default = _pil_font.load_default_imagefont()
-        except Exception:
-            default = ImageFont.load_default()
+        default = (
+            ImageFont.load_default_imagefont()
+            if hasattr(ImageFont, "load_default_imagefont")
+            else ImageFont.load_default()
+        )
         font_hdr = font_cat = font_count = font_lbl = font_opt = default
 
     label_col_w = 110
