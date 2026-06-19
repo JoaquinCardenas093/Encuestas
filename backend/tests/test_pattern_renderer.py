@@ -255,9 +255,10 @@ def test_n_charts_grid_renders_three_chart_shapes():
     assert n_chart_shapes == 3, f"expected 3 chart shapes, got {n_chart_shapes}"
 
 
-def test_chart_with_table_type_routes_to_table_renderer():
-    """When source_chart.chart_type == TABLE_WITH_MINIBARS, the dispatch hook
-    must produce a table shape (has_table True) instead of a chart shape."""
+def test_chart_with_table_type_routes_to_ole_table_renderer():
+    """Fase C: TABLE_WITH_MINIBARS chart_type with real breakdown_ids
+    routes through ole_table_renderer and produces a graphicFrame with
+    oleObj progId=Excel.Sheet.12."""
     from pptx import Presentation
     from types import SimpleNamespace
     from aurum_encuestas.pattern_renderer import render_pattern
@@ -266,46 +267,34 @@ def test_chart_with_table_type_routes_to_table_renderer():
 
     prs = Presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
-
     q = SimpleNamespace(options=["Sí", "No"])
-    source_chart = SimpleNamespace(
-        question=q,
-        breakdown_ids=["edad"],
-        chart_type="TABLE_WITH_MINIBARS",
-        colors=[],
-        data={"General": {"Sí": {"pct": 0.92, "count": 460}, "No": {"pct": 0.08, "count": 40}}},
+    src = SimpleNamespace(
+        question=q, breakdown_ids=["edad"], chart_type="TABLE_WITH_MINIBARS", colors=[],
+        title=None, show_legend=False, grid_cols=None, cat_titles=None,
+        data={},
         all_breakdowns_data={
-            "edad": {
-                "label": "Rango de edad",
-                "categories": {
-                    "De 18 a 39 años": {"Sí": {"pct": 0.92, "count": 230}, "No": {"pct": 0.08, "count": 20}},
-                    "De 40 a 59 años": {"Sí": {"pct": 0.912, "count": 228}, "No": {"pct": 0.088, "count": 22}},
-                },
-            },
+            "edad": {"label": "Edad", "categories": {
+                "18-39": {"Sí": {"pct": 0.9, "count": 90}, "No": {"pct": 0.1, "count": 10}},
+                "40-59": {"Sí": {"pct": 0.85, "count": 85}, "No": {"pct": 0.15, "count": 15}},
+            }},
         },
     )
-    slide_config = SimpleNamespace(charts=[source_chart], analyses=[], n_charts=1)
+    slide_config = SimpleNamespace(charts=[src], analyses=[], n_charts=1)
     ctx = RenderContext(
         slide_config=slide_config,
-        chart_colors=["#7F7F7F", "#404040", "#EEC245", "#C00000", "#FFC000"],
-        resolved_colors={
-            "primary": "#7F7F7F", "secondary": "#404040", "background": "#EEC245",
-            "accent": "#C00000", "dark": "#FFC000", "light": "#7F7F7F",
-        },
+        chart_colors=["#7F7F7F","#404040","#EEC245","#C00000","#FFC000"],
+        resolved_colors={"primary":"#7F7F7F","secondary":"#404040","background":"#EEC245"},
         free_area={"x": 487680, "y": 1097280, "cx": 11216640, "cy": 5212080},
-        typography={"label_size": 9, "body_size": 10, "title_size": 16, "font_family": "Calibri"},
-        style_guide=BUILTIN_STYLE_GUIDE,
-        resolved_anchors={},
+        typography={"label_size":9,"body_size":10,"title_size":16,"font_family":"Calibri"},
+        style_guide=BUILTIN_STYLE_GUIDE, resolved_anchors={},
     )
-
-    # binary_general matches: 1 chart, binary question, 1 breakdown
     pattern = next(p for p in BUILTIN_STYLE_GUIDE.patterns if p.id == "binary_general")
     render_pattern(pattern, slide, ctx, BUILTIN_STYLE_GUIDE, list(BUILTIN_STYLE_GUIDE.patterns))
-
-    has_table = any(sh.has_table for sh in slide.shapes)
-    has_chart = any(sh.has_chart for sh in slide.shapes)
-    assert has_table, f"expected a table shape, got shapes: {[str(sh.shape_type) for sh in slide.shapes]}"
-    assert not has_chart, "expected NO chart shape when chart_type is TABLE_WITH_MINIBARS"
+    from lxml.etree import tostring
+    xml = tostring(slide.shapes._spTree, encoding="unicode")
+    assert 'progId="Excel.Sheet.12"' in xml
+    # Fase C: NO python-pptx table is rendered
+    assert not any(sh.has_table for sh in slide.shapes)
 
 
 # ── Task 5: breakdown_ids list (peek + synthesize) ───────────────────────────
@@ -324,8 +313,8 @@ def test_synthesize_table_element_uses_full_breakdown_ids_list():
     }
     src = SimpleNamespace(breakdown_ids=["edad", "sexo", "general", "nse"], chart_type="TABLE_WITH_MINIBARS")
     el = _synthesize_table_element(chart_el, src)
-    assert el["kind"] == "table"
-    assert el["structure"] == "segmented_breakdowns"
+    assert el["kind"] == "ole_table"
+    assert "structure" not in el
     assert el["data_source"]["breakdown_groups"] == ["edad", "sexo", "nse"]
 
 
@@ -362,7 +351,7 @@ def test_dispatch_does_not_fire_when_breakdown_ids_empty():
 
 def test_dispatch_fires_for_multi_breakdown_ids():
     """chart_type=TABLE_WITH_MINIBARS with breakdown_ids=['edad','sexo']
-    → table shape rendered with both breakdowns in breakdown_groups."""
+    → Fase C: OLE Excel object rendered (not a python-pptx table)."""
     from pptx import Presentation
     from types import SimpleNamespace
     from aurum_encuestas.pattern_renderer import render_pattern
@@ -374,6 +363,7 @@ def test_dispatch_fires_for_multi_breakdown_ids():
     q = SimpleNamespace(options=["Sí","No"])
     src = SimpleNamespace(
         question=q, breakdown_ids=["edad","sexo"], chart_type="TABLE_WITH_MINIBARS", colors=[],
+        title=None, show_legend=False, grid_cols=None, cat_titles=None,
         data={"General": {"Sí":{"pct":0.6},"No":{"pct":0.4}}},
         all_breakdowns_data={
             "edad": {"label":"Edad","categories":{
@@ -397,4 +387,30 @@ def test_dispatch_fires_for_multi_breakdown_ids():
     )
     pattern = next(p for p in BUILTIN_STYLE_GUIDE.patterns if p.id == "binary_general")
     render_pattern(pattern, slide, ctx, BUILTIN_STYLE_GUIDE, list(BUILTIN_STYLE_GUIDE.patterns))
-    assert any(sh.has_table for sh in slide.shapes), "expected a table for multi-bd TABLE_WITH_MINIBARS"
+    from lxml.etree import tostring
+    xml = tostring(slide.shapes._spTree, encoding="unicode")
+    assert 'progId="Excel.Sheet.12"' in xml, "expected OLE Excel object for multi-bd TABLE_WITH_MINIBARS"
+    assert not any(sh.has_table for sh in slide.shapes), "Fase C: no python-pptx table expected"
+
+
+def test_synthesize_table_element_kind_is_ole_table():
+    """Fase C: _synthesize_table_element returns kind=ole_table, not table."""
+    from aurum_encuestas.pattern_renderer import _synthesize_table_element
+    from types import SimpleNamespace
+
+    chart_el = {
+        "kind": "chart", "id": "main",
+        "position": {"x_rel": 0.1, "y_rel": 0.1, "w_rel": 0.8, "h_rel": 0.8},
+        "data_source": {"chart_ref_index": 0, "value_field": "pct"},
+    }
+    src = SimpleNamespace(breakdown_ids=["edad", "sexo"], chart_type="TABLE_WITH_MINIBARS")
+    el = _synthesize_table_element(chart_el, src)
+    assert el["kind"] == "ole_table"
+    assert "structure" not in el
+    assert el["data_source"]["breakdown_groups"] == ["edad", "sexo"]
+
+
+def test_kind_ole_table_routes_to_ole_table_renderer():
+    """_KIND_RENDERERS maps ole_table → ole_table_renderer module path."""
+    from aurum_encuestas.pattern_renderer import _KIND_RENDERERS
+    assert _KIND_RENDERERS["ole_table"] == "aurum_encuestas.element_renderers.ole_table_renderer"

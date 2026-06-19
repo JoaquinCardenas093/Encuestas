@@ -25,6 +25,7 @@ _KIND_RENDERERS: dict[str, str] = {
     "shape": "aurum_encuestas.element_renderers.shape_renderer",
     "image": "aurum_encuestas.element_renderers.image_renderer",
     "table": "aurum_encuestas.element_renderers.table_renderer",
+    "ole_table": "aurum_encuestas.element_renderers.ole_table_renderer",
 }
 
 
@@ -113,7 +114,7 @@ def render_pattern(
                 sc_bds_real = [b for b in sc_bds if b and b.lower() != "general"]
                 if sc_chart_type == "TABLE_WITH_MINIBARS" and sc_bds_real:
                     element = _synthesize_table_element(element, source_chart)
-                    kind = "table"
+                    kind = "ole_table"
         renderer_module_path = _KIND_RENDERERS.get(kind)
         if renderer_module_path is None:
             log.warning(
@@ -366,17 +367,20 @@ def _el_to_dict(el: Any) -> dict:
 
 
 def _synthesize_table_element(chart_el: dict, source_chart) -> dict:
-    """Convert a chart element to a segmented_breakdowns table element
-    targeting every real breakdown carried by source_chart.breakdown_ids."""
+    """Convert a chart element to an OLE-embedded segmented table element.
+
+    Fase C: the dispatch peek that fires this helper now routes
+    TABLE_WITH_MINIBARS to ole_table_renderer instead of the legacy
+    table_renderer.
+    """
     bds = [
         b for b in (getattr(source_chart, "breakdown_ids", []) or [])
         if b and b.lower() != "general"
     ]
     return {
-        "kind": "table",
+        "kind": "ole_table",
         "id": chart_el.get("id"),
         "position": chart_el.get("position", {}),
-        "structure": "segmented_breakdowns",
         "data_source": {
             "chart_ref_index": chart_el.get("data_source", {}).get("chart_ref_index", 0),
             "breakdown_groups": bds,
