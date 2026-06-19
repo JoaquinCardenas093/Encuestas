@@ -235,11 +235,11 @@ def test_n_charts_grid_renders_three_chart_shapes():
 
     q = SimpleNamespace(options=["A", "B", "C"])
     charts = [
-        SimpleNamespace(question=q, breakdown_id="general", chart_type="PIE",
+        SimpleNamespace(question=q, breakdown_ids=[], chart_type="PIE",
                         data={"General": {"A": {"pct": 0.5}, "B": {"pct": 0.3}, "C": {"pct": 0.2}}}, colors=[]),
-        SimpleNamespace(question=q, breakdown_id="general", chart_type="BAR_CLUSTERED",
+        SimpleNamespace(question=q, breakdown_ids=[], chart_type="BAR_HORIZONTAL",
                         data={"General": {"A": {"pct": 0.4}, "B": {"pct": 0.4}, "C": {"pct": 0.2}}}, colors=[]),
-        SimpleNamespace(question=q, breakdown_id="general", chart_type="BAR_CLUSTERED",
+        SimpleNamespace(question=q, breakdown_ids=[], chart_type="BAR_HORIZONTAL",
                         data={"General": {"A": {"pct": 0.6}, "B": {"pct": 0.3}, "C": {"pct": 0.1}}}, colors=[]),
     ]
     slide_config = SimpleNamespace(charts=charts, analyses=[], n_charts=3)
@@ -270,7 +270,7 @@ def test_chart_with_table_type_routes_to_table_renderer():
     q = SimpleNamespace(options=["Sí", "No"])
     source_chart = SimpleNamespace(
         question=q,
-        breakdown_id="edad",
+        breakdown_ids=["edad"],
         chart_type="TABLE_WITH_MINIBARS",
         colors=[],
         data={"General": {"Sí": {"pct": 0.92, "count": 460}, "No": {"pct": 0.08, "count": 40}}},

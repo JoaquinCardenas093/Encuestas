@@ -12,7 +12,8 @@ from aurum_encuestas.style_guide import BUILTIN_STYLE_GUIDE, Pattern, StyleGuide
 # ────────────────────────────────────────────────────────────────────────────
 
 def _chart(question_id="q1", breakdown_id="general", chart_type="PIE"):
-    return {"id": "c1", "question_id": question_id, "breakdown_id": breakdown_id, "chart_type": chart_type, "colors": []}
+    bids = [] if breakdown_id == "general" else [breakdown_id]
+    return {"id": "c1", "question_id": question_id, "breakdown_ids": bids, "chart_type": chart_type, "colors": []}
 
 
 def _slide_config(
@@ -458,9 +459,9 @@ def test_three_charts_matches_n_charts_grid_pattern():
 
     slide_config = SimpleNamespace(
         charts=[
-            SimpleNamespace(question_id="q1", breakdown_id="sexo", chart_type="PIE"),
-            SimpleNamespace(question_id="q2", breakdown_id="general", chart_type="BAR_CLUSTERED"),
-            SimpleNamespace(question_id="q3", breakdown_id="general", chart_type="BAR_CLUSTERED"),
+            SimpleNamespace(question_id="q1", breakdown_ids=["sexo"], chart_type="PIE"),
+            SimpleNamespace(question_id="q2", breakdown_ids=[], chart_type="BAR_HORIZONTAL"),
+            SimpleNamespace(question_id="q3", breakdown_ids=[], chart_type="BAR_HORIZONTAL"),
         ],
         n_charts=3,
         analyses=[],

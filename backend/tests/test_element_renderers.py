@@ -416,7 +416,7 @@ def test_render_chart_respects_source_chart_chart_type(tmp_path):
     source_chart = SimpleNamespace(
         question=q,
         data={"General": {"Sí": {"pct": 0.6, "count": 60}, "No": {"pct": 0.4, "count": 40}}},
-        chart_type="COLUMN_CLUSTERED",  # ← UI choice
+        chart_type="BAR_HORIZONTAL",  # ← UI choice
         colors=[],
     )
     slide_config = SimpleNamespace(charts=[source_chart])
@@ -437,14 +437,14 @@ def test_render_chart_respects_source_chart_chart_type(tmp_path):
     }
     render(slide, element, ctx)
 
-    # Verify the rendered chart is COLUMN_CLUSTERED (51), not PIE (5)
+    # Verify the rendered chart is BAR_CLUSTERED (XL type for BAR_HORIZONTAL), not PIE (5)
     from pptx.enum.chart import XL_CHART_TYPE
     chart_shape = next(sh for sh in slide.shapes if sh.has_chart)
-    assert chart_shape.chart.chart_type == XL_CHART_TYPE.COLUMN_CLUSTERED
+    assert chart_shape.chart.chart_type == XL_CHART_TYPE.BAR_CLUSTERED
 
 
 # ---------------------------------------------------------------------------
-# T10: breakdown_id-driven multi-series
+# T10: breakdown_ids-driven multi-series
 # ---------------------------------------------------------------------------
 
 
@@ -460,8 +460,8 @@ def test_render_chart_for_breakdown_creates_two_series():
     q = SimpleNamespace(options=["Sí", "No"])
     source_chart = SimpleNamespace(
         question=q,
-        breakdown_id="sexo",
-        chart_type="BAR_CLUSTERED",
+        breakdown_ids=["sexo"],
+        chart_type="BAR_HORIZONTAL",
         data={
             "General": {"Sí": {"pct": 0.55}, "No": {"pct": 0.45}},
             "Hombre":  {"Sí": {"pct": 0.80}, "No": {"pct": 0.20}},

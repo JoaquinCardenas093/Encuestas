@@ -62,7 +62,7 @@ def test_build_pptx_substitutes_titulo(tmp_path, valid_xlsx_path, valid_template
 
 
 def test_build_pptx_with_chart(tmp_path, valid_xlsx_path, valid_template_path):
-    chart = Chart(id="c1", question_id="q1", breakdown_id="general", chart_type="PIE")
+    chart = Chart(id="c1", question_id="q1", breakdown_ids=[], chart_type="PIE")
     slides = [
         Slide(id="s1", type="separator", title="Sec"),
         Slide(id="s2", type="shell", title="Sec", charts=[chart]),
@@ -113,7 +113,7 @@ def test_build_pptx_applies_font_override(tmp_path, valid_xlsx_path, valid_templ
 
 def test_build_pptx_pipeline_produces_slide_count(tmp_path, valid_xlsx_path, valid_template_path):
     """classify→render pipeline: 1 sep + 1 shell → 2-slide output, no crash."""
-    chart = Chart(id="c1", question_id="q1", breakdown_id="general", chart_type="PIE")
+    chart = Chart(id="c1", question_id="q1", breakdown_ids=[], chart_type="PIE")
     slides = [
         Slide(id="s1", type="separator", title="Pipeline Test"),
         Slide(id="s2", type="shell", title="Pipeline Test", charts=[chart]),

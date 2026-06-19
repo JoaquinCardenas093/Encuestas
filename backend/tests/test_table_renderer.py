@@ -11,7 +11,7 @@ def edad_chart():
     q = SimpleNamespace(options=["Sí", "No"])
     return SimpleNamespace(
         question=q,
-        breakdown_id="edad",
+        breakdown_ids=["edad"],
         chart_type="TABLE_WITH_MINIBARS",
         colors=[],
         data={},
