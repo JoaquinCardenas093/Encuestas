@@ -59,7 +59,7 @@ describe("store chart operations", () => {
 
   it("addChart appends one chart", () => {
     const shellId = useProjectStore.getState().state!.slides[1].id
-    useProjectStore.getState().addChart(shellId, "q1", ["general"], "PIE")
+    useProjectStore.getState().addChart(shellId, "q1", [], "PIE")
     const shell = useProjectStore.getState().state!.slides[1]
     expect(shell.charts.length).toBe(1)
     expect(shell.charts[0].chart_type).toBe("PIE")
@@ -76,7 +76,7 @@ describe("store chart operations", () => {
 
   it("updateChartType changes one chart", () => {
     const shellId = useProjectStore.getState().state!.slides[1].id
-    useProjectStore.getState().addChart(shellId, "q1", ["general", "sexo"], "PIE")
+    useProjectStore.getState().addChart(shellId, "q1", ["sexo"], "PIE")
     const chart0 = useProjectStore.getState().state!.slides[1].charts[0]
     useProjectStore.getState().updateChartType(shellId, chart0.id, "BAR_HORIZONTAL")
     const updated = useProjectStore.getState().state!.slides[1].charts[0]
@@ -85,7 +85,7 @@ describe("store chart operations", () => {
 
   it("resetSlide clears charts and analyses", () => {
     const shellId = useProjectStore.getState().state!.slides[1].id
-    useProjectStore.getState().addChart(shellId, "q1", ["general"], "PIE")
+    useProjectStore.getState().addChart(shellId, "q1", [], "PIE")
     useProjectStore.getState().resetSlide(shellId)
     expect(useProjectStore.getState().state!.slides[1].charts).toEqual([])
   })
@@ -97,7 +97,7 @@ describe("store chart operations", () => {
 
   it("updateChartColors sets colors array on chart", () => {
     const shellId = useProjectStore.getState().state!.slides[1].id
-    useProjectStore.getState().addChart(shellId, "q1", ["general"], "PIE")
+    useProjectStore.getState().addChart(shellId, "q1", [], "PIE")
     const chartId = useProjectStore.getState().state!.slides[1].charts[0].id
     useProjectStore.getState().updateChartColors(shellId, chartId, ["#7F7F7F", "#BFBFBF"])
     const colors = useProjectStore.getState().state!.slides[1].charts[0].colors

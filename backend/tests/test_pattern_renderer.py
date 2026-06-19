@@ -298,7 +298,7 @@ def test_chart_with_table_type_routes_to_table_renderer():
         resolved_anchors={},
     )
 
-    # binary_general matches: 1 chart, binary question, no breakdowns
+    # binary_general matches: 1 chart, binary question, 1 breakdown
     pattern = next(p for p in BUILTIN_STYLE_GUIDE.patterns if p.id == "binary_general")
     render_pattern(pattern, slide, ctx, BUILTIN_STYLE_GUIDE, list(BUILTIN_STYLE_GUIDE.patterns))
 

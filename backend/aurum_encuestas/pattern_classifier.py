@@ -113,7 +113,7 @@ def extract_context(slide_config: dict, db: dict = None) -> dict:
                 "breakdowns": list[str],
             }
         }
-    parsed_db shape (subset used here):
+    db shape (subset used here):
         {
             "questions": [{"id": ..., "options": [...], "text": ...}, ...],
             "breakdowns": [{"id": ..., ...}, ...],
@@ -153,7 +153,7 @@ def extract_context(slide_config: dict, db: dict = None) -> dict:
                 if bd and bd.lower() != "general":
                     bd_set.add(bd)
         breakdowns_used = sorted(bd_set)
-    if not breakdowns_used and parsed_db.get("breakdowns"):
+    if not breakdowns_used and not charts and parsed_db.get("breakdowns"):
         breakdowns_used = [b["id"] for b in parsed_db["breakdowns"]]
 
     n_breakdowns = len(breakdowns_used)
