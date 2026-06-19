@@ -5,7 +5,7 @@ import { ColorPicker } from "../../../components/ColorPicker"
 import { autoDeriveColors } from "../../../utils/colorUtils"
 import { useStyleGuideStore } from "../../../store/styleGuide"
 
-const BUILTIN_CHART_TYPES = ["PIE", "PIE_GROUPED", "BAR_HORIZONTAL", "BAR_HORIZONTAL_GROUPED", "TABLE_WITH_MINIBARS"]
+const BUILTIN_CHART_TYPES = ["PIE", "BAR_HORIZONTAL", "TABLE_WITH_MINIBARS"]
 
 interface ApplyResult {
   questionId: string

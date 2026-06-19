@@ -9,7 +9,7 @@ import type { ChartType } from "../../types"
 import { useStyleGuideStore } from "../../store/styleGuide"
 
 const BUILTIN_CHART_TYPES: ChartType[] = [
-  "PIE", "PIE_GROUPED", "BAR_HORIZONTAL", "BAR_HORIZONTAL_GROUPED", "TABLE_WITH_MINIBARS",
+  "PIE", "BAR_HORIZONTAL", "TABLE_WITH_MINIBARS",
 ]
 
 interface Props {

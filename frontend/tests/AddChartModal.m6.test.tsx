@@ -61,12 +61,12 @@ describe("AddChartModal — M6 chart types", () => {
   it("falls back to built-in chart types when styleGuide not loaded", () => {
     currentMock = mockStyleGuideBuiltin as unknown as typeof mockStyleGuideWithTypes
     render(<AddChartModal open db={DB} onClose={vi.fn()} onApply={vi.fn()} />)
-    // Fallback builtin types: PIE, PIE_GROUPED, BAR_HORIZONTAL, BAR_HORIZONTAL_GROUPED
+    // Fallback builtin types (Fase A): PIE, BAR_HORIZONTAL
     // (TABLE_WITH_MINIBARS hidden when no real breakdown selected)
     expect(screen.getByRole("option", { name: "PIE" })).toBeInTheDocument()
-    expect(screen.getByRole("option", { name: "PIE_GROUPED" })).toBeInTheDocument()
     expect(screen.getByRole("option", { name: "BAR_HORIZONTAL" })).toBeInTheDocument()
-    expect(screen.getByRole("option", { name: "BAR_HORIZONTAL_GROUPED" })).toBeInTheDocument()
+    expect(screen.queryByRole("option", { name: "PIE_GROUPED" })).toBeNull()
+    expect(screen.queryByRole("option", { name: "BAR_HORIZONTAL_GROUPED" })).toBeNull()
     expect(screen.queryByRole("option", { name: "TABLE_WITH_MINIBARS" })).toBeNull()
   })
 
