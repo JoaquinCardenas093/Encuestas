@@ -388,23 +388,35 @@ def test_builtin_palette_matches_aurora_reference():
     assert "#EEC245" in palette or "#FFC000" in palette
     # Grey neutrals first
     assert palette[0] in ("#7F7F7F", "#595959", "#404040")
-    # Fase A: only 3 chart types are in available_chart_types
-    # LINE/DONUT/AREA are removed in Fase A, added back in Fase B
-    assert "PIE" in BUILTIN_STYLE_GUIDE.available_chart_types
-    assert "BAR_HORIZONTAL" in BUILTIN_STYLE_GUIDE.available_chart_types
-    assert "TABLE_WITH_MINIBARS" in BUILTIN_STYLE_GUIDE.available_chart_types
-
-
-def test_builtin_available_chart_types_phase_a_is_three():
-    """Fase A exposes exactly 3 chart types to the UI. Fase B adds the
-    two grouped variants."""
-    from aurum_encuestas.style_guide import BUILTIN_STYLE_GUIDE
-    assert BUILTIN_STYLE_GUIDE.available_chart_types == [
-        "PIE", "BAR_HORIZONTAL", "TABLE_WITH_MINIBARS",
-    ]
+    # Fase B: 5 chart types in available_chart_types including the newly added grouped variants
+    assert "PIE_GROUPED" in BUILTIN_STYLE_GUIDE.available_chart_types
+    assert "BAR_HORIZONTAL_GROUPED" in BUILTIN_STYLE_GUIDE.available_chart_types
 
 
 def test_style_guide_default_available_chart_types_is_three():
     from aurum_encuestas.style_guide import StyleGuide
     sg = StyleGuide()
-    assert sg.available_chart_types == ["PIE", "BAR_HORIZONTAL", "TABLE_WITH_MINIBARS"]
+    assert sg.available_chart_types == [
+        "PIE", "PIE_GROUPED",
+        "BAR_HORIZONTAL", "BAR_HORIZONTAL_GROUPED",
+        "TABLE_WITH_MINIBARS",
+    ]
+
+
+def test_builtin_available_chart_types_phase_b_is_five():
+    from aurum_encuestas.style_guide import BUILTIN_STYLE_GUIDE
+    assert BUILTIN_STYLE_GUIDE.available_chart_types == [
+        "PIE", "PIE_GROUPED",
+        "BAR_HORIZONTAL", "BAR_HORIZONTAL_GROUPED",
+        "TABLE_WITH_MINIBARS",
+    ]
+
+
+def test_style_guide_default_available_chart_types_phase_b_is_five():
+    from aurum_encuestas.style_guide import StyleGuide
+    sg = StyleGuide()
+    assert sg.available_chart_types == [
+        "PIE", "PIE_GROUPED",
+        "BAR_HORIZONTAL", "BAR_HORIZONTAL_GROUPED",
+        "TABLE_WITH_MINIBARS",
+    ]
