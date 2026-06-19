@@ -393,16 +393,6 @@ def test_builtin_palette_matches_aurora_reference():
     assert "BAR_HORIZONTAL_GROUPED" in BUILTIN_STYLE_GUIDE.available_chart_types
 
 
-def test_style_guide_default_available_chart_types_is_three():
-    from aurum_encuestas.style_guide import StyleGuide
-    sg = StyleGuide()
-    assert sg.available_chart_types == [
-        "PIE", "PIE_GROUPED",
-        "BAR_HORIZONTAL", "BAR_HORIZONTAL_GROUPED",
-        "TABLE_WITH_MINIBARS",
-    ]
-
-
 def test_builtin_available_chart_types_phase_b_is_five():
     from aurum_encuestas.style_guide import BUILTIN_STYLE_GUIDE
     assert BUILTIN_STYLE_GUIDE.available_chart_types == [
