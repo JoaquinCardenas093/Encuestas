@@ -89,3 +89,25 @@ def test_multiple_embeds_get_distinct_partnames():
     png_parts = [str(p.partname) for p in package.iter_parts() if str(p.partname).endswith(".png")]
     assert len(set(xlsx_parts)) == 2
     assert len(set(png_parts)) == 2
+
+
+def test_round_trip_save_and_reopen_succeeds():
+    """Regression: Part(blob, package) arg order was inverted, corrupting the
+    serialized pptx blob. This test exercises full save+reopen to catch any
+    repeat of that defect."""
+    from aurum_encuestas.element_renderers.ole_embedder import embed_ole_xlsx_with_preview
+    prs, slide = _make_slide()
+    embed_ole_xlsx_with_preview(
+        slide, x=0, y=0, w=4_572_000, h=2_286_000,
+        xlsx_bytes=_xlsx_bytes(), png_bytes=_png_bytes(),
+    )
+    buf = BytesIO()
+    prs.save(buf)
+    buf.seek(0)
+    # Reopen the saved pptx — fails if Part blob was a Package object
+    prs2 = Presentation(buf)
+    # Embedded xlsx part should be readable
+    xlsx_parts = [p for p in prs2.part.package.iter_parts() if str(p.partname).endswith(".xlsx") and "embeddings" in str(p.partname)]
+    assert len(xlsx_parts) == 1
+    # Its blob is the original xlsx bytes (xlsx file magic = b"PK\x03\x04")
+    assert xlsx_parts[0].blob[:4] == b"PK\x03\x04"

@@ -25,11 +25,11 @@ def embed_ole_xlsx_with_preview(
     package = slide_part.package
 
     xlsx_partname = _next_partname(package, "/ppt/embeddings/oleObject{}.xlsx")
-    xlsx_part = Part(xlsx_partname, CT_XLSX, xlsx_bytes, package)
+    xlsx_part = Part(xlsx_partname, CT_XLSX, package, xlsx_bytes)
     rId_xlsx = slide_part.relate_to(xlsx_part, RT.OLE_OBJECT)
 
     png_partname = _next_partname(package, "/ppt/media/image{}.png")
-    png_part = Part(png_partname, CT.PNG, png_bytes, package)
+    png_part = Part(png_partname, CT.PNG, package, png_bytes)
     rId_img = slide_part.relate_to(png_part, RT.IMAGE)
 
     spTree = slide.shapes._spTree
