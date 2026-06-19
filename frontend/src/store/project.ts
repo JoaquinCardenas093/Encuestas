@@ -62,10 +62,28 @@ interface Store {
   removeSlide(slideId: string): void
   updateSeparatorTitle(slideId: string, title: string): void
 
-  addChart(slideId: string, questionId: string, breakdownIds: string[], chartType: import("../types").ChartType): void
+  addChart(
+    slideId: string,
+    questionId: string,
+    breakdownIds: string[],
+    chartType: import("../types").ChartType,
+    opts?: {
+      show_legend?: boolean
+      grid_cols?: number | null
+      title?: string | null
+      cat_titles?: Record<string, string> | null
+      colors?: string[]
+    },
+  ): void
   removeChart(slideId: string, chartId: string): void
   updateChartType(slideId: string, chartId: string, chartType: import("../types").ChartType): void
   updateChartColors(slideId: string, chartId: string, colors: string[]): void
+  updateChartField<K extends keyof import("../types").Chart>(
+    slideId: string,
+    chartId: string,
+    field: K,
+    value: import("../types").Chart[K],
+  ): void
   resetSlide(slideId: string): void
   resetAll(): void
 
@@ -160,7 +178,7 @@ export const useProjectStore = create<Store>()(
         })
       },
 
-      addChart(slideId, questionId, breakdownIds, chartType) {
+      addChart(slideId, questionId, breakdownIds, chartType, opts) {
         const s = get().state
         if (!s) return
         const slides = s.slides.map((sl) => {
@@ -170,10 +188,11 @@ export const useProjectStore = create<Store>()(
             question_id: questionId,
             breakdown_ids: breakdownIds,
             chart_type: chartType,
-            show_legend: false,
-            grid_cols: null,
-            title: null,
-            colors: [] as string[],
+            show_legend: opts?.show_legend ?? false,
+            grid_cols: opts?.grid_cols ?? null,
+            title: opts?.title ?? null,
+            cat_titles: opts?.cat_titles ?? null,
+            colors: opts?.colors ?? [] as string[],
           }
           return { ...sl, charts: [...sl.charts, newChart] }
         })
@@ -214,6 +233,21 @@ export const useProjectStore = create<Store>()(
             ),
           }
         )
+        set({ state: { ...s, slides } })
+      },
+
+      updateChartField(slideId, chartId, field, value) {
+        const s = get().state
+        if (!s) return
+        const slides = s.slides.map((sl) => {
+          if (sl.id !== slideId) return sl
+          return {
+            ...sl,
+            charts: sl.charts.map((c) =>
+              c.id !== chartId ? c : { ...c, [field]: value }
+            ),
+          }
+        })
         set({ state: { ...s, slides } })
       },
 

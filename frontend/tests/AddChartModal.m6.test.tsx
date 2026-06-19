@@ -7,7 +7,11 @@ import type { ParsedDB } from "../src/types"
 // Mock styleGuide store — with AI-generated style guide
 const mockStyleGuideWithTypes = {
   styleGuide: {
-    available_chart_types: ["PIE", "DONUT", "TABLE_WITH_MINIBARS"],
+    available_chart_types: [
+      "PIE", "PIE_GROUPED",
+      "BAR_HORIZONTAL", "BAR_HORIZONTAL_GROUPED",
+      "TABLE_WITH_MINIBARS",
+    ],
     global: { suggested_palette: [] },
     is_builtin: false,
   },
@@ -48,13 +52,16 @@ describe("AddChartModal — M6 chart types", () => {
     const select = screen.getByRole("combobox", { name: /tipo de chart/i })
     expect(select).toBeInTheDocument()
     expect(screen.getByRole("option", { name: "PIE" })).toBeInTheDocument()
-    expect(screen.getByRole("option", { name: "DONUT" })).toBeInTheDocument()
-    // BAR_HORIZONTAL not in styleGuide — should NOT appear
-    expect(screen.queryByRole("option", { name: "BAR_HORIZONTAL" })).toBeNull()
+    expect(screen.getByRole("option", { name: "BAR_HORIZONTAL" })).toBeInTheDocument()
+    // Grouped types hidden until a real (non-general) breakdown is selected
+    expect(screen.queryByRole("option", { name: "PIE_GROUPED" })).toBeNull()
+    expect(screen.queryByRole("option", { name: "BAR_HORIZONTAL_GROUPED" })).toBeNull()
     // TABLE_WITH_MINIBARS is hidden until a real (non-general) breakdown is selected
     expect(screen.queryByRole("option", { name: "TABLE_WITH_MINIBARS" })).toBeNull()
-    // Select a real breakdown — TABLE_WITH_MINIBARS should now appear
+    // Select a real breakdown — all 5 types should now appear
     await userEvent.click(screen.getByLabelText(/Sexo/i))
+    expect(screen.getByRole("option", { name: "PIE_GROUPED" })).toBeInTheDocument()
+    expect(screen.getByRole("option", { name: "BAR_HORIZONTAL_GROUPED" })).toBeInTheDocument()
     expect(screen.getByRole("option", { name: "TABLE_WITH_MINIBARS" })).toBeInTheDocument()
   })
 

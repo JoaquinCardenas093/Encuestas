@@ -9,7 +9,9 @@ import type { ChartType } from "../../types"
 import { useStyleGuideStore } from "../../store/styleGuide"
 
 const BUILTIN_CHART_TYPES: ChartType[] = [
-  "PIE", "BAR_HORIZONTAL", "TABLE_WITH_MINIBARS",
+  "PIE", "PIE_GROUPED",
+  "BAR_HORIZONTAL", "BAR_HORIZONTAL_GROUPED",
+  "TABLE_WITH_MINIBARS",
 ]
 
 interface Props {
@@ -62,6 +64,7 @@ export default function ConfigPanel({ slideId }: Props) {
   const addChart = useProjectStore((s) => s.addChart)
   const removeChart = useProjectStore((s) => s.removeChart)
   const updateChartType = useProjectStore((s) => s.updateChartType)
+  const updateChartField = useProjectStore((s) => s.updateChartField)
   const styleGuide = useStyleGuideStore((s) => s.styleGuide)
   const CHART_TYPES = (styleGuide?.available_chart_types?.length
     ? styleGuide.available_chart_types
@@ -105,7 +108,11 @@ export default function ConfigPanel({ slideId }: Props) {
             const nReal = realBds.length
             const allCT = CHART_TYPES
             const chartTypeOptions =
-              nReal === 0 ? allCT.filter((t) => t !== "TABLE_WITH_MINIBARS")
+              nReal === 0 ? allCT.filter((t) =>
+                t !== "TABLE_WITH_MINIBARS" &&
+                t !== "PIE_GROUPED" &&
+                t !== "BAR_HORIZONTAL_GROUPED"
+              )
               : nReal >= 2 ? (["TABLE_WITH_MINIBARS"] as ChartType[])
               : allCT
             const b = parsedDb?.breakdowns.find((b) => b.id === (c.breakdown_ids[0] ?? "general"))
@@ -133,6 +140,83 @@ export default function ConfigPanel({ slideId }: Props) {
                     <Trash2 size={12} />
                   </button>
                 </div>
+
+                {/* Título (opcional) */}
+                <div className="flex flex-col gap-0.5 px-0.5">
+                  <label className="text-[10px] text-neutral-400">Título (opcional)</label>
+                  <input
+                    type="text"
+                    value={c.title ?? ""}
+                    onChange={(e) =>
+                      updateChartField(slide.id, c.id, "title", e.target.value.trim() || null)
+                    }
+                    placeholder="Ej: Plazo del crédito"
+                    className="bg-neutral-900 border border-neutral-700 rounded px-2 py-0.5 text-xs"
+                  />
+                </div>
+
+                {/* Mostrar leyenda */}
+                {(c.chart_type === "BAR_HORIZONTAL_GROUPED" || c.chart_type === "TABLE_WITH_MINIBARS") && (
+                  <label className="flex items-center gap-2 text-xs px-0.5">
+                    <input
+                      type="checkbox"
+                      checked={c.show_legend}
+                      onChange={(e) =>
+                        updateChartField(slide.id, c.id, "show_legend", e.target.checked)
+                      }
+                    />
+                    Mostrar leyenda
+                  </label>
+                )}
+
+                {/* Columnas por fila */}
+                {c.chart_type === "PIE_GROUPED" && (
+                  <div className="flex flex-col gap-0.5 px-0.5">
+                    <label className="text-[10px] text-neutral-400">Columnas por fila (vacío = auto)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={c.grid_cols ?? ""}
+                      onChange={(e) =>
+                        updateChartField(
+                          slide.id, c.id, "grid_cols",
+                          e.target.value === "" ? null : Math.max(1, parseInt(e.target.value, 10))
+                        )
+                      }
+                      className="bg-neutral-900 border border-neutral-700 rounded px-2 py-0.5 text-xs"
+                    />
+                  </div>
+                )}
+
+                {/* Títulos por categoría */}
+                {c.chart_type === "PIE_GROUPED" && nReal === 1 && (() => {
+                  const bdId = realBds[0]
+                  const cats = parsedDb?.breakdowns.find((bd) => bd.id === bdId)?.categories ?? []
+                  if (cats.length === 0) return null
+                  return (
+                    <div className="flex flex-col gap-1 px-0.5">
+                      <label className="text-[10px] text-neutral-400">Títulos por categoría (opcional)</label>
+                      {cats.map((cat) => (
+                        <div key={cat} className="flex items-center gap-2">
+                          <span className="text-[9px] text-neutral-500 w-20 truncate">{cat}</span>
+                          <input
+                            type="text"
+                            value={(c.cat_titles ?? {})[cat] ?? ""}
+                            onChange={(e) =>
+                              updateChartField(slide.id, c.id, "cat_titles", {
+                                ...(c.cat_titles ?? {}),
+                                [cat]: e.target.value,
+                              })
+                            }
+                            className="flex-1 bg-neutral-900 border border-neutral-700 rounded px-2 py-0.5 text-[10px]"
+                            placeholder={cat}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })()}
+
                 {options.length > 0 && (
                   <div className="flex flex-wrap items-center gap-1.5 pl-1">
                     <span className="text-[10px] text-neutral-500 uppercase tracking-wide mr-1">Colores</span>
@@ -171,7 +255,13 @@ export default function ConfigPanel({ slideId }: Props) {
             open={chartModalOpen}
             onClose={() => setChartModalOpen(false)}
             onApply={(r) =>
-              addChart(slide.id, r.questionId, r.breakdownIds, r.chartType)
+              addChart(slide.id, r.questionId, r.breakdownIds, r.chartType, {
+                show_legend: r.show_legend,
+                grid_cols: r.grid_cols,
+                title: r.title,
+                cat_titles: r.cat_titles,
+                colors: r.colors,
+              })
             }
             db={parsedDb}
           />

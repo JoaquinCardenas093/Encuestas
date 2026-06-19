@@ -255,3 +255,57 @@ describe("T7 — addChart single-record action", () => {
     expect(slide.charts[0].title).toBeNull()
   })
 })
+
+// Helper shared by B8 store tests
+function setStateMinimalSlide() {
+  useProjectStore.setState({
+    state: {
+      version: 1, app_name: "AurumEncuestas", project_name: "t",
+      inputs: { db_path: "", template_path: "" },
+      parsed_db: null,
+      slides: [{ id: "s1", type: "shell", title: "T", charts: [], analyses: [], auto_notes: null }],
+      history: { past: [], future: [] },
+      palette: null,
+    },
+  } as any)
+}
+
+describe("B8 — addChart opts + updateChartField", () => {
+  it("addChart with opts persists new fields", () => {
+    setStateMinimalSlide()
+    useProjectStore.getState().addChart("s1", "q1", ["edad"], "PIE_GROUPED", {
+      show_legend: true, grid_cols: 2,
+      title: "Plazo del crédito",
+      cat_titles: { "18-39": "Jóvenes", "40-59": "Adultos" },
+    })
+    const c = useProjectStore.getState().state!.slides[0].charts[0]
+    expect(c.chart_type).toBe("PIE_GROUPED")
+    expect(c.show_legend).toBe(true)
+    expect(c.grid_cols).toBe(2)
+    expect(c.title).toBe("Plazo del crédito")
+    expect(c.cat_titles).toEqual({ "18-39": "Jóvenes", "40-59": "Adultos" })
+  })
+
+  it("addChart without opts uses schema defaults", () => {
+    setStateMinimalSlide()
+    useProjectStore.getState().addChart("s1", "q1", [], "PIE")
+    const c = useProjectStore.getState().state!.slides[0].charts[0]
+    expect(c.show_legend).toBe(false)
+    expect(c.grid_cols).toBeNull()
+    expect(c.title).toBeNull()
+    expect(c.cat_titles).toBeNull()
+  })
+
+  it("updateChartField patches only the targeted field", () => {
+    setStateMinimalSlide()
+    useProjectStore.getState().addChart("s1", "q1", ["edad"], "PIE_GROUPED", {
+      show_legend: false, grid_cols: 3, title: null,
+    })
+    const cId = useProjectStore.getState().state!.slides[0].charts[0].id
+    useProjectStore.getState().updateChartField("s1", cId, "show_legend", true)
+    const c2 = useProjectStore.getState().state!.slides[0].charts[0]
+    expect(c2.show_legend).toBe(true)
+    expect(c2.grid_cols).toBe(3)
+    expect(c2.title).toBeNull()
+  })
+})

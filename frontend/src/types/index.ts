@@ -37,6 +37,7 @@ export interface Chart {
   show_legend: boolean
   grid_cols: number | null
   title: string | null
+  cat_titles: Record<string, string> | null
   colors: string[]
 }
 
