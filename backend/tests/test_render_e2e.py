@@ -153,7 +153,14 @@ def test_e2e_table_with_minibars_renders_single_panel_table(tmp_path, monkeypatc
     build_pptx(state, str(out))
 
     prs = Presentation(str(out))
-    slides_with_tables = [s for s in prs.slides if any(sh.has_table for sh in s.shapes)]
-    assert slides_with_tables, "expected at least one table shape rendered"
-    slides_with_charts = [s for s in prs.slides if any(sh.has_chart for sh in s.shapes)]
-    assert not slides_with_charts, "expected NO chart shape (TABLE_WITH_MINIBARS routes to table)"
+    found = False
+    for s in prs.slides:
+        from lxml.etree import tostring
+        xml = tostring(s.shapes._spTree, encoding="unicode")
+        if 'progId="Excel.Sheet.12"' in xml:
+            found = True
+            break
+    assert found, "expected at least one OLE Excel object on a slide"
+    # Fase C: NO python-pptx table
+    for s in prs.slides:
+        assert not any(sh.has_table for sh in s.shapes)
