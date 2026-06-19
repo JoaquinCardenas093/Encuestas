@@ -51,8 +51,9 @@ class Chart(BaseModel):
     breakdown_ids: list[str] = Field(default_factory=list)
     chart_type: ChartType
     show_legend: bool = False
-    grid_cols: int | None = None
+    grid_cols: int | None = Field(default=None, ge=1)
     title: str | None = None
+    cat_titles: dict[str, str] | None = None
     colors: list[str] = Field(default_factory=list)
 
     @model_validator(mode="before")

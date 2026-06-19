@@ -177,3 +177,46 @@ def test_chart_accepts_new_fields_set():
     assert c.show_legend is True
     assert c.grid_cols == 2
     assert c.title == "Plazo del crédito"
+
+
+# ── Task 1 (B1): cat_titles + grid_cols validator ────────────────────────────
+
+def test_chart_accepts_cat_titles_dict():
+    from aurum_encuestas.models import Chart
+    c = Chart.model_validate({
+        "id": "c1", "question_id": "q1", "breakdown_ids": ["edad"],
+        "chart_type": "PIE_GROUPED",
+        "cat_titles": {"18-39": "Jóvenes", "40-59": "Adultos"},
+    })
+    assert c.cat_titles == {"18-39": "Jóvenes", "40-59": "Adultos"}
+
+
+def test_chart_cat_titles_default_none():
+    from aurum_encuestas.models import Chart
+    c = Chart.model_validate({"id":"c1","question_id":"q1","breakdown_ids":[],"chart_type":"PIE"})
+    assert c.cat_titles is None
+
+
+def test_chart_grid_cols_rejects_zero():
+    import pytest
+    from pydantic import ValidationError
+    from aurum_encuestas.models import Chart
+    with pytest.raises(ValidationError):
+        Chart.model_validate({"id":"c1","question_id":"q1","breakdown_ids":[],
+                              "chart_type":"PIE_GROUPED","grid_cols":0})
+
+
+def test_chart_grid_cols_rejects_negative():
+    import pytest
+    from pydantic import ValidationError
+    from aurum_encuestas.models import Chart
+    with pytest.raises(ValidationError):
+        Chart.model_validate({"id":"c1","question_id":"q1","breakdown_ids":[],
+                              "chart_type":"PIE_GROUPED","grid_cols":-3})
+
+
+def test_chart_grid_cols_accepts_positive():
+    from aurum_encuestas.models import Chart
+    c = Chart.model_validate({"id":"c1","question_id":"q1","breakdown_ids":[],
+                              "chart_type":"PIE_GROUPED","grid_cols":3})
+    assert c.grid_cols == 3
