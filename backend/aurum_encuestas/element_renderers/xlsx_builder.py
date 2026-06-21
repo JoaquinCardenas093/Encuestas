@@ -127,6 +127,8 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
         for c in range(data_start, data_end + 1):
             ws.column_dimensions[get_column_letter(c)].width = DATA_COL_W
 
+        # Explicit narrow width for spacer col between bds
+        ws.column_dimensions[get_column_letter(data_end + 1)].width = 2
         cur_col = data_end + 2
 
     ws.row_dimensions[HEADER_ROW].height = 24

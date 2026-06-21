@@ -94,8 +94,10 @@ def test_palette_dark_header_white_body():
     assert hp[0] < 130 and hp[1] < 130 and hp[2] < 130, \
         f"expected dark header pixel at ({hx},{hy}), got {hp}"
     # Body row pixel must be white (FFFFFF). Old code used GRAY=(127,127,127) body fill
-    # which would FAIL this assertion. Sample 80px down from top (past header band).
-    body_y = min(h - 5, 80)
+    # which would FAIL this assertion. Sample DEEP inside the option-row band, past
+    # the cat sub-header which is also HEADER_DARK. Layout: hdr 28 + cat 24 + count 22 = 74.
+    # First option row starts at y=74; sample at y=100 to be safely inside.
+    body_y = min(h - 5, 100)
     bp = img.getpixel((hx, body_y))
     assert bp[0] > 240 and bp[1] > 240 and bp[2] > 240, \
         f"expected white body pixel at ({hx},{body_y}), got {bp}"

@@ -57,7 +57,7 @@ def embed_ole_xlsx_with_preview(
         with_spid=False,
     )
 
-    xml = f"""<p:graphicFrame {nsmap_decl}>
+    xml = f"""<p:graphicFrame {nsmap_decl} mc:Ignorable="v">
   <p:nvGraphicFramePr>
     <p:cNvPr id="{nv_id}" name="OLEObject {nv_id}"/>
     <p:cNvGraphicFramePr>

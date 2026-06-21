@@ -106,13 +106,18 @@ def test_databar_per_bd_panel_scoped():
     for cf_range, rules in ws.conditional_formatting._cf_rules.items():
         for rule in rules:
             if getattr(rule, "dataBar", None) is not None:
-                bar_ranges.append(str(cf_range))
-    # Each bd's data range gets its own bar rules; no range spans across bds
-    assert all("A" not in r and "C" not in r for r in bar_ranges) or any("B" in r for r in bar_ranges)
-    # No bar range covers col D (spacer) or both bd panels at once
+                bar_ranges.append(str(cf_range.sqref))
+    import re
+    assert bar_ranges, "expected at least one databar rule"
+    # Each range must match pattern: single col letter, single row, OR <col><row>:<col><row> within same bd
+    # Edad bd cols: B (1 cat). Sexo bd cols: E (1 cat). Spacer col D must never appear.
+    # openpyxl normalises "B5:B5" → "B5" (single-cell sqref), so allow both forms.
+    edad_pattern = re.compile(r"^[BC]\d+(:[BC]\d+)?$")
+    sexo_pattern = re.compile(r"^[EF]\d+(:[EF]\d+)?$")
     for r in bar_ranges:
-        # A databar range like "B5:B5" or "E5:E5" — never crosses the spacer col D
         assert "D" not in r, f"databar range {r} spans into spacer col D"
+        assert edad_pattern.match(r) or sexo_pattern.match(r), \
+            f"databar range {r} does not match expected per-bd pattern (Edad=[BC] or Sexo=[EF])"
 
 
 def test_hex_palette_applied():

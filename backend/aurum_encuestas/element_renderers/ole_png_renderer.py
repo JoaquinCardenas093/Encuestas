@@ -49,13 +49,21 @@ def render_table_preview_png(
 
     # Layout: per-panel label col + N cat cols, with horizontal gap between panels
     gap_px = 15
-    label_col_w = 95
     n_bds = len(bds)
     total_cats = sum(len(bd.get("categories", {}) or {}) for _, bd in bds)
     content_w = w_px - 10
-    # Compute cell_w so all panels fit
-    per_panel_overhead = label_col_w
-    available_for_cats = content_w - per_panel_overhead * n_bds - gap_px * (n_bds - 1)
+
+    # Try preferred label_col_w; shrink if necessary so cell_w >= 45
+    preferred_label_w = 95
+    min_label_w = 40
+    label_col_w = preferred_label_w
+    while label_col_w >= min_label_w:
+        available_for_cats = content_w - label_col_w * n_bds - gap_px * (n_bds - 1)
+        if available_for_cats >= total_cats * 45:
+            break
+        label_col_w -= 5
+    label_col_w = max(min_label_w, label_col_w)
+    available_for_cats = content_w - label_col_w * n_bds - gap_px * (n_bds - 1)
     cell_w = max(45, available_for_cats // max(total_cats, 1))
 
     row_hdr = 28
