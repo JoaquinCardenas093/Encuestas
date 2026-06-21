@@ -93,6 +93,12 @@ def test_palette_dark_header_white_body():
     hp = img.getpixel((hx, hy))
     assert hp[0] < 130 and hp[1] < 130 and hp[2] < 130, \
         f"expected dark header pixel at ({hx},{hy}), got {hp}"
+    # Body row pixel must be white (FFFFFF). Old code used GRAY=(127,127,127) body fill
+    # which would FAIL this assertion. Sample 80px down from top (past header band).
+    body_y = min(h - 5, 80)
+    bp = img.getpixel((hx, body_y))
+    assert bp[0] > 240 and bp[1] > 240 and bp[2] > 240, \
+        f"expected white body pixel at ({hx},{body_y}), got {bp}"
 
 
 def test_multi_bd_renders_n_panels_with_gap():
@@ -121,9 +127,15 @@ def test_multi_bd_renders_n_panels_with_gap():
     # Scan a horizontal line through the header band; expect:
     # dark, white-gap, dark
     y = 5
-    pixels = [img.getpixel((x, y)) for x in range(0, w, max(w // 40, 1))]
-    dark_count = sum(1 for p in pixels if p[0] < 130)
-    white_count = sum(1 for p in pixels if p[0] > 240)
-    # Both regions present (panels are dark; gap between them is white)
-    assert dark_count > 0
-    assert white_count > 0
+    pixels = [img.getpixel((x, y)) for x in range(0, w, max(w // 80, 1))]
+    # Compress to run-length: collect transitions dark↔white
+    runs = []
+    prev_state = None
+    for p in pixels:
+        state = "D" if p[0] < 130 else ("W" if p[0] > 240 else None)
+        if state and state != prev_state:
+            runs.append(state)
+            prev_state = state
+    # Must see at least D, W, D — two distinct dark clusters with white gap between
+    dark_runs = sum(1 for r in runs if r == "D")
+    assert dark_runs >= 2, f"expected >=2 dark panels separated by white gap; runs={runs}"
