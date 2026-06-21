@@ -5,7 +5,6 @@ a custom preview image. We build the part + relationships + graphicFrame XML
 directly.
 """
 from lxml import etree
-from lxml.etree import cleanup_namespaces
 from pptx.opc.constants import CONTENT_TYPE as CT
 from pptx.opc.constants import RELATIONSHIP_TYPE as RT
 from pptx.opc.package import Part
@@ -21,17 +20,21 @@ def embed_ole_xlsx_with_preview(
     x: int, y: int, w: int, h: int,
     xlsx_bytes: bytes, png_bytes: bytes,
 ) -> None:
-    """Append an OLE xlsx graphicFrame with a PNG preview to slide."""
+    """Append an OLE xlsx graphicFrame with PNG preview to slide.
+
+    Uses the standard OOXML mc:AlternateContent wrapper with mc:Choice
+    (Office 2010+ with VML fallback) and mc:Fallback (legacy OOXML).
+    """
     slide_part = slide.part
     package = slide_part.package
 
     xlsx_partname = _next_partname(package, "/ppt/embeddings/oleObject{}.xlsx")
     xlsx_part = Part(xlsx_partname, CT_XLSX, package, xlsx_bytes)
-    rId_xlsx = slide_part.relate_to(xlsx_part, RT.OLE_OBJECT)
+    rid_xlsx = slide_part.relate_to(xlsx_part, RT.OLE_OBJECT)
 
     png_partname = _next_partname(package, "/ppt/media/image{}.png")
     png_part = Part(png_partname, CT.PNG, package, png_bytes)
-    rId_img = slide_part.relate_to(png_part, RT.IMAGE)
+    rid_img = slide_part.relate_to(png_part, RT.IMAGE)
 
     spTree = slide.shapes._spTree
     nv_id = _next_shape_id(spTree)
@@ -39,7 +42,19 @@ def embed_ole_xlsx_with_preview(
     nsmap_decl = (
         'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
         'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
-        'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"'
+        'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" '
+        'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"'
+    )
+
+    choice_oleobj = _render_oleobj_xml(
+        rid_xlsx=rid_xlsx, rid_img=rid_img,
+        w=w, h=h, nv_id=nv_id,
+        with_spid=True,
+    )
+    fallback_oleobj = _render_oleobj_xml(
+        rid_xlsx=rid_xlsx, rid_img=rid_img,
+        w=w, h=h, nv_id=nv_id,
+        with_spid=False,
     )
 
     xml = f"""<p:graphicFrame {nsmap_decl}>
@@ -56,34 +71,55 @@ def embed_ole_xlsx_with_preview(
   </p:xfrm>
   <a:graphic>
     <a:graphicData uri="http://schemas.openxmlformats.org/presentationml/2006/ole">
-      <p:oleObj spid="_x0000_s{nv_id}" name="" r:id="{rId_xlsx}" imgW="{int(w)}" imgH="{int(h)}" progId="{PROG_ID}">
-        <p:embed followColorScheme="full"/>
-        <p:pic>
-          <p:nvPicPr>
-            <p:cNvPr id="0" name=""/>
-            <p:cNvPicPr/>
-            <p:nvPr/>
-          </p:nvPicPr>
-          <p:blipFill>
-            <a:blip r:embed="{rId_img}"/>
-            <a:stretch><a:fillRect/></a:stretch>
-          </p:blipFill>
-          <p:spPr>
-            <a:xfrm>
-              <a:off x="{int(x)}" y="{int(y)}"/>
-              <a:ext cx="{int(w)}" cy="{int(h)}"/>
-            </a:xfrm>
-            <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
-          </p:spPr>
-        </p:pic>
-      </p:oleObj>
+      <mc:AlternateContent>
+        <mc:Choice xmlns:v="urn:schemas-microsoft-com:vml" Requires="v">
+          {choice_oleobj}
+        </mc:Choice>
+        <mc:Fallback>
+          {fallback_oleobj}
+        </mc:Fallback>
+      </mc:AlternateContent>
     </a:graphicData>
   </a:graphic>
 </p:graphicFrame>"""
 
     graphic_frame = etree.fromstring(xml)
-    cleanup_namespaces(graphic_frame, top_nsmap=spTree.nsmap)
+    # NOTE: do NOT call cleanup_namespaces — it would strip xmlns:v from mc:Choice.
     spTree.append(graphic_frame)
+
+
+def _render_oleobj_xml(
+    *, rid_xlsx: str, rid_img: str,
+    w: int, h: int, nv_id: int,
+    with_spid: bool,
+) -> str:
+    """Return one <p:oleObj> XML fragment.
+
+    Choice branch: with_spid=True (also lives inside a mc:Choice declaring xmlns:v).
+    Fallback branch: with_spid=False.
+    """
+    spid_attr = f'spid="_x0000_s{nv_id}" ' if with_spid else ""
+    return f"""<p:oleObj {spid_attr}name="" r:id="{rid_xlsx}" imgW="{int(w)}" imgH="{int(h)}" progId="{PROG_ID}">
+            <p:embed followColorScheme="full"/>
+            <p:pic>
+              <p:nvPicPr>
+                <p:cNvPr id="0" name=""/>
+                <p:cNvPicPr/>
+                <p:nvPr/>
+              </p:nvPicPr>
+              <p:blipFill>
+                <a:blip r:embed="{rid_img}"/>
+                <a:stretch><a:fillRect/></a:stretch>
+              </p:blipFill>
+              <p:spPr bwMode="auto">
+                <a:xfrm>
+                  <a:off x="0" y="0"/>
+                  <a:ext cx="{int(w)}" cy="{int(h)}"/>
+                </a:xfrm>
+                <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+              </p:spPr>
+            </p:pic>
+          </p:oleObj>"""
 
 
 def _next_partname(package, template: str) -> PackURI:

@@ -111,3 +111,75 @@ def test_round_trip_save_and_reopen_succeeds():
     assert len(xlsx_parts) == 1
     # Its blob is the original xlsx bytes (xlsx file magic = b"PK\x03\x04")
     assert xlsx_parts[0].blob[:4] == b"PK\x03\x04"
+
+
+def test_graphic_frame_contains_mc_alternate_content():
+    from aurum_encuestas.element_renderers.ole_embedder import embed_ole_xlsx_with_preview
+    _prs, slide = _make_slide()
+    embed_ole_xlsx_with_preview(
+        slide, x=0, y=0, w=4_572_000, h=2_286_000,
+        xlsx_bytes=_xlsx_bytes(), png_bytes=_png_bytes(),
+    )
+    from lxml.etree import tostring
+    xml = tostring(slide.shapes._spTree, encoding="unicode")
+    assert "AlternateContent" in xml
+    assert "Choice" in xml
+    assert "Fallback" in xml
+
+
+def test_choice_has_xmlns_v_and_spid():
+    from aurum_encuestas.element_renderers.ole_embedder import embed_ole_xlsx_with_preview
+    _prs, slide = _make_slide()
+    embed_ole_xlsx_with_preview(
+        slide, x=0, y=0, w=4_572_000, h=2_286_000,
+        xlsx_bytes=_xlsx_bytes(), png_bytes=_png_bytes(),
+    )
+    from lxml.etree import tostring
+    xml = tostring(slide.shapes._spTree, encoding="unicode")
+    # Find the Choice block and confirm both xmlns:v and a spid attribute
+    assert 'xmlns:v="urn:schemas-microsoft-com:vml"' in xml
+    assert 'spid="_x0000_s' in xml
+
+
+def test_fallback_branch_has_no_spid():
+    """Fallback oleObj has no spid attribute (only Choice carries spid)."""
+    from aurum_encuestas.element_renderers.ole_embedder import embed_ole_xlsx_with_preview
+    from lxml import etree
+    _prs, slide = _make_slide()
+    embed_ole_xlsx_with_preview(
+        slide, x=0, y=0, w=4_572_000, h=2_286_000,
+        xlsx_bytes=_xlsx_bytes(), png_bytes=_png_bytes(),
+    )
+    # Re-parse to plain lxml element so xpath() accepts namespaces= kwarg
+    root = etree.fromstring(etree.tostring(slide.shapes._spTree))
+    # Locate Fallback element via XPath with namespaces
+    nsmap = {
+        "mc": "http://schemas.openxmlformats.org/markup-compatibility/2006",
+        "p": "http://schemas.openxmlformats.org/presentationml/2006/main",
+    }
+    fallback = root.xpath(".//mc:Fallback//p:oleObj", namespaces=nsmap)
+    assert len(fallback) == 1
+    assert fallback[0].get("spid") is None
+
+
+def test_both_branches_reference_same_xlsx_rid():
+    """Choice and Fallback oleObj both reference the same xlsx r:id."""
+    from aurum_encuestas.element_renderers.ole_embedder import embed_ole_xlsx_with_preview
+    from lxml import etree
+    _prs, slide = _make_slide()
+    embed_ole_xlsx_with_preview(
+        slide, x=0, y=0, w=4_572_000, h=2_286_000,
+        xlsx_bytes=_xlsx_bytes(), png_bytes=_png_bytes(),
+    )
+    # Re-parse to plain lxml element so xpath() accepts namespaces= kwarg
+    root = etree.fromstring(etree.tostring(slide.shapes._spTree))
+    nsmap = {
+        "mc": "http://schemas.openxmlformats.org/markup-compatibility/2006",
+        "p": "http://schemas.openxmlformats.org/presentationml/2006/main",
+        "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+    }
+    choice_oleobj = root.xpath(".//mc:Choice/p:oleObj", namespaces=nsmap)
+    fallback_oleobj = root.xpath(".//mc:Fallback/p:oleObj", namespaces=nsmap)
+    rid_key = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"
+    assert len(choice_oleobj) == 1 and len(fallback_oleobj) == 1
+    assert choice_oleobj[0].get(rid_key) == fallback_oleobj[0].get(rid_key)
