@@ -418,7 +418,7 @@ def test_builtin_has_table_only_full_width_pattern():
     matched = [p for p in BUILTIN_STYLE_GUIDE.patterns if p.id == "table_only_full_width"]
     assert len(matched) == 1, f"expected exactly one table_only_full_width pattern; got {len(matched)}"
     p = matched[0]
-    assert p.priority == 10
+    assert p.priority == -10
     elements = list(p.implementation.elements)
     assert len(elements) == 1
     el = elements[0]

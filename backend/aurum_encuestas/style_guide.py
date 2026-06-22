@@ -555,7 +555,7 @@ BUILTIN_STYLE_GUIDE = StyleGuide.model_validate({
         # Binary question + ≥1 breakdown → single full-width TABLE_WITH_MINIBARS
         {
             "id": "table_only_full_width",
-            "priority": 10,
+            "priority": -10,
             "trigger": {
                 "$and": [
                     {"field": "question_type", "$eq": "binary"},
