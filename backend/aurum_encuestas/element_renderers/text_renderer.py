@@ -107,11 +107,22 @@ def _resolve_content(content_source: dict, ctx: RenderContext) -> str | None:
             return matching[idx].text
         return matching[0].text
     if source_type == "computed":
-        # `field` reads an attribute off the slide_config (e.g. "title").
+        # `field` reads an attribute off the slide_config OR a chart.
+        # scope="slide" (default) → ctx.slide_config.<field>
+        # scope="chart" + ref_index → ctx.slide_config.charts[ref_index].<field>
         # Returns None if empty so renderer skips drawing.
         field = content_source.get("field")
         if field:
-            val = getattr(ctx.slide_config, field, None)
+            scope = content_source.get("scope", "slide")
+            if scope == "chart":
+                ref_index = content_source.get("ref_index", 0)
+                charts = getattr(ctx.slide_config, "charts", []) or []
+                if 0 <= ref_index < len(charts):
+                    val = getattr(charts[ref_index], field, None)
+                else:
+                    val = None
+            else:
+                val = getattr(ctx.slide_config, field, None)
             if val is None or (isinstance(val, str) and not val.strip()):
                 return None
             return str(val)
