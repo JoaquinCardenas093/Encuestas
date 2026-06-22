@@ -239,7 +239,7 @@ def render(slide, element: dict, ctx: RenderContext) -> None:
     _apply_series_colors(chart, effective_colors)
 
     # Apply labels — pie/donut force show_category_name + show_percentage, NO value.
-    labels_cfg = dict(element.get("labels", {}))
+    labels_cfg = dict(element.get("labels") or {})
     if is_pie:
         labels_cfg["show_category_name"] = True  # Always show category name for pie
         labels_cfg["show_percentage"] = True  # Always show percentage for pie
