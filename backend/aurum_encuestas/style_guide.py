@@ -570,7 +570,7 @@ BUILTIN_STYLE_GUIDE = StyleGuide.model_validate({
                         "kind": "text",
                         "id": "section_subtitle",
                         "position": {"x_rel": 0.0, "y_rel": 0.05, "w_rel": 1.0, "h_rel": 0.08},
-                        "content_source": {"type": "computed", "field": "title"},
+                        "content_source": {"type": "computed", "scope": "chart", "ref_index": 0, "field": "title"},
                         "style": {"font_size": 16, "bold": True, "align_h": "center"},
                     },
                     {
