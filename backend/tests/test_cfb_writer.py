@@ -131,30 +131,34 @@ def test_dir_entries_sorted_by_msfb_rule():
     ole.close()
 
 
-def test_dir_tree_balanced_depth_bounded():
-    """Tree depth ≤ ceil(log2(N+1)) + 1 for N=4 non-Root entries → max depth 3."""
-    from math import ceil, log2
+def test_dir_tree_is_right_leaning_all_black_chain():
+    """Mac OLE activation tolerates right-leaning all-BLACK chain (Fase E
+    baseline). Fase F's depth-alternating colors broke double-click on Mac."""
+    from aurum_encuestas.element_renderers.cfb_writer import build_excel_ole_cfb
+    NIL = 0xFFFFFFFF
+    cfb = build_excel_ole_cfb(_make_xlsx_bytes())
+    ole = olefile.OleFileIO(BytesIO(cfb))
+    cur = ole.direntries[0].sid_child
+    assert cur != NIL, "Root.child must point to first non-root entry"
+    seen = 0
+    while cur != NIL:
+        e = ole.direntries[cur]
+        assert e.color == 1, f"entry {cur} color must be BLACK (1), got {e.color}"
+        assert e.sid_left == NIL, f"entry {cur} left_sib must be NIL"
+        cur = e.sid_right
+        seen += 1
+        assert seen <= 10, "chain too long — likely loop"
+    assert seen == 4, f"expected 4 entries in chain, got {seen}"
+    ole.close()
+
+
+def test_compobj_header_matches_real_office():
+    """Office-generated CompObj starts with 01 00 FE FF [version DWORD]
+    FF FF FF FF [CLSID]. Verifies first 12 bytes match real Office layout."""
     from aurum_encuestas.element_renderers.cfb_writer import build_excel_ole_cfb
     cfb = build_excel_ole_cfb(_make_xlsx_bytes())
     ole = olefile.OleFileIO(BytesIO(cfb))
-    # Find the root child of the Root Entry
-    root_entry = ole.direntries[0]
-    root_child_id = root_entry.sid_child
-
-    def depth_of(idx, visited=None):
-        if idx == 0xFFFFFFFF or idx is None:
-            return 0
-        visited = visited or set()
-        if idx in visited:
-            return 0
-        visited.add(idx)
-        e = ole.direntries[idx]
-        if e is None:
-            return 0
-        return 1 + max(depth_of(e.sid_left, visited), depth_of(e.sid_right, visited))
-
-    depth = depth_of(root_child_id)
-    n_entries = sum(1 for e in ole.direntries[1:] if e is not None)
-    max_allowed = int(ceil(log2(n_entries + 1))) + 1
-    assert depth <= max_allowed, f"tree depth {depth} > max {max_allowed} for N={n_entries}"
+    co = ole.openstream("\x01CompObj").read()
+    assert co[:4] == b"\x01\x00\xFE\xFF", f"CompObj[0:4]={co[:4].hex()}"
+    assert co[8:12] == b"\xFF\xFF\xFF\xFF", f"CompObj[8:12]={co[8:12].hex()}"
     ole.close()
