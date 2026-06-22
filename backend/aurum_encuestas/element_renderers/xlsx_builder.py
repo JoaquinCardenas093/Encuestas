@@ -130,7 +130,6 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
             obs.fill = body_fill
             obs.font = body_font_bold_11
             obs.alignment = right
-            obs.border = label_border
 
         for i, (_, opt_cells) in enumerate(cats.items()):
             total = sum(int((opt_cells.get(o) or {}).get("count") or 0) for o in options)
@@ -151,7 +150,6 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
                 lbl.fill = body_fill
                 lbl.font = body_font_bold_11
                 lbl.alignment = right
-                lbl.border = label_border
 
             is_last_opt = (j == n_opts - 1)
             for i, (_, opt_cells) in enumerate(cats.items()):

@@ -123,15 +123,18 @@ def render_table_preview_png(
     y_opt0 = y_count + row_count
 
     cur_x = 5
-    for bd_id, bd in bds:
+    for bd_index, (bd_id, bd) in enumerate(bds):
         cats = bd.get("categories", {}) or {}
         n_cats = len(cats)
         if n_cats == 0:
             continue
-        panel_w = effective_label_w + cell_w * n_cats
+        # Only the FIRST bd renders the label col when show_legend=True.
+        # Subsequent bds share the first's leyenda visually (no own col).
+        bd_eff_label_w = effective_label_w if (show_legend and bd_index == 0) else 0
+        panel_w = bd_eff_label_w + cell_w * n_cats
 
         # Group header band — DATA cols only (excludes label col per design target)
-        hdr_x = cur_x + effective_label_w
+        hdr_x = cur_x + bd_eff_label_w
         hdr_w = cell_w * n_cats
         draw.rectangle([hdr_x, y_hdr, hdr_x + hdr_w, y_hdr + row_hdr], fill=HEADER_DARK)
         _centered_text(draw, bd.get("label") or bd_id, font_hdr, TEXT_WHITE,
@@ -139,18 +142,18 @@ def render_table_preview_png(
 
         # Cat sub-headers — data cols only (label col empty in cat row)
         for i, (cat_label, _) in enumerate(cats.items()):
-            cx = cur_x + effective_label_w + i * cell_w
+            cx = cur_x + bd_eff_label_w + i * cell_w
             draw.rectangle([cx, y_cat, cx + cell_w, y_cat + row_cat], fill=HEADER_DARK)
             _centered_text(draw, cat_label, font_cat, TEXT_WHITE, cx, y_cat, cell_w, row_cat)
 
-        # Counts row: label col = "Observaciones", data cols = totals
-        if show_legend:
+        # Counts row: label col = "Observaciones" (only first bd), data cols = totals
+        if bd_eff_label_w > 0:
             lx = cur_x
-            draw.rectangle([lx, y_count, lx + effective_label_w, y_count + row_count], fill=BG_WHITE)
+            draw.rectangle([lx, y_count, lx + bd_eff_label_w, y_count + row_count], fill=BG_WHITE)
             _centered_text(draw, "Observaciones", font_lbl, TEXT_BLACK,
-                           lx, y_count, effective_label_w, row_count, align="right")
+                           lx, y_count, bd_eff_label_w, row_count, align="right")
         for i, (_, opt_cells) in enumerate(cats.items()):
-            cx = cur_x + effective_label_w + i * cell_w
+            cx = cur_x + bd_eff_label_w + i * cell_w
             total = sum(int((opt_cells.get(o) or {}).get("count") or 0) for o in options)
             draw.rectangle([cx, y_count, cx + cell_w, y_count + row_count], fill=BG_WHITE)
             _centered_text(draw, str(total) if total else "", font_count, TEXT_BLACK,
@@ -160,15 +163,15 @@ def render_table_preview_png(
         for j, opt in enumerate(options):
             oy = y_opt0 + j * row_opt
 
-            # Label col
-            if show_legend:
+            # Label col (only first bd)
+            if bd_eff_label_w > 0:
                 lx = cur_x
-                draw.rectangle([lx, oy, lx + effective_label_w, oy + row_opt], fill=BG_WHITE)
+                draw.rectangle([lx, oy, lx + bd_eff_label_w, oy + row_opt], fill=BG_WHITE)
                 _centered_text(draw, opt, font_lbl, TEXT_BLACK,
-                               lx, oy, effective_label_w, row_opt, align="right")
+                               lx, oy, bd_eff_label_w, row_opt, align="right")
 
             for i, (_, opt_cells) in enumerate(cats.items()):
-                cx = cur_x + effective_label_w + i * cell_w
+                cx = cur_x + bd_eff_label_w + i * cell_w
                 pct = float((opt_cells.get(opt) or {}).get("pct") or 0)
                 draw.rectangle([cx, oy, cx + cell_w, oy + row_opt], fill=BG_WHITE)
 
