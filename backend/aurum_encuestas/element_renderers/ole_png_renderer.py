@@ -11,7 +11,7 @@ BG_WHITE = (255, 255, 255)
 TEXT_BLACK = (0, 0, 0)
 TEXT_WHITE = (255, 255, 255)
 BAR_GRAY = (217, 217, 217)
-BORDER_GRAY = (191, 191, 191)
+BORDER_GRAY = (0, 0, 0)  # black (matches xlsx BORDER_HEX)
 
 # Font candidates: try Calibri (Windows / installed), Arial Bold (macOS Supplemental),
 # Helvetica (macOS System), in order. Fall back to PIL default bitmap.
@@ -183,14 +183,9 @@ def render_table_preview_png(
                 draw.line([(cx, oy + row_opt - 1), (cx + cell_w, oy + row_opt - 1)],
                           fill=BORDER_GRAY, width=1)
 
-                # Text right-aligned with indent, overlays bar.
+                # Text left-aligned with indent, overlays bar from left.
                 pct_text = f"{pct * 100:.1f}%"
-                try:
-                    tbbox = draw.textbbox((0, 0), pct_text, font=font_opt)
-                    tw = tbbox[2] - tbbox[0]
-                except Exception:
-                    tw = len(pct_text) * 7
-                tx = cx + cell_w - tw - 6
+                tx = cx + 6
                 draw.text((tx, oy + (row_opt - 14) // 2), pct_text, font=font_opt, fill=TEXT_BLACK)
 
         cur_x += panel_w + gap_px
