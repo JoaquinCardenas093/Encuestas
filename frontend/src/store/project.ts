@@ -97,14 +97,18 @@ interface Store {
 }
 
 function applyTitleInheritance(slides: Slide[]): Slide[] {
-  // every shell slide inherits the most recent separator's title
+  // Shell slides inherit the most recent separator's title ONLY if their own
+  // title is null/empty (never edited). User-set shell titles preserved.
   let currentTitle: string | null = null
   return slides.map((s) => {
     if (s.type === "separator") {
       currentTitle = s.title
       return s
     }
-    return { ...s, title: currentTitle }
+    if (s.title == null || s.title === "") {
+      return { ...s, title: currentTitle }
+    }
+    return s
   })
 }
 
