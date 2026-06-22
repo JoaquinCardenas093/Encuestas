@@ -334,7 +334,15 @@ def _apply_training_style(chart, chart_type: str, specific_style: dict | None = 
     If specific_style provided (from a matched layout), use it. Else aggregate from bank."""
     # M6.2: training_extractor removed; chart_style comes from specific_style only.
     # Full color resolution from style_guide planned in M6.4 (color_resolver).
-    style = specific_style or {}
+    style = dict(specific_style or {})
+    # Auto-defaults so legacy fallback preserves PIE/DONUT labels.
+    if chart_type in ("PIE", "DONUT") and not style:
+        style = {
+            "has_data_labels": True,
+            "show_value": False,
+            "show_percent": True,
+            "show_cat_name": True,
+        }
     if not style:
         return
 
