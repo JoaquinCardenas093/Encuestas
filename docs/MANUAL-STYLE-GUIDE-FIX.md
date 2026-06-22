@@ -1,5 +1,24 @@
 # Manual fix: remove "Distribución general/segmentada" split from active style_guide
 
+## Quick reset (recommended)
+
+Delete your active style_guide.json entirely:
+
+```bash
+rm ~/.aurum/training/style_guide.json
+```
+
+The renderer falls back to the BUILTIN style guide, which includes a
+clean `table_only_full_width` pattern for TABLE_WITH_MINIBARS + breakdown
+slides. No manual JSON editing required.
+
+You can re-run training (`/api/training/analyze`) later if you want
+AI-generated patterns again.
+
+---
+
+## Manual fix (legacy fallback)
+
 If your current `~/.aurum/training/style_guide.json` was generated before Fase E
 of the chart-catalog overhaul, it likely contains a pattern with four elements:
 

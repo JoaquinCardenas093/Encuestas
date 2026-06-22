@@ -233,8 +233,8 @@ def test_builtin_is_valid_style_guide():
     assert BUILTIN_STYLE_GUIDE.is_builtin is True
 
 
-def test_builtin_has_six_patterns():
-    assert len(BUILTIN_STYLE_GUIDE.patterns) == 6
+def test_builtin_has_seven_patterns():
+    assert len(BUILTIN_STYLE_GUIDE.patterns) == 7
 
 
 def test_builtin_pattern_ids():
@@ -245,6 +245,7 @@ def test_builtin_pattern_ids():
     assert "multi_choice_large" in ids
     assert "comparison_two_charts" in ids
     assert "n_charts_grid" in ids
+    assert "table_only_full_width" in ids
 
 
 def test_builtin_patterns_have_valid_triggers():
@@ -410,3 +411,20 @@ def test_style_guide_default_available_chart_types_phase_b_is_five():
         "BAR_HORIZONTAL", "BAR_HORIZONTAL_GROUPED",
         "TABLE_WITH_MINIBARS",
     ]
+
+
+def test_builtin_has_table_only_full_width_pattern():
+    from aurum_encuestas.style_guide import BUILTIN_STYLE_GUIDE
+    matched = [p for p in BUILTIN_STYLE_GUIDE.patterns if p.id == "table_only_full_width"]
+    assert len(matched) == 1, f"expected exactly one table_only_full_width pattern; got {len(matched)}"
+    p = matched[0]
+    assert p.priority == 10
+    elements = list(p.implementation.elements)
+    assert len(elements) == 1
+    el = elements[0]
+    # el may be a pydantic model — access via attribute or .model_dump()
+    el_dict = el.model_dump() if hasattr(el, "model_dump") else el
+    assert el_dict["kind"] == "chart"
+    assert el_dict["chart_type"] == "TABLE_WITH_MINIBARS"
+    assert el_dict["position"]["x_rel"] == 0.04
+    assert el_dict["position"]["w_rel"] == 0.92
