@@ -11,6 +11,40 @@ BG_WHITE = (255, 255, 255)
 TEXT_BLACK = (0, 0, 0)
 TEXT_WHITE = (255, 255, 255)
 BAR_GRAY = (217, 217, 217)
+BORDER_GRAY = (191, 191, 191)
+
+# Font candidates: try Calibri (Windows / installed), Arial Bold (macOS Supplemental),
+# Helvetica (macOS System), in order. Fall back to PIL default bitmap.
+_FONT_BOLD_CANDIDATES = (
+    "Calibri Bold.ttf",
+    "Calibrib.ttf",
+    "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+    "/Library/Fonts/Arial Bold.ttf",
+    "/System/Library/Fonts/HelveticaNeue.ttc",
+    "/System/Library/Fonts/Helvetica.ttc",
+    "Arial Bold",
+    "Helvetica",
+)
+_FONT_REG_CANDIDATES = (
+    "Calibri.ttf",
+    "Calibri",
+    "/System/Library/Fonts/Supplemental/Arial.ttf",
+    "/Library/Fonts/Arial.ttf",
+    "/System/Library/Fonts/HelveticaNeue.ttc",
+    "/System/Library/Fonts/Helvetica.ttc",
+    "Arial",
+    "Helvetica",
+)
+
+
+def _load_font(candidates, size, default):
+    """Try each candidate path/name; return first that loads or default."""
+    for c in candidates:
+        try:
+            return ImageFont.truetype(c, size)
+        except (IOError, OSError):
+            continue
+    return default
 
 
 def render_table_preview_png(
@@ -39,14 +73,11 @@ def render_table_preview_png(
         default_font = ImageFont.load_default_imagefont()
     else:
         default_font = ImageFont.load_default()
-    try:
-        font_hdr = ImageFont.truetype("Calibri Bold", 14)
-        font_cat = ImageFont.truetype("Calibri Bold", 12)
-        font_count = ImageFont.truetype("Calibri Bold", 13)
-        font_lbl = ImageFont.truetype("Calibri Bold", 12)
-        font_opt = ImageFont.truetype("Calibri", 11)
-    except (IOError, OSError):
-        font_hdr = font_cat = font_count = font_lbl = font_opt = default_font
+    font_hdr = _load_font(_FONT_BOLD_CANDIDATES, 14, default_font)
+    font_cat = _load_font(_FONT_BOLD_CANDIDATES, 12, default_font)
+    font_count = _load_font(_FONT_BOLD_CANDIDATES, 13, default_font)
+    font_lbl = _load_font(_FONT_BOLD_CANDIDATES, 12, default_font)
+    font_opt = _load_font(_FONT_REG_CANDIDATES, 11, default_font)
 
     # Read show_legend flag (default False)
     show_legend = bool(getattr(source_chart, "show_legend", False))
@@ -139,12 +170,17 @@ def render_table_preview_png(
                 pct = float((opt_cells.get(opt) or {}).get("pct") or 0)
                 draw.rectangle([cx, oy, cx + cell_w, oy + row_opt], fill=BG_WHITE)
 
-                # Bar fills cell from left to pct% width (Excel DataBar style).
+                # Gradient bar: solid BAR_GRAY at left fading to BG_WHITE at right
+                # (Excel DataBar gradient style).
                 bar_h = min(row_opt - 6, 22)
                 bar_y = oy + (row_opt - bar_h) // 2
                 bar_w = int(cell_w * min(1.0, max(0.0, pct)))
                 if bar_w > 0:
-                    draw.rectangle([cx, bar_y, cx + bar_w, bar_y + bar_h], fill=BAR_GRAY)
+                    _draw_gradient_bar(draw, cx, bar_y, bar_w, bar_h, BAR_GRAY, BG_WHITE)
+
+                # Cell bottom border (1px) for table grid look.
+                draw.line([(cx, oy + row_opt - 1), (cx + cell_w, oy + row_opt - 1)],
+                          fill=BORDER_GRAY, width=1)
 
                 # Text right-aligned with indent, overlays bar.
                 pct_text = f"{pct * 100:.1f}%"
@@ -174,6 +210,17 @@ def _centered_text(draw, text, font, color, x, y, w, h, align="center"):
         tx = x + (w - tw) // 2
     ty = y + (h - th) // 2
     draw.text((tx, ty), text, font=font, fill=color)
+
+
+def _draw_gradient_bar(draw, x, y, w, h, start_color, end_color):
+    """Linear gradient bar from start_color (left) to end_color (right).
+    Drawn as 1px vertical strips with interpolated color."""
+    if w <= 0 or h <= 0:
+        return
+    for i in range(w):
+        t = i / max(w - 1, 1)
+        color = tuple(int(start_color[c] + (end_color[c] - start_color[c]) * t) for c in range(3))
+        draw.line([(x + i, y), (x + i, y + h)], fill=color, width=1)
 
 
 def _save_png(img: Image.Image) -> bytes:
