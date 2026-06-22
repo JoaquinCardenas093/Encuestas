@@ -261,12 +261,10 @@ def build_excel_ole_cfb(xlsx_bytes: bytes) -> bytes:
     fat_bytes = b"".join(struct.pack("<I", v) for v in fat)
 
     # ---- 7. Directory entries ----
-    # Per [MS-CFB] §2.6.4: siblings sorted by (UTF-16 byte length incl NUL, UPPER(name) UTF-16)
-    # arranged in a balanced binary tree with alternating depth-based colors (BLACK=1, RED=0).
-    #
-    # Strategy: build "logical" specs (Root at slot 0, then non-Root in any order),
-    # sort the non-Root specs, assign new physical slot numbers in sorted order,
-    # build a balanced tree over the new slot indices, then serialize in physical order.
+    # Right-leaning all-BLACK chain in MS-CFB sort order.
+    # Empirically tolerated by Mac OLE activation (Fase E baseline b475c3e).
+    # Fase F's depth-alternating RB-approximation broke Mac Excel.app
+    # double-click; reverted here. See post-fase-f-investigation.md.
     def name_len_bytes(s: str) -> int:
         return 2 * (len(s) + 1)
 
@@ -286,17 +284,9 @@ def build_excel_ole_cfb(xlsx_bytes: bytes) -> bytes:
     # sorted_logical[0] is the logical index of the entry that goes to physical slot 1, etc.
     # Assign physical slots: physical_slot[logical_idx] = 1-based physical position
     n_non_root = len(non_root_specs)
-    physical_slot: dict[int, int] = {}
-    sorted_specs: list[tuple] = []
-    for phys_pos, li in enumerate(sorted_logical, start=1):
-        physical_slot[li] = phys_pos
-        sorted_specs.append(non_root_specs[li])
+    sorted_specs = [non_root_specs[li] for li in sorted_logical]
 
-    # Build balanced red-black tree over physical slots [1..N]
-    physical_slots_in_order = list(range(1, n_non_root + 1))
-    tree_root, sib_color = _assign_balanced_tree(physical_slots_in_order)
-
-    # Serialize Root entry (slot 0): child = tree_root
+    # Right-leaning all-BLACK chain in MS-CFB sort order.
     entries = []
     entries.append(_dir_entry(
         name="Root Entry",
@@ -305,20 +295,19 @@ def build_excel_ole_cfb(xlsx_bytes: bytes) -> bytes:
         color=1,
         left_sib=NOSTREAM,
         right_sib=NOSTREAM,
-        child=tree_root,
+        child=1,                                     # first non-root slot
         clsid=EXCEL_CLSID,
         start_sect=MINISTREAM_IDX,
         stream_size=mini_stream_size,
     ))
-    # Serialize non-Root entries in sorted (physical) order
     for phys_slot, (name, etype, clsid, start, size) in enumerate(sorted_specs, start=1):
-        left, right, color = sib_color.get(phys_slot, (NOSTREAM, NOSTREAM, 1))
+        right = phys_slot + 1 if phys_slot < n_non_root else NOSTREAM
         entries.append(_dir_entry(
             name=name,
             entry_type=etype,
             name_len_bytes=name_len_bytes(name),
-            color=color,
-            left_sib=left,
+            color=1,                                  # BLACK
+            left_sib=NOSTREAM,
             right_sib=right,
             child=NOSTREAM,
             clsid=clsid,
