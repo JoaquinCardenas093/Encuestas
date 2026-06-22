@@ -19,7 +19,8 @@ CAT_ROW = 3
 COUNTS_ROW = 4
 FIRST_OPT_ROW = 5
 
-LABEL_COL_W = 12
+LABEL_COL_W_MIN = 14
+LABEL_COL_W_MAX = 40
 DATA_COL_W = 14
 
 
@@ -43,6 +44,12 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
     bds = [(bd_id, all_bds.get(bd_id, {})) for bd_id in breakdown_groups if bd_id in all_bds]
 
     show_legend = bool(getattr(source_chart, "show_legend", False))
+
+    # Auto-size label col to fit longest option name + "Observaciones" header.
+    # Excel col width unit ~ 1 char of Calibri 11. Add small padding.
+    label_strings = list(options) + ["Observaciones"]
+    longest = max((len(str(s)) for s in label_strings), default=0)
+    label_col_w = max(LABEL_COL_W_MIN, min(LABEL_COL_W_MAX, longest + 2))
 
     header_fill = PatternFill("solid", fgColor=HEADER_FILL_HEX)
     body_fill = PatternFill("solid", fgColor=BODY_FILL_HEX)
@@ -177,7 +184,7 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
 
         # Column widths for this bd
         if show_legend:
-            ws.column_dimensions[get_column_letter(label_col)].width = LABEL_COL_W
+            ws.column_dimensions[get_column_letter(label_col)].width = label_col_w
         for c in range(data_start, data_end + 1):
             ws.column_dimensions[get_column_letter(c)].width = DATA_COL_W
 
