@@ -101,14 +101,15 @@ def test_bar_width_proportional_to_pct():
     opt1_y = 140  # safely inside opt1 row (row_opt capped ≤44, so opt1 starts ≥118)
 
     def bar_extent(y):
-        """Walk pixels at row y from cell_left=5; return last x where pixel is BAR_GRAY."""
-        last_gray = 5
-        for x in range(5, w):
+        """Walk pixels at row y from cell_left=5; return last x where pixel is non-white.
+        Gradient bar fades from BAR_GRAY(217) to BG_WHITE(255), so detect any non-white."""
+        last_nonwhite = 5
+        for x in range(5, w - 50):  # ignore text-region at right (overlays bar)
             p = img.getpixel((x, y))
-            # BAR_GRAY=(217,217,217) — wide tolerance vs anti-alias
-            if 200 <= p[0] <= 230 and abs(p[0] - p[1]) <= 5 and abs(p[1] - p[2]) <= 5:
-                last_gray = x
-        return last_gray - 5
+            # Non-white: any channel < 250 (covers gradient fade range)
+            if p[0] < 250 or p[1] < 250 or p[2] < 250:
+                last_nonwhite = x
+        return last_nonwhite - 5
 
     opt0_bar = bar_extent(opt0_y)
     opt1_bar = bar_extent(opt1_y)
@@ -222,19 +223,18 @@ def test_show_legend_false_skips_label_column():
     assert png_true[:8] == b"\x89PNG\r\n\x1a\n"
     assert png_false[:8] == b"\x89PNG\r\n\x1a\n"
 
-    # Sample label-col text pixels in the count row where "Observaciones" is drawn.
-    # Layout: y_hdr=0, y_cat=28, y_count=52, y_count+row_count=74 (so y ~59-65 is text area)
-    # With show_legend=True: label text "Observaciones" rendered at (x ~15-40, y ~59-65) in black
-    # With show_legend=False: label column is 0-width, so this region is white
-    sample_x, sample_y = 20, 61
-
+    # Sample opt0 row (y=80, well inside it) at x=10:
+    # - show_legend=True: label col x=5-95 has option name text right-aligned at ~x=85;
+    #   x=10 is in white space before text → WHITE pixel
+    # - show_legend=False: no label col, cell starts at x=5; opt0 pct=0.9 so gradient
+    #   bar covers x=5 to ~x=5+cell_w*0.9; x=10 is inside bar → NON-WHITE
+    sample_x, sample_y = 10, 95
     pixel_true = img_true.getpixel((sample_x, sample_y))
     pixel_false = img_false.getpixel((sample_x, sample_y))
 
-    # When show_legend=True: text drawn in label column → should be black
-    assert pixel_true[0] < 100 and pixel_true[1] < 100 and pixel_true[2] < 100, \
-        f"expected black text in label column at ({sample_x},{sample_y}) with show_legend=True, got {pixel_true}"
-
-    # When show_legend=False: label column skipped → pixel should be pure white
-    assert pixel_false[0] > 240 and pixel_false[1] > 240 and pixel_false[2] > 240, \
-        f"expected white at ({sample_x},{sample_y}) with show_legend=False, got {pixel_false}"
+    # show_legend=True: x=10 in label col is white (before any text)
+    assert pixel_true[0] > 240 and pixel_true[1] > 240 and pixel_true[2] > 240, \
+        f"expected white at ({sample_x},{sample_y}) with show_legend=True, got {pixel_true}"
+    # show_legend=False: x=10 is inside opt0 bar (BAR_GRAY gradient)
+    assert pixel_false[0] < 250 or pixel_false[1] < 250 or pixel_false[2] < 250, \
+        f"expected non-white bar pixel at ({sample_x},{sample_y}) with show_legend=False, got {pixel_false}"
