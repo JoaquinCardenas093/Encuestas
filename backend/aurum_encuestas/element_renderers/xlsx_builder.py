@@ -11,7 +11,7 @@ HEADER_FILL_HEX = "595959"   # dark gray
 HEADER_FONT_HEX = "FFFFFF"   # white
 BODY_FILL_HEX = "FFFFFF"     # white
 BODY_FONT_HEX = "000000"     # black
-DATABAR_HEX = "BFBFBF"       # light gray bar
+DATABAR_HEX = "D9D9D9"       # light gray bar (paler)
 
 HEADER_ROW = 2
 CAT_ROW = 3
@@ -39,6 +39,8 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
 
     bds = [(bd_id, all_bds.get(bd_id, {})) for bd_id in breakdown_groups if bd_id in all_bds]
 
+    show_legend = bool(getattr(source_chart, "show_legend", False))
+
     header_fill = PatternFill("solid", fgColor=HEADER_FILL_HEX)
     body_fill = PatternFill("solid", fgColor=BODY_FILL_HEX)
     header_font_bold_11 = Font(color=HEADER_FONT_HEX, bold=True, name="Calibri", size=11)
@@ -56,16 +58,21 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
         if n_cats == 0:
             continue
 
-        label_col = cur_col
-        data_start = cur_col + 1
+        if show_legend:
+            label_col = cur_col
+            data_start = cur_col + 1
+        else:
+            data_start = cur_col
+            label_col = None  # no label col
         data_end = data_start + n_cats - 1
 
-        # Row 2: merged group_header label_col..data_end
+        # Row 2: merged group_header
+        header_start = label_col if show_legend else data_start
         ws.merge_cells(
-            start_row=HEADER_ROW, start_column=label_col,
+            start_row=HEADER_ROW, start_column=header_start,
             end_row=HEADER_ROW, end_column=data_end,
         )
-        gh = ws.cell(row=HEADER_ROW, column=label_col,
+        gh = ws.cell(row=HEADER_ROW, column=header_start,
                      value=bd.get("label") or bd_id)
         gh.fill = header_fill
         gh.font = header_font_bold_11
@@ -78,11 +85,12 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
             ch.font = header_font_bold_10
             ch.alignment = center
 
-        # Row 4: counts row — label col = "Observaciones", data cols = totals
-        obs = ws.cell(row=COUNTS_ROW, column=label_col, value="Observaciones")
-        obs.fill = body_fill
-        obs.font = body_font_bold_11
-        obs.alignment = right
+        # Row 4: counts row — label col = "Observaciones" (only if show_legend), data cols = totals
+        if show_legend:
+            obs = ws.cell(row=COUNTS_ROW, column=label_col, value="Observaciones")
+            obs.fill = body_fill
+            obs.font = body_font_bold_11
+            obs.alignment = right
 
         for i, (_, opt_cells) in enumerate(cats.items()):
             total = sum(int((opt_cells.get(o) or {}).get("count") or 0) for o in options)
@@ -95,10 +103,11 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
         for j, opt in enumerate(options):
             row = FIRST_OPT_ROW + j
 
-            lbl = ws.cell(row=row, column=label_col, value=opt)
-            lbl.fill = body_fill
-            lbl.font = body_font_bold_11
-            lbl.alignment = right
+            if show_legend:
+                lbl = ws.cell(row=row, column=label_col, value=opt)
+                lbl.fill = body_fill
+                lbl.font = body_font_bold_11
+                lbl.alignment = right
 
             for i, (_, opt_cells) in enumerate(cats.items()):
                 pct = float((opt_cells.get(opt) or {}).get("pct") or 0)
@@ -106,7 +115,7 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
                 oc.number_format = "0.0%"
                 oc.fill = body_fill
                 oc.font = body_font_10
-                oc.alignment = left
+                oc.alignment = Alignment(horizontal="right", indent=1, vertical="center")
 
         # DataBarRule per OPTION ROW spanning this bd's data cols only
         for j in range(len(options)):
@@ -123,7 +132,8 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
             ws.conditional_formatting.add(range_str, rule)
 
         # Column widths for this bd
-        ws.column_dimensions[get_column_letter(label_col)].width = LABEL_COL_W
+        if show_legend:
+            ws.column_dimensions[get_column_letter(label_col)].width = LABEL_COL_W
         for c in range(data_start, data_end + 1):
             ws.column_dimensions[get_column_letter(c)].width = DATA_COL_W
 

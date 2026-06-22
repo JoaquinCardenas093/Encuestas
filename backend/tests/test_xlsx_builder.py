@@ -31,6 +31,7 @@ def test_single_panel_has_own_label_col():
             ("40-59", {"opt0": {"pct": 0.91, "count": 228}, "opt1": {"pct": 0.09, "count": 22}}),
         ]),
     ])
+    src.show_legend = True
     buf = build_xlsx_for_table(src, ["edad"])
     wb = load_workbook(buf)
     ws = wb.active
@@ -68,6 +69,7 @@ def test_multi_panel_n_independent_tables():
             ("M", {"opt0": {"pct": 0.85, "count": 85}, "opt1": {"pct": 0.15, "count": 15}}),
         ]),
     ])
+    src.show_legend = True
     buf = build_xlsx_for_table(src, ["edad", "sexo"])
     wb = load_workbook(buf)
     ws = wb.active
@@ -98,6 +100,7 @@ def test_databar_per_bd_panel_scoped():
             ("F", {"opt0": {"pct": 0.7, "count": 70}, "opt1": {"pct": 0.3, "count": 30}}),
         ]),
     ])
+    src.show_legend = True
     buf = build_xlsx_for_table(src, ["edad", "sexo"])
     wb = load_workbook(buf)
     ws = wb.active
@@ -129,6 +132,7 @@ def test_hex_palette_applied():
             ("18-39", {"opt0": {"pct": 0.9, "count": 90}, "opt1": {"pct": 0.1, "count": 10}}),
         ]),
     ])
+    src.show_legend = True
     buf = build_xlsx_for_table(src, ["edad"])
     wb = load_workbook(buf)
     ws = wb.active
@@ -151,3 +155,80 @@ def test_empty_breakdown_groups_returns_empty_xlsx():
     ws = wb.active
     # No merged ranges at row 2
     assert not any(str(mr).startswith(("A2", "B2", "C2")) for mr in ws.merged_cells.ranges)
+
+
+def test_xlsx_show_legend_true_includes_label_col():
+    """show_legend=True → label col with 'Observaciones' + option labels."""
+    from aurum_encuestas.element_renderers.xlsx_builder import build_xlsx_for_table
+
+    src = _make_source(n_options=2, bds_spec=[
+        ("edad", "Edad", [
+            ("18-39", {"opt0": {"pct": 0.9, "count": 90}, "opt1": {"pct": 0.1, "count": 10}}),
+        ]),
+    ])
+    src.show_legend = True
+    buf = build_xlsx_for_table(src, ["edad"])
+    wb = load_workbook(buf)
+    ws = wb.active
+    assert ws["A4"].value == "Observaciones"
+    assert ws["A5"].value == "opt0"
+
+
+def test_xlsx_show_legend_false_skips_label_col():
+    """show_legend=False → no label col; data starts at col A."""
+    from aurum_encuestas.element_renderers.xlsx_builder import build_xlsx_for_table
+
+    src = _make_source(n_options=2, bds_spec=[
+        ("edad", "Edad", [
+            ("18-39", {"opt0": {"pct": 0.9, "count": 90}, "opt1": {"pct": 0.1, "count": 10}}),
+            ("40-59", {"opt0": {"pct": 0.8, "count": 80}, "opt1": {"pct": 0.2, "count": 20}}),
+        ]),
+    ])
+    src.show_legend = False
+    buf = build_xlsx_for_table(src, ["edad"])
+    wb = load_workbook(buf)
+    ws = wb.active
+    # Cat headers at A3 + B3 (no label col), data at A5 + B5
+    assert ws["A3"].value == "18-39"
+    assert ws["B3"].value == "40-59"
+    assert abs(ws["A5"].value - 0.9) < 1e-9
+    # No "Observaciones" text anywhere (label col was skipped)
+    assert ws["A4"].value != "Observaciones"
+
+
+def test_databar_color_is_d9d9d9():
+    from aurum_encuestas.element_renderers.xlsx_builder import build_xlsx_for_table
+
+    src = _make_source(n_options=2, bds_spec=[
+        ("edad", "Edad", [
+            ("18-39", {"opt0": {"pct": 0.9, "count": 90}, "opt1": {"pct": 0.1, "count": 10}}),
+        ]),
+    ])
+    src.show_legend = True
+    buf = build_xlsx_for_table(src, ["edad"])
+    wb = load_workbook(buf)
+    ws = wb.active
+    for cf_range, rules in ws.conditional_formatting._cf_rules.items():
+        for rule in rules:
+            db = getattr(rule, "dataBar", None)
+            if db is not None and db.color is not None:
+                assert "D9D9D9" in (db.color.value or "").upper()
+                return
+    raise AssertionError("no DataBarRule found")
+
+
+def test_data_cell_alignment_right():
+    from aurum_encuestas.element_renderers.xlsx_builder import build_xlsx_for_table
+
+    src = _make_source(n_options=2, bds_spec=[
+        ("edad", "Edad", [
+            ("18-39", {"opt0": {"pct": 0.9, "count": 90}, "opt1": {"pct": 0.1, "count": 10}}),
+        ]),
+    ])
+    src.show_legend = True
+    buf = build_xlsx_for_table(src, ["edad"])
+    wb = load_workbook(buf)
+    ws = wb.active
+    # Data cell at B5 (first option row, first cat col when show_legend=True)
+    cell = ws["B5"]
+    assert cell.alignment.horizontal == "right"
