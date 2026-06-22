@@ -144,7 +144,7 @@ def extract_context(slide_config: dict, db: dict = None) -> dict:
     question_type = _detect_question_type(n_options, question_text)
 
     # breakdowns_used
-    breakdowns_used: list[str] = list(meta.get("breakdowns", []))
+    breakdowns_used: list[str] = [b for b in meta.get("breakdowns", []) if b and b.lower() != "general"]
     if not breakdowns_used:
         # derive from charts using breakdown_ids list
         bd_set: set[str] = set()
