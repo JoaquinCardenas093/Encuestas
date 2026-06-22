@@ -84,6 +84,8 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
         data_end = data_start + n_cats - 1
 
         # Row 2: merged group_header (Sexo/NSE) — top + L + R, NO bottom.
+        # NOTE: openpyxl merge_cells only applies master cell's border. Must set
+        # borders on EACH cell in merge per position so outer top/right span fully.
         ws.merge_cells(
             start_row=HEADER_ROW, start_column=data_start,
             end_row=HEADER_ROW, end_column=data_end,
@@ -93,7 +95,15 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
         gh.fill = header_fill
         gh.font = header_font_bold_11
         gh.alignment = center
-        gh.border = _bdr(first=True, last=True, top=True)
+        # Apply per-cell borders across full merge span for continuous outer.
+        for col_offset in range(n_cats):
+            c = ws.cell(row=HEADER_ROW, column=data_start + col_offset)
+            c.fill = header_fill  # ensure non-master cells also visually filled
+            c.border = _bdr(
+                first=(col_offset == 0),
+                last=(col_offset == n_cats - 1),
+                top=True,
+            )
 
         # Row 3: cat sub-headers (Femenino/Masculino) — only bottom (+ L first / R last for outer).
         for i, (cat_label, _) in enumerate(cats.items()):
