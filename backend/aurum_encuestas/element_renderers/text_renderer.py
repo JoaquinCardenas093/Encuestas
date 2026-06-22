@@ -107,7 +107,14 @@ def _resolve_content(content_source: dict, ctx: RenderContext) -> str | None:
             return matching[idx].text
         return matching[0].text
     if source_type == "computed":
-        # Placeholder for future computed expressions
+        # `field` reads an attribute off the slide_config (e.g. "title").
+        # Returns None if empty so renderer skips drawing.
+        field = content_source.get("field")
+        if field:
+            val = getattr(ctx.slide_config, field, None)
+            if val is None or (isinstance(val, str) and not val.strip()):
+                return None
+            return str(val)
         return content_source.get("text", "")
     return content_source.get("text")
 

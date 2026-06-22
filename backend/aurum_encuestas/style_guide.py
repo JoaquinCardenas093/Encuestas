@@ -169,6 +169,7 @@ class _ContentSource(_Base):
     scope: Literal["slide", "question", "chart"] | None = None
     ref_index: int | None = None
     text: str | None = None
+    field: str | None = None  # for type=computed: attribute name to read off slide_config
 
 
 class _TextStyle(_Base):
@@ -569,7 +570,7 @@ BUILTIN_STYLE_GUIDE = StyleGuide.model_validate({
                         "kind": "text",
                         "id": "section_subtitle",
                         "position": {"x_rel": 0.0, "y_rel": 0.05, "w_rel": 1.0, "h_rel": 0.08},
-                        "content_source": {"type": "static", "text": "Distribución segmentada"},
+                        "content_source": {"type": "computed", "field": "title"},
                         "style": {"font_size": 16, "bold": True, "align_h": "center"},
                     },
                     {
