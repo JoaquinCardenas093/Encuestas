@@ -176,7 +176,7 @@ export const useProjectStore = create<Store>()(
           state: {
             ...s,
             slides: applyTitleInheritance(
-              s.slides.map((sl) => (sl.id === slideId && sl.type === "separator" ? { ...sl, title } : sl)),
+              s.slides.map((sl) => (sl.id === slideId ? { ...sl, title } : sl)),
             ),
           },
         })

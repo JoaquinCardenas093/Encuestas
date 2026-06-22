@@ -93,9 +93,8 @@ export default function ConfigPanel({ slideId }: Props) {
       <label className="block text-xs text-neutral-400 mb-1">Título</label>
       <input
         value={slide.title || ""}
-        disabled={!isSep}
-        onChange={(e) => isSep && updateSeparatorTitle(slide.id, e.target.value)}
-        className="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1.5 text-sm mb-4 disabled:opacity-60"
+        onChange={(e) => updateSeparatorTitle(slide.id, e.target.value)}
+        className="w-full bg-neutral-900 border border-neutral-700 rounded px-2 py-1.5 text-sm mb-4"
       />
 
       {!isSep && (
