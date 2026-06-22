@@ -258,7 +258,8 @@ def test_databar_color_is_d9d9d9():
     raise AssertionError("no DataBarRule found")
 
 
-def test_data_cell_alignment_right():
+def test_data_cell_alignment_left():
+    """Data cells text left-aligned with indent (matches Fase R design target)."""
     from aurum_encuestas.element_renderers.xlsx_builder import build_xlsx_for_table
 
     src = _make_source(n_options=2, bds_spec=[
@@ -270,6 +271,6 @@ def test_data_cell_alignment_right():
     buf = build_xlsx_for_table(src, ["edad"])
     wb = load_workbook(buf)
     ws = wb.active
-    # Data cell at B5 (first option row, first cat col when show_legend=True)
     cell = ws["B5"]
-    assert cell.alignment.horizontal == "right"
+    assert cell.alignment.horizontal == "left"
+    assert cell.alignment.indent == 1

@@ -12,7 +12,7 @@ HEADER_FONT_HEX = "FFFFFFFF"   # white ARGB
 BODY_FILL_HEX = "FFFFFFFF"     # white ARGB
 BODY_FONT_HEX = "FF000000"     # black ARGB
 DATABAR_HEX = "FFD9D9D9"       # light gray bar ARGB
-BORDER_HEX = "FFBFBFBF"        # cell borders ARGB
+BORDER_HEX = "FF000000"        # cell borders black
 
 HEADER_ROW = 2
 CAT_ROW = 3
@@ -56,6 +56,11 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
     cell_border = Border(left=_thin, right=_thin, top=_thin, bottom=_thin)
     label_border = Border(bottom=_thin)  # Observaciones col: bottom border only
 
+    # Subheader row (Alto/Medio/etc): outer rectangle only — no internal verticals.
+    subhdr_first_border = Border(left=_thin, top=_thin, bottom=_thin)
+    subhdr_middle_border = Border(top=_thin, bottom=_thin)
+    subhdr_last_border = Border(right=_thin, top=_thin, bottom=_thin)
+
     cur_col = 1
     for bd_id, bd in bds:
         cats = bd.get("categories", {}) or {}
@@ -83,13 +88,21 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
         gh.alignment = center
         gh.border = cell_border
 
-        # Row 3: cat sub-headers (data cols only)
+        # Row 3: cat sub-headers (data cols only).
+        # Outer rectangle only — no internal verticals between subheader cells.
         for i, (cat_label, _) in enumerate(cats.items()):
             ch = ws.cell(row=CAT_ROW, column=data_start + i, value=cat_label)
             ch.fill = header_fill
             ch.font = header_font_bold_10
             ch.alignment = center
-            ch.border = cell_border
+            if i == 0 and n_cats == 1:
+                ch.border = cell_border  # single cat: full border
+            elif i == 0:
+                ch.border = subhdr_first_border
+            elif i == n_cats - 1:
+                ch.border = subhdr_last_border
+            else:
+                ch.border = subhdr_middle_border
 
         # Row 4: counts row — label col = "Observaciones" (only if show_legend), data cols = totals
         if show_legend:
@@ -124,7 +137,7 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
                 oc.number_format = "0.0%"
                 oc.fill = body_fill
                 oc.font = body_font_10
-                oc.alignment = Alignment(horizontal="right", indent=1, vertical="center")
+                oc.alignment = Alignment(horizontal="left", indent=1, vertical="center")
                 oc.border = cell_border
 
         # DataBarRule per OPTION ROW spanning this bd's data cols only
