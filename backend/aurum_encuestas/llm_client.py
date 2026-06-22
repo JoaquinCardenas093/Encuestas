@@ -293,66 +293,15 @@ EJEMPLO COMPLETO DE 1 PATTERN BIEN ARMADO (binary + demographics, target Aurora)
   },
   "extends": null,
   "best_example": "Aurora.pptx#slide17",
-  "why_picked": "Pie compacto izq + tabla con mini-bars cubriendo todos los breakdowns derecha. Compacto, comparable, profesional.",
+  "why_picked": "Tabla OLE editable que cubre todos los breakdowns. Render via TABLE_WITH_MINIBARS = embedded xlsx + PNG preview.",
   "implementation": {
     "elements": [
       {
-        "kind": "text",
-        "id": "section_subtitle",
-        "position": {"x_rel": 0.05, "y_rel": 0.15, "w_rel": 0.30, "h_rel": 0.05},
-        "content_source": {"type": "static", "text": "Distribución general"},
-        "style": {"font_size": 11, "bold": true, "align_h": "center"}
-      },
-      {
         "kind": "chart",
-        "id": "main_pie",
-        "position": {"x_rel": 0.05, "y_rel": 0.22, "w_rel": 0.30, "h_rel": 0.50},
-        "chart_type": "PIE",
-        "data_source": {"chart_ref_index": 0, "value_field": "pct"},
-        "labels": {"show_category_name": true, "show_percentage": true, "position": "outside_end", "format": "0.0%"},
-        "legend": "none",
-        "sort": "none"
-      },
-      {
-        "kind": "text",
-        "id": "breakdowns_subtitle",
-        "position": {"x_rel": 0.40, "y_rel": 0.15, "w_rel": 0.55, "h_rel": 0.05},
-        "content_source": {"type": "static", "text": "Distribución segmentada"},
-        "style": {"font_size": 11, "bold": true, "align_h": "center"}
-      },
-      {
-        "kind": "table",
-        "id": "demographics_table",
-        "position": {"x_rel": 0.40, "y_rel": 0.22, "w_rel": 0.55, "h_rel": 0.50},
-        "structure": "segmented_breakdowns",
-        "data_source": {"chart_ref_index": 0, "breakdown_groups": "all_except_general"},
-        "layout": {"col_widths": "auto", "header_height_rel": 0.20, "counts_row_height_rel": 0.12},
-        "cells": {
-          "group_header": {"style": {"fill": "primary", "text_color": "background", "font_size": 9, "bold": true, "align_h": "center"}, "merge_per_breakdown": true},
-          "category_header": {"style": {"fill": "secondary", "font_size": 8, "bold": true, "align_h": "center"}},
-          "counts_row": {"style": {"fill": "background", "font_size": 8, "align_h": "center"}, "label_first_col": "Obs."},
-          "option_row": {
-            "style": {"fill": "background", "font_size": 8},
-            "label_col_width_rel": 0.08,
-            "value_format": "percentage",
-            "value_decimals": 1,
-            "minibar": {"enabled": true, "color_role": "primary", "height_rel_to_cell": 0.4, "show_percent_text": true, "percent_text_position": "left_of_bar"}
-          }
-        }
-      },
-      {
-        "kind": "text",
-        "id": "analysis_box",
-        "position": {"x_rel": 0.05, "y_rel": 0.76, "w_rel": 0.30, "h_rel": 0.20},
-        "content_source": {"type": "analysis", "scope": "slide"},
-        "style": {"fill": "background_tint", "border_left": {"color": "accent", "width_pt": 3}, "font_size": 8, "padding": 6, "align_h": "left"}
-      },
-      {
-        "kind": "text",
-        "id": "footnotes",
-        "position": {"x_rel": 0.05, "y_rel": 0.96, "w_rel": 0.90, "h_rel": 0.04},
-        "content_source": {"type": "computed", "kind": "notes"},
-        "style": {"font_size": 7, "align_h": "left"}
+        "id": "main_table",
+        "position": {"x_rel": 0.04, "y_rel": 0.18, "w_rel": 0.92, "h_rel": 0.70},
+        "chart_type": "TABLE_WITH_MINIBARS",
+        "data_source": {"chart_ref_index": 0, "value_field": "pct"}
       }
     ]
   }
