@@ -426,9 +426,10 @@ def test_builtin_has_table_only_full_width_pattern():
         (e.model_dump() if hasattr(e, "model_dump") else e)
         for e in elements
     ]
-    # Subtitle text element first.
+    # Subtitle text element first. Sources from slide.title (UI-defined, optional).
     sub = next(e for e in el_dicts if e["kind"] == "text")
-    assert sub["content_source"]["text"] == "Distribución segmentada"
+    assert sub["content_source"]["type"] == "computed"
+    assert sub["content_source"]["field"] == "title"
     assert sub["style"]["bold"] is True
     assert sub["style"]["align_h"] == "center"
     # Chart element (TABLE_WITH_MINIBARS).
