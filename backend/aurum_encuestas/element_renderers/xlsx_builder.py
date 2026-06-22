@@ -53,13 +53,20 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
     center = Alignment(horizontal="center", vertical="center")
     right = Alignment(horizontal="right", vertical="center")
     _thin = Side(style="thin", color=BORDER_HEX)
-    cell_border = Border(left=_thin, right=_thin, top=_thin, bottom=_thin)
-    label_border = Border(bottom=_thin)  # Observaciones col: bottom border only
+    label_border = Border(bottom=_thin)  # Observaciones col: bottom only
 
-    # Subheader row (Alto/Medio/etc): outer rectangle only — no internal verticals.
-    subhdr_first_border = Border(left=_thin, top=_thin, bottom=_thin)
-    subhdr_middle_border = Border(top=_thin, bottom=_thin)
-    subhdr_last_border = Border(right=_thin, top=_thin, bottom=_thin)
+    def _bdr(first: bool, last: bool, *, top=False, bottom=False, right_always=False):
+        """Helper: build Border with side-set logic per row-type spec."""
+        sides = {}
+        if top:
+            sides["top"] = _thin
+        if bottom:
+            sides["bottom"] = _thin
+        if first:
+            sides["left"] = _thin
+        if last or right_always:
+            sides["right"] = _thin
+        return Border(**sides)
 
     cur_col = 1
     for bd_id, bd in bds:
@@ -76,7 +83,7 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
             label_col = None  # no label col
         data_end = data_start + n_cats - 1
 
-        # Row 2: merged group_header — DATA cols only (excludes label col per design target)
+        # Row 2: merged group_header (Sexo/NSE) — top + L + R, NO bottom.
         ws.merge_cells(
             start_row=HEADER_ROW, start_column=data_start,
             end_row=HEADER_ROW, end_column=data_end,
@@ -86,25 +93,18 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
         gh.fill = header_fill
         gh.font = header_font_bold_11
         gh.alignment = center
-        gh.border = cell_border
+        gh.border = _bdr(first=True, last=True, top=True)
 
-        # Row 3: cat sub-headers (data cols only).
-        # Outer rectangle only — no internal verticals between subheader cells.
+        # Row 3: cat sub-headers (Femenino/Masculino) — only bottom (+ L first / R last for outer).
         for i, (cat_label, _) in enumerate(cats.items()):
             ch = ws.cell(row=CAT_ROW, column=data_start + i, value=cat_label)
             ch.fill = header_fill
             ch.font = header_font_bold_10
             ch.alignment = center
-            if i == 0 and n_cats == 1:
-                ch.border = cell_border  # single cat: full border
-            elif i == 0:
-                ch.border = subhdr_first_border
-            elif i == n_cats - 1:
-                ch.border = subhdr_last_border
-            else:
-                ch.border = subhdr_middle_border
+            ch.border = _bdr(first=(i == 0), last=(i == n_cats - 1), bottom=True)
 
-        # Row 4: counts row — label col = "Observaciones" (only if show_legend), data cols = totals
+        # Row 4: counts row — label col = "Observaciones" (only if show_legend), data cols = totals.
+        # Counts cells: bottom only (no L/R divider between them).
         if show_legend:
             obs = ws.cell(row=COUNTS_ROW, column=label_col, value="Observaciones")
             obs.fill = body_fill
@@ -118,9 +118,11 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
             cc.fill = body_fill
             cc.font = body_font_bold_11
             cc.alignment = center
-            cc.border = cell_border
+            cc.border = _bdr(first=(i == 0), last=(i == n_cats - 1), bottom=True)
 
-        # Rows 5+: option rows
+        # Rows 5+: option rows. Each option cell: right border always (between cols),
+        # + left if first col (outer), + bottom if last option row (outer).
+        n_opts = len(options)
         for j, opt in enumerate(options):
             row = FIRST_OPT_ROW + j
 
@@ -131,6 +133,7 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
                 lbl.alignment = right
                 lbl.border = label_border
 
+            is_last_opt = (j == n_opts - 1)
             for i, (_, opt_cells) in enumerate(cats.items()):
                 pct = float((opt_cells.get(opt) or {}).get("pct") or 0)
                 oc = ws.cell(row=row, column=data_start + i, value=pct)
@@ -138,7 +141,12 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
                 oc.fill = body_fill
                 oc.font = body_font_10
                 oc.alignment = Alignment(horizontal="left", indent=1, vertical="center")
-                oc.border = cell_border
+                oc.border = _bdr(
+                    first=(i == 0),
+                    last=(i == n_cats - 1),
+                    bottom=is_last_opt,
+                    right_always=True,
+                )
 
         # DataBarRule per OPTION ROW spanning this bd's data cols only
         for j in range(len(options)):
