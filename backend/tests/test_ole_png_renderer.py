@@ -148,33 +148,45 @@ def test_multi_bd_renders_n_panels_with_gap():
 
 def test_show_legend_false_skips_label_column():
     """When show_legend=False, label columns should not be rendered.
-    Bar color should be paler (217, 217, 217)."""
-    from io import BytesIO
-    from PIL import Image
-    from types import SimpleNamespace
+    Render TWO versions (True & False) and sample pixels in the count row:
+    - With show_legend=True: label col text "Observaciones" drawn → black pixels
+    - With show_legend=False: label column skipped → white pixels
+    This ensures the guard doesn't regress silently."""
     from aurum_encuestas.element_renderers.ole_png_renderer import render_table_preview_png
 
-    q = SimpleNamespace(options=["opt0", "opt1"])
-    src = SimpleNamespace(
-        question=q,
-        all_breakdowns_data={
-            "edad": {"label": "Edad", "categories": {
-                "18-39": {"opt0": {"pct": 0.9, "count": 90}, "opt1": {"pct": 0.1, "count": 10}},
-            }},
-        },
-        breakdown_ids=["edad"],
-        show_legend=False,
-    )
-    png = render_table_preview_png(src, ["edad"], 4_000_000, 2_000_000)
-    # Should not crash and return valid PNG
-    assert png[:8] == b"\x89PNG\r\n\x1a\n"
-    img = Image.open(BytesIO(png))
-    # Verify the image is valid
-    assert img.size == (4_000_000 // 9525, 2_000_000 // 9525)
-    # Sample a pixel in the option row where bar is drawn (paler gray at 217, 217, 217)
-    w, h = img.size
-    body_y = min(h - 5, 100)
-    bp = img.getpixel((w // 2, body_y))
-    # Should be either white (255, 255, 255) or pale bar color (217, 217, 217)
-    assert (bp[0] > 240 and bp[1] > 240 and bp[2] > 240) or bp == (217, 217, 217), \
-        f"expected white or pale bar color, got {bp}"
+    bds_spec = [
+        ("edad", "Edad", [
+            ("18-39", {"opt0": {"pct": 0.9, "count": 90}, "opt1": {"pct": 0.1, "count": 10}}),
+        ]),
+    ]
+
+    # Render with show_legend=True
+    src_true = _make_source(n_options=2, bds_spec=bds_spec, show_legend=True)
+    png_true = render_table_preview_png(src_true, ["edad"], 4_000_000, 2_000_000)
+    img_true = Image.open(BytesIO(png_true))
+
+    # Render with show_legend=False
+    src_false = _make_source(n_options=2, bds_spec=bds_spec, show_legend=False)
+    png_false = render_table_preview_png(src_false, ["edad"], 4_000_000, 2_000_000)
+    img_false = Image.open(BytesIO(png_false))
+
+    # Both should be valid PNGs
+    assert png_true[:8] == b"\x89PNG\r\n\x1a\n"
+    assert png_false[:8] == b"\x89PNG\r\n\x1a\n"
+
+    # Sample label-col text pixels in the count row where "Observaciones" is drawn.
+    # Layout: y_hdr=0, y_cat=28, y_count=52, y_count+row_count=74 (so y ~59-65 is text area)
+    # With show_legend=True: label text "Observaciones" rendered at (x ~15-40, y ~59-65) in black
+    # With show_legend=False: label column is 0-width, so this region is white
+    sample_x, sample_y = 20, 61
+
+    pixel_true = img_true.getpixel((sample_x, sample_y))
+    pixel_false = img_false.getpixel((sample_x, sample_y))
+
+    # When show_legend=True: text drawn in label column → should be black
+    assert pixel_true[0] < 100 and pixel_true[1] < 100 and pixel_true[2] < 100, \
+        f"expected black text in label column at ({sample_x},{sample_y}) with show_legend=True, got {pixel_true}"
+
+    # When show_legend=False: label column skipped → pixel should be pure white
+    assert pixel_false[0] > 240 and pixel_false[1] > 240 and pixel_false[2] > 240, \
+        f"expected white at ({sample_x},{sample_y}) with show_legend=False, got {pixel_false}"
