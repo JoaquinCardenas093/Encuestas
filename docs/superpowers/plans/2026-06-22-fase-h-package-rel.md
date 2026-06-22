@@ -1,3 +1,43 @@
+# Fase H — Package Relationship Form Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development. Steps use checkbox (`- [ ]`) syntax.
+
+**Goal:** Drop CFB entirely. Replace `oleObject{N}.bin` with raw `Microsoft_Excel_Worksheet{N}.xlsx` part + RT.PACKAGE rel. Match real Office Excel embed shape verified by investigation.
+
+**Architecture:** ~20 LOC swap in `ole_embedder.py` + delete `cfb_writer.py` + rewrite affected tests.
+
+**Tech Stack:** Python 3.11, python-pptx, lxml.
+
+## Global Constraints
+
+- Python 3.11. `cd backend && arch -arm64 .venv/bin/pytest -q`.
+- `embed_ole_xlsx_with_preview` signature unchanged.
+- Partname template: `/ppt/embeddings/Microsoft_Excel_Worksheet{N}.xlsx`.
+- Content type literal: `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`.
+- Rel type: `RT.PACKAGE` from `pptx.opc.constants.RELATIONSHIP_TYPE`.
+- Blob content: raw `xlsx_bytes` (no length prefix, no CFB wrap).
+- Slide XML structure unchanged.
+- Delete `cfb_writer.py` + `test_cfb_writer.py` entirely.
+
+---
+
+### Task 1: Rewrite `ole_embedder.py` + tests
+
+**Files:**
+- Modify: `backend/aurum_encuestas/element_renderers/ole_embedder.py`
+- Modify: `backend/tests/test_ole_embedder.py`
+- Delete: `backend/aurum_encuestas/element_renderers/cfb_writer.py`
+- Delete: `backend/tests/test_cfb_writer.py`
+
+**Interfaces:**
+- Consumes: `pptx.opc.constants.RELATIONSHIP_TYPE.PACKAGE`, `pptx.opc.constants.CONTENT_TYPE.PNG`.
+- Produces: `embed_ole_xlsx_with_preview` adds raw xlsx part + RT.PACKAGE rel + PNG part + RT.IMAGE rel + graphicFrame XML with `<p:oleObj progId="Excel.Sheet.12">` mc:AlternateContent.
+
+- [ ] **Step 1: Write failing tests**
+
+Replace `backend/tests/test_ole_embedder.py` with this new set (keep helpers + adapted tests):
+
+```python
 from io import BytesIO
 
 from pptx import Presentation
@@ -212,3 +252,56 @@ def test_embedded_blob_is_pk_zip():
             assert p.blob[:4] == b"PK\x03\x04"
             return
     raise AssertionError("no xlsx embedding part found")
+```
+
+- [ ] **Step 2: Run new tests → FAIL**
+
+`cd backend && arch -arm64 .venv/bin/pytest tests/test_ole_embedder.py -q`
+Expected: all FAIL — current `ole_embedder` still produces .bin/CFB.
+
+- [ ] **Step 3: Rewrite `ole_embedder.py`**
+
+Replace lines 14-17 + 33-36 with:
+```python
+# Drop the cfb_writer import:
+# from .cfb_writer import build_excel_ole_cfb   # DELETED
+
+CT_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+PROG_ID = "Excel.Sheet.12"
+```
+
+And replace the embed body (current lines 33-36):
+```python
+xlsx_partname = _next_partname(package, "/ppt/embeddings/Microsoft_Excel_Worksheet{}.xlsx")
+xlsx_part = Part(xlsx_partname, CT_XLSX, package, xlsx_bytes)
+rid_xlsx = slide_part.relate_to(xlsx_part, RT.PACKAGE)
+```
+
+Drop `CT_OLE_OBJECT` constant. Drop `cfb_blob = build_excel_ole_cfb(...)` line. Drop the `bin_partname` + `bin_part` lines. Keep everything else (PNG part, graphicFrame XML).
+
+- [ ] **Step 4: Run tests → PASS**
+
+`cd backend && arch -arm64 .venv/bin/pytest tests/test_ole_embedder.py -q`
+Expected: 12/12 pass.
+
+- [ ] **Step 5: Delete `cfb_writer.py` + `test_cfb_writer.py`**
+
+```bash
+rm backend/aurum_encuestas/element_renderers/cfb_writer.py
+rm backend/tests/test_cfb_writer.py
+```
+
+- [ ] **Step 6: Run full backend suite → PASS**
+
+`cd backend && arch -arm64 .venv/bin/pytest -q`
+Expected: 356 - 12 (cfb tests) + 0 (xlsx test count unchanged) = ~344 pass + 3 skip.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add backend/aurum_encuestas/element_renderers/ole_embedder.py \
+        backend/tests/test_ole_embedder.py
+git rm backend/aurum_encuestas/element_renderers/cfb_writer.py \
+       backend/tests/test_cfb_writer.py
+git commit -m "feat(ole_embedder): use Package relationship form (raw xlsx); drop CFB"
+```
