@@ -74,20 +74,22 @@ def test_multi_panel_n_independent_tables():
     buf = build_xlsx_for_table(src, ["edad", "sexo"])
     wb = load_workbook(buf)
     ws = wb.active
-    # Edad bd: B2:C2 merge (data cols only, label col A excluded);
-    # Sexo bd at col E label, data F-G → F2:G2
+    # First bd Edad: label col A + data B-C → merge B2:C2.
+    # Second bd Sexo: NO own label col (shares first's leyenda visually) →
+    # data starts at E directly, merge E2:F2.
     merge_strs = {str(m) for m in ws.merged_cells.ranges}
     assert "B2:C2" in merge_strs
-    assert "F2:G2" in merge_strs
+    assert "E2:F2" in merge_strs
     assert ws["B2"].value == "Edad"
-    assert ws["F2"].value == "Sexo"
+    assert ws["E2"].value == "Sexo"
     # Spacer col D row 2 empty
     assert ws["D2"].value is None
     assert ws["D3"].value is None
     assert ws["D4"].value is None
-    # Sexo label col E
-    assert ws["E4"].value == "Observaciones"
-    assert ws["E5"].value == "opt0"
+    # Only FIRST bd has its label col with Observaciones.
+    assert ws["A4"].value == "Observaciones"
+    # Second bd has NO label col rendered (col E is bd2's first data col).
+    assert ws["E4"].value != "Observaciones"
 
 
 def test_databar_per_bd_panel_scoped():
@@ -114,15 +116,16 @@ def test_databar_per_bd_panel_scoped():
                 bar_ranges.append(str(cf_range.sqref))
     import re
     assert bar_ranges, "expected at least one databar rule"
-    # Each range must match pattern: single col letter, single row, OR <col><row>:<col><row> within same bd
-    # Edad bd cols: B (1 cat). Sexo bd cols: E (1 cat). Spacer col D must never appear.
-    # openpyxl normalises "B5:B5" → "B5" (single-cell sqref), so allow both forms.
-    edad_pattern = re.compile(r"^[BC]\d+(:[BC]\d+)?$")
-    sexo_pattern = re.compile(r"^[EF]\d+(:[EF]\d+)?$")
+    # First bd Edad has label A + data B (1 cat). Spacer C.
+    # Second bd Sexo has NO label col → data D (1 cat). Spacer E.
+    # Each databar range scoped to ONE col (single-cat per bd).
+    edad_pattern = re.compile(r"^B\d+(:B\d+)?$")
+    sexo_pattern = re.compile(r"^D\d+(:D\d+)?$")
     for r in bar_ranges:
-        assert "D" not in r, f"databar range {r} spans into spacer col D"
+        # Must not span spacer cols C or E.
+        assert ":C" not in r and ":E" not in r, f"databar range {r} spans into spacer col"
         assert edad_pattern.match(r) or sexo_pattern.match(r), \
-            f"databar range {r} does not match expected per-bd pattern (Edad=[BC] or Sexo=[EF])"
+            f"databar range {r} does not match expected per-bd pattern (Edad=B or Sexo=D)"
 
 
 def test_hex_palette_applied():
