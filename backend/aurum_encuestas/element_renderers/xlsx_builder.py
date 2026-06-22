@@ -163,4 +163,152 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
     buf = BytesIO()
     wb.save(buf)
     buf.seek(0)
-    return buf
+    return _force_databar_solid(buf)
+
+
+# ---- x14:dataBar gradient="0" injection (Fase Q) ----
+# Real Office Excel-embed xlsx files (verified in PPT Aurora ejemplo.pptx
+# Microsoft_Excel_Worksheet4.xlsx) use this exact structure for solid bars.
+# Previous attempts failed because of malformed GUIDs (template "% seq"
+# generated 13-char last segment) + missing required negativeFillColor /
+# axisColor children. Excel surfaces this as "Memoria insuficiente para
+# leer Hoja de cálculo" when the OLE Excel host validates the embed.
+
+_NS_MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+_NS_X14 = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main"
+_NS_XM = "http://schemas.microsoft.com/office/excel/2006/main"
+_EXT_URI_CF_RULE = "{B025F937-C7B1-47D3-B67F-A62EFF666E3E}"
+_EXT_URI_CF_LIST = "{78C0D931-6437-407d-A8EE-F0AAD7539E65}"  # lowercase 'd'
+
+
+def _new_guid() -> str:
+    import uuid
+    return "{" + str(uuid.uuid4()).upper() + "}"
+
+
+def _force_databar_solid(xlsx_buf: BytesIO) -> BytesIO:
+    """Post-process xlsx to add x14:dataBar gradient="0" override."""
+    import zipfile
+
+    xlsx_buf.seek(0)
+    out = BytesIO()
+    with zipfile.ZipFile(xlsx_buf, "r") as zin:
+        with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zout:
+            for item in zin.namelist():
+                data = zin.read(item)
+                if item.startswith("xl/worksheets/sheet") and item.endswith(".xml"):
+                    try:
+                        data = _inject_x14_solid_databar(data)
+                    except Exception:
+                        pass  # Fall back to gradient bars on any error.
+                zout.writestr(item, data)
+    out.seek(0)
+    return out
+
+
+def _inject_x14_solid_databar(sheet_bytes: bytes) -> bytes:
+    """Inject x14:dataBar gradient="0" override matching real Office output."""
+    from lxml import etree
+
+    parser = etree.XMLParser(remove_blank_text=False)
+    root = etree.fromstring(sheet_bytes, parser=parser)
+    ns = {"main": _NS_MAIN}
+
+    cf_blocks = root.findall("main:conditionalFormatting", ns)
+    if not cf_blocks:
+        return sheet_bytes
+
+    pairs: list[tuple[str, str, list]] = []  # (sqref, guid, inner_cfvos)
+    for cf in cf_blocks:
+        sqref = cf.get("sqref")
+        for rule in cf.findall('main:cfRule[@type="dataBar"]', ns):
+            inner_db = rule.find("main:dataBar", ns)
+            if inner_db is None:
+                continue
+            inner_cfvos = inner_db.findall("main:cfvo", ns)
+            guid = _new_guid()
+
+            # Append <extLst><ext uri="..." xmlns:x14="..."><x14:id>GUID</x14:id></ext></extLst>
+            # AFTER the inner <dataBar> (per real Office layout).
+            extlst = etree.SubElement(rule, f"{{{_NS_MAIN}}}extLst")
+            ext = etree.SubElement(
+                extlst,
+                f"{{{_NS_MAIN}}}ext",
+                attrib={"uri": _EXT_URI_CF_RULE},
+                nsmap={"x14": _NS_X14},
+            )
+            x14_id = etree.SubElement(ext, f"{{{_NS_X14}}}id")
+            x14_id.text = guid
+            pairs.append((sqref, guid, list(inner_cfvos)))
+
+    if not pairs:
+        return sheet_bytes
+
+    # Append to existing worksheet-level extLst, OR create one.
+    extlst = root.find("main:extLst", ns)
+    if extlst is None:
+        extlst = etree.SubElement(root, f"{{{_NS_MAIN}}}extLst")
+
+    ext = etree.SubElement(
+        extlst,
+        f"{{{_NS_MAIN}}}ext",
+        attrib={"uri": _EXT_URI_CF_LIST},
+        nsmap={"x14": _NS_X14},
+    )
+    x14_cfs = etree.SubElement(ext, f"{{{_NS_X14}}}conditionalFormattings")
+
+    for sqref, guid, inner_cfvos in pairs:
+        x14_cf = etree.SubElement(
+            x14_cfs,
+            f"{{{_NS_X14}}}conditionalFormatting",
+            nsmap={"xm": _NS_XM},
+        )
+        x14_rule = etree.SubElement(
+            x14_cf,
+            f"{{{_NS_X14}}}cfRule",
+            attrib={"type": "dataBar", "id": guid},
+        )
+        x14_databar = etree.SubElement(
+            x14_rule,
+            f"{{{_NS_X14}}}dataBar",
+            attrib={"minLength": "0", "maxLength": "100", "gradient": "0"},
+        )
+        # Mirror inner cfvo types to ext.
+        for c in inner_cfvos:
+            kind = c.get("type")
+            if kind == "num":
+                cfvo = etree.SubElement(
+                    x14_databar, f"{{{_NS_X14}}}cfvo", attrib={"type": "num"}
+                )
+                f_el = etree.SubElement(cfvo, f"{{{_NS_XM}}}f")
+                f_el.text = c.get("val") or "0"
+            elif kind == "min":
+                etree.SubElement(
+                    x14_databar, f"{{{_NS_X14}}}cfvo", attrib={"type": "autoMin"}
+                )
+            elif kind == "max":
+                etree.SubElement(
+                    x14_databar, f"{{{_NS_X14}}}cfvo", attrib={"type": "autoMax"}
+                )
+            else:
+                etree.SubElement(
+                    x14_databar, f"{{{_NS_X14}}}cfvo", attrib={"type": "autoMin"}
+                )
+        # REQUIRED children per real Office schema.
+        etree.SubElement(
+            x14_databar,
+            f"{{{_NS_X14}}}negativeFillColor",
+            attrib={"rgb": "FFFF0000"},
+        )
+        etree.SubElement(
+            x14_databar,
+            f"{{{_NS_X14}}}axisColor",
+            attrib={"rgb": "FF000000"},
+        )
+
+        xm_sqref = etree.SubElement(x14_cf, f"{{{_NS_XM}}}sqref")
+        xm_sqref.text = sqref
+
+    return etree.tostring(
+        root, xml_declaration=True, encoding="UTF-8", standalone=True
+    )
