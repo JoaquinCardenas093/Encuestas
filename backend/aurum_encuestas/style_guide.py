@@ -579,6 +579,7 @@ BUILTIN_STYLE_GUIDE = StyleGuide.model_validate({
                         "position": {"x_rel": 0.04, "y_rel": 0.18, "w_rel": 0.92, "h_rel": 0.70},
                         "chart_type": "TABLE_WITH_MINIBARS",
                         "data_source": {"chart_ref_index": 0, "value_field": "pct"},
+                        "_repeat": "per_chart",
                     },
                 ]
             },
