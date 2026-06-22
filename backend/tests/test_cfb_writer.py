@@ -68,3 +68,31 @@ def test_root_clsid_is_excel():
     # olefile.OleFileIO.root.clsid is "{guid-string}"
     assert ole.root.clsid.upper().replace("-", "") == "0002082000000000C000000000000046"
     ole.close()
+
+
+def test_build_excel_ole_cfb_is_deterministic():
+    """Same input must produce identical bytes (no time.time or random)."""
+    from aurum_encuestas.element_renderers.cfb_writer import build_excel_ole_cfb
+    xlsx = _make_xlsx_bytes()
+    cfb1 = build_excel_ole_cfb(xlsx)
+    cfb2 = build_excel_ole_cfb(xlsx)
+    assert cfb1 == cfb2
+
+
+def test_oversized_xlsx_raises_value_error():
+    """Single-FAT-sector cap silently corrupts if exceeded. Guard raises ValueError."""
+    import pytest
+    from aurum_encuestas.element_renderers.cfb_writer import build_excel_ole_cfb, MAX_PKG_BYTES
+    huge = b"\x00" * (MAX_PKG_BYTES + 1)
+    with pytest.raises(ValueError, match="exceeds CFB single-FAT-sector capacity"):
+        build_excel_ole_cfb(huge)
+
+
+def test_max_size_xlsx_succeeds():
+    """At exactly MAX_PKG_BYTES the blob still builds cleanly."""
+    from aurum_encuestas.element_renderers.cfb_writer import build_excel_ole_cfb, MAX_PKG_BYTES
+    # Need a ZIP-like blob so the CFB Package stream contains valid Open XML
+    # but at MAX_PKG_BYTES. For this test, just verify build succeeds at limit.
+    blob_at_limit = b"PK\x03\x04" + b"\x00" * (MAX_PKG_BYTES - 4)
+    cfb = build_excel_ole_cfb(blob_at_limit)
+    assert cfb[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"

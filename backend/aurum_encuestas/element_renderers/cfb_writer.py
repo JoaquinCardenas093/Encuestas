@@ -29,6 +29,11 @@ DIFSECT = 0xFFFFFFFC
 NOSTREAM = 0xFFFFFFFF
 
 CFB_MAGIC = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+
+# Compute max Package size given single FAT sector capacity.
+# 128 FAT entries consumed: 1 FAT + 2 dir sectors (5 entries × 128 B → 640 B → 2 sectors)
+# + 1 mini-FAT + 1 mini-stream container = 5 overhead → 123 available for Package.
+MAX_PKG_BYTES = (SECTOR_SIZE // 4 - 5) * SECTOR_SIZE   # 123 × 512 = 62,976 B (~61 KB)
 # CLSID {00020820-0000-0000-C000-000000000046} little-endian encoded
 EXCEL_CLSID = b"\x20\x08\x02\x00\x00\x00\x00\x00\xc0\x00\x00\x00\x00\x00\x00\x46"
 
@@ -124,6 +129,12 @@ def build_excel_ole_cfb(xlsx_bytes: bytes) -> bytes:
       fat[n_dir+2]                = mini-stream container
       fat[n_dir+3..]              = Package stream
     """
+    if len(xlsx_bytes) > MAX_PKG_BYTES:
+        raise ValueError(
+            f"xlsx blob {len(xlsx_bytes)} bytes exceeds CFB single-FAT-sector "
+            f"capacity ({MAX_PKG_BYTES}); writer would silently corrupt the "
+            f"OLE. Extend writer to multi-FAT or DIFAT layout for larger blobs."
+        )
     # ---- 1. Mini streams (\x01Ole, \x01CompObj, \x03ObjInfo) ----
     mini_streams = [
         ("\x01Ole", OLE_STREAM),
@@ -199,6 +210,14 @@ def build_excel_ole_cfb(xlsx_bytes: bytes) -> bytes:
     fat_bytes = b"".join(struct.pack("<I", v) for v in fat)
 
     # ---- 7. Directory entries ----
+    # NOTE: directory siblings are stored as a right-leaning chain rather than
+    # a balanced red-black tree per [MS-CFB] §2.6.4. Also, entries are not
+    # sorted by (length, UPPER(name) UTF-16) — they're in allocation order
+    # (Package, \x01Ole, \x01CompObj, \x03ObjInfo). Both deviations are
+    # tolerated by olefile and by PowerPoint Mac/Windows in practice;
+    # strict OOXML validators (oletools) may emit warnings. If a future
+    # strict consumer rejects the blob, sort entries + build balanced tree.
+    #
     # Entry layout:
     #   0: Root Entry (type 5) — clsid = Excel, start = MINISTREAM_IDX, size = mini_stream_size
     #   1: Package          — start = PKG_FIRST_IDX, size = package_size
