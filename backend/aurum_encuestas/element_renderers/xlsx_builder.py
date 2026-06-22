@@ -76,18 +76,21 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
         return Border(**sides)
 
     cur_col = 1
-    for bd_id, bd in bds:
+    for bd_index, (bd_id, bd) in enumerate(bds):
         cats = bd.get("categories", {}) or {}
         n_cats = len(cats)
         if n_cats == 0:
             continue
 
-        if show_legend:
+        # Only the FIRST bd table renders the label col when show_legend=True.
+        # Subsequent tables share the first table's leyenda visually (no own col).
+        is_first_bd = (bd_index == 0)
+        if show_legend and is_first_bd:
             label_col = cur_col
             data_start = cur_col + 1
         else:
             data_start = cur_col
-            label_col = None  # no label col
+            label_col = None
         data_end = data_start + n_cats - 1
 
         # Row 2: merged group_header (Sexo/NSE) — top + L + R, NO bottom.
@@ -120,9 +123,9 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
             ch.alignment = center
             ch.border = _bdr(first=(i == 0), last=(i == n_cats - 1), bottom=True)
 
-        # Row 4: counts row — label col = "Observaciones" (only if show_legend), data cols = totals.
+        # Row 4: counts row — label col = "Observaciones" (only on first bd), data cols = totals.
         # Counts cells: bottom only (no L/R divider between them).
-        if show_legend:
+        if label_col is not None:
             obs = ws.cell(row=COUNTS_ROW, column=label_col, value="Observaciones")
             obs.fill = body_fill
             obs.font = body_font_bold_11
@@ -143,7 +146,7 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
         for j, opt in enumerate(options):
             row = FIRST_OPT_ROW + j
 
-            if show_legend:
+            if label_col is not None:
                 lbl = ws.cell(row=row, column=label_col, value=opt)
                 lbl.fill = body_fill
                 lbl.font = body_font_bold_11
@@ -183,7 +186,7 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
             ws.conditional_formatting.add(range_str, rule)
 
         # Column widths for this bd
-        if show_legend:
+        if label_col is not None:
             ws.column_dimensions[get_column_letter(label_col)].width = label_col_w
         for c in range(data_start, data_end + 1):
             ws.column_dimensions[get_column_letter(c)].width = DATA_COL_W
