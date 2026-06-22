@@ -158,3 +158,15 @@ def test_dir_tree_balanced_depth_bounded():
     max_allowed = int(ceil(log2(n_entries + 1))) + 1
     assert depth <= max_allowed, f"tree depth {depth} > max {max_allowed} for N={n_entries}"
     ole.close()
+
+
+def test_compobj_header_matches_real_office():
+    """Office-generated CompObj starts with 01 00 FE FF [version DWORD]
+    FF FF FF FF [CLSID]. Verifies first 12 bytes match real Office layout."""
+    from aurum_encuestas.element_renderers.cfb_writer import build_excel_ole_cfb
+    cfb = build_excel_ole_cfb(_make_xlsx_bytes())
+    ole = olefile.OleFileIO(BytesIO(cfb))
+    co = ole.openstream("\x01CompObj").read()
+    assert co[:4] == b"\x01\x00\xFE\xFF", f"CompObj[0:4]={co[:4].hex()}"
+    assert co[8:12] == b"\xFF\xFF\xFF\xFF", f"CompObj[8:12]={co[8:12].hex()}"
+    ole.close()

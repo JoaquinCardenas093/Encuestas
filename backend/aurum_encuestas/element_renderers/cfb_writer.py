@@ -47,9 +47,9 @@ OBJINFO_STREAM = b"\x40\x00\x09\x00\x00\x00"
 def _build_compobj_stream() -> bytes:
     """Build \\x01CompObj stream per [MS-OLEDS] §2.3.6 for Excel.Sheet.12."""
     parts = []
-    parts.append(struct.pack("<I", 0xFFFE))                     # 4 bytes
-    parts.append(struct.pack("<I", 0x0A03))                     # 4 bytes
-    parts.append(struct.pack("<I", 0x000000FF))                 # 4 bytes
+    parts.append(b"\x01\x00\xFE\xFF")                # 4B Version+Reserved+ByteOrder
+    parts.append(struct.pack("<I", 0x00000A03))      # 4B Version DWORD (unchanged)
+    parts.append(struct.pack("<I", 0xFFFFFFFF))      # 4B Reserved2 (was 0x000000FF)
     parts.append(EXCEL_CLSID)                                   # CLSID 16 bytes
     # AnsiUserType — length-prefixed Pascal string with NUL terminator
     user_type = b"Microsoft Excel Worksheet\x00"
