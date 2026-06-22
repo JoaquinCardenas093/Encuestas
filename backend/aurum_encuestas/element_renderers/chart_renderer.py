@@ -241,8 +241,8 @@ def render(slide, element: dict, ctx: RenderContext) -> None:
     # Apply labels — pie/donut force show_category_name + show_percentage, NO value.
     labels_cfg = dict(element.get("labels", {}))
     if is_pie:
-        labels_cfg.setdefault("show_category_name", True)
-        labels_cfg.setdefault("show_percentage", True)
+        labels_cfg["show_category_name"] = True  # Always show category name for pie
+        labels_cfg["show_percentage"] = True  # Always show percentage for pie
         labels_cfg["show_value"] = False  # never raw fraction
         labels_cfg.setdefault("format", "0.0%")
     _apply_labels(chart, labels_cfg, ctx)
