@@ -6,7 +6,7 @@ from PIL import Image, ImageDraw, ImageFont
 EMU_PER_PX = 9525
 
 # Palette (matches xlsx_builder hex literals)
-HEADER_DARK = (89, 89, 89)
+HEADER_DARK = (153, 153, 153)  # #999999 — matches xlsx HEADER_FILL_HEX
 BG_WHITE = (255, 255, 255)
 TEXT_BLACK = (0, 0, 0)
 TEXT_WHITE = (255, 255, 255)
@@ -130,10 +130,12 @@ def render_table_preview_png(
             continue
         panel_w = effective_label_w + cell_w * n_cats
 
-        # Group header band — spans full panel width
-        draw.rectangle([cur_x, y_hdr, cur_x + panel_w, y_hdr + row_hdr], fill=HEADER_DARK)
+        # Group header band — DATA cols only (excludes label col per design target)
+        hdr_x = cur_x + effective_label_w
+        hdr_w = cell_w * n_cats
+        draw.rectangle([hdr_x, y_hdr, hdr_x + hdr_w, y_hdr + row_hdr], fill=HEADER_DARK)
         _centered_text(draw, bd.get("label") or bd_id, font_hdr, TEXT_WHITE,
-                       cur_x, y_hdr, panel_w, row_hdr)
+                       hdr_x, y_hdr, hdr_w, row_hdr)
 
         # Cat sub-headers — data cols only (label col empty in cat row)
         for i, (cat_label, _) in enumerate(cats.items()):

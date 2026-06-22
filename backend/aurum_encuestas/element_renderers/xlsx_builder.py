@@ -3,15 +3,16 @@ from io import BytesIO
 
 from openpyxl import Workbook
 from openpyxl.formatting.rule import DataBarRule
-from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 # Hex palette (no role mapping — direct hex to avoid color_resolver remapping)
-HEADER_FILL_HEX = "595959"   # dark gray
+HEADER_FILL_HEX = "999999"   # medium gray (matches target design)
 HEADER_FONT_HEX = "FFFFFF"   # white
 BODY_FILL_HEX = "FFFFFF"     # white
 BODY_FONT_HEX = "000000"     # black
-DATABAR_HEX = "D9D9D9"       # light gray bar (paler)
+DATABAR_HEX = "D9D9D9"       # light gray bar
+BORDER_HEX = "BFBFBF"        # cell borders
 
 HEADER_ROW = 2
 CAT_ROW = 3
@@ -32,6 +33,8 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
     wb = Workbook()
     ws = wb.active
     ws.title = "Datos"
+    # Hide worksheet gridlines (rely on explicit cell borders).
+    ws.sheet_view.showGridLines = False
 
     question = getattr(source_chart, "question", None)
     options = list(getattr(question, "options", []) or [])
@@ -49,6 +52,8 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
     body_font_bold_11 = Font(color=BODY_FONT_HEX, bold=True, name="Calibri", size=11)
     center = Alignment(horizontal="center", vertical="center")
     right = Alignment(horizontal="right", vertical="center")
+    _thin = Side(style="thin", color=BORDER_HEX)
+    cell_border = Border(left=_thin, right=_thin, top=_thin, bottom=_thin)
 
     cur_col = 1
     for bd_id, bd in bds:
@@ -65,17 +70,17 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
             label_col = None  # no label col
         data_end = data_start + n_cats - 1
 
-        # Row 2: merged group_header
-        header_start = label_col if show_legend else data_start
+        # Row 2: merged group_header — DATA cols only (excludes label col per design target)
         ws.merge_cells(
-            start_row=HEADER_ROW, start_column=header_start,
+            start_row=HEADER_ROW, start_column=data_start,
             end_row=HEADER_ROW, end_column=data_end,
         )
-        gh = ws.cell(row=HEADER_ROW, column=header_start,
+        gh = ws.cell(row=HEADER_ROW, column=data_start,
                      value=bd.get("label") or bd_id)
         gh.fill = header_fill
         gh.font = header_font_bold_11
         gh.alignment = center
+        gh.border = cell_border
 
         # Row 3: cat sub-headers (data cols only)
         for i, (cat_label, _) in enumerate(cats.items()):
@@ -83,6 +88,7 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
             ch.fill = header_fill
             ch.font = header_font_bold_10
             ch.alignment = center
+            ch.border = cell_border
 
         # Row 4: counts row — label col = "Observaciones" (only if show_legend), data cols = totals
         if show_legend:
@@ -97,6 +103,7 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
             cc.fill = body_fill
             cc.font = body_font_bold_11
             cc.alignment = center
+            cc.border = cell_border
 
         # Rows 5+: option rows
         for j, opt in enumerate(options):
@@ -115,6 +122,7 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
                 oc.fill = body_fill
                 oc.font = body_font_10
                 oc.alignment = Alignment(horizontal="right", indent=1, vertical="center")
+                oc.border = cell_border
 
         # DataBarRule per OPTION ROW spanning this bd's data cols only
         for j in range(len(options)):

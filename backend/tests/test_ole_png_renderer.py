@@ -138,12 +138,15 @@ def test_palette_dark_header_white_body():
     )
     png = render_table_preview_png(src, ["edad"], 6_000_000, 3_000_000)
     img = Image.open(BytesIO(png))
-    # Sample top-center (header band — should be dark gray ~89)
+    # Sample top-center (header band — should be medium gray HEADER_DARK=(153,153,153))
     w, h = img.size
     hx, hy = w // 2, 5
     hp = img.getpixel((hx, hy))
-    assert hp[0] < 130 and hp[1] < 130 and hp[2] < 130, \
-        f"expected dark header pixel at ({hx},{hy}), got {hp}"
+    # Header gray must be clearly non-white (channel < 200) and roughly equal RGB (gray)
+    assert hp[0] < 200 and hp[1] < 200 and hp[2] < 200, \
+        f"expected gray header pixel at ({hx},{hy}), got {hp}"
+    assert abs(hp[0] - hp[1]) <= 5 and abs(hp[1] - hp[2]) <= 5, \
+        f"expected gray (equal RGB), got {hp}"
     # Body row pixel must be white. Layout: hdr 28 + cat 24 + count 22 = 74.
     # Option rows after that, row_opt capped at 44.
     # Sample opt1 row (pct=0.1 — bar only covers 10% from left edge of cell).
@@ -182,17 +185,20 @@ def test_multi_bd_renders_n_panels_with_gap():
     # dark, white-gap, dark
     y = 5
     pixels = [img.getpixel((x, y)) for x in range(0, w, max(w // 80, 1))]
-    # Compress to run-length: collect transitions dark↔white
+    # Compress to run-length: collect transitions gray↔white
+    # HEADER_DARK now (153,153,153); detect gray as channel < 200 AND RGB equal-ish.
     runs = []
     prev_state = None
     for p in pixels:
-        state = "D" if p[0] < 130 else ("W" if p[0] > 240 else None)
+        is_gray = p[0] < 200 and abs(p[0] - p[1]) <= 5 and abs(p[1] - p[2]) <= 5
+        is_white = p[0] > 240 and p[1] > 240 and p[2] > 240
+        state = "D" if is_gray else ("W" if is_white else None)
         if state and state != prev_state:
             runs.append(state)
             prev_state = state
-    # Must see at least D, W, D — two distinct dark clusters with white gap between
+    # Must see at least 2 distinct gray panels separated by white gap
     dark_runs = sum(1 for r in runs if r == "D")
-    assert dark_runs >= 2, f"expected >=2 dark panels separated by white gap; runs={runs}"
+    assert dark_runs >= 2, f"expected >=2 gray panels separated by white gap; runs={runs}"
 
 
 def test_show_legend_false_skips_label_column():
