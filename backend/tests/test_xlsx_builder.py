@@ -177,14 +177,23 @@ def test_cell_borders_applied():
     buf = build_xlsx_for_table(src, ["edad"])
     wb = load_workbook(buf)
     ws = wb.active
-    # Header B2 must have left border style "thin"
-    assert ws["B2"].border.left.style == "thin"
-    # Option row B5 must have all 4 borders styled "thin"
+    # Header B2 (single cat → first+last): top + left + right, NO bottom.
+    h = ws["B2"]
+    assert h.border.top.style == "thin"
+    assert h.border.left.style == "thin"
+    assert h.border.right.style == "thin"
+    assert h.border.bottom is None or h.border.bottom.style is None
+    # Option row B5 first option (j=0, n_opts=2 → not last): single-col so first+last.
+    # Has: right_always, left (first col), no bottom (not last opt).
     b5 = ws["B5"]
-    assert b5.border.left.style == "thin"
     assert b5.border.right.style == "thin"
-    assert b5.border.top.style == "thin"
-    assert b5.border.bottom.style == "thin"
+    assert b5.border.left.style == "thin"
+    assert b5.border.top is None or b5.border.top.style is None
+    assert b5.border.bottom is None or b5.border.bottom.style is None
+    # Last option row B6: same + bottom (outer).
+    b6 = ws["B6"]
+    assert b6.border.bottom.style == "thin"
+    assert b6.border.right.style == "thin"
 
 
 def test_empty_breakdown_groups_returns_empty_xlsx():
