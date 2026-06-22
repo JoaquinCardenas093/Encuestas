@@ -420,11 +420,19 @@ def test_builtin_has_table_only_full_width_pattern():
     p = matched[0]
     assert p.priority == -10
     elements = list(p.implementation.elements)
-    assert len(elements) == 1
-    el = elements[0]
-    # el may be a pydantic model — access via attribute or .model_dump()
-    el_dict = el.model_dump() if hasattr(el, "model_dump") else el
-    assert el_dict["kind"] == "chart"
-    assert el_dict["chart_type"] == "TABLE_WITH_MINIBARS"
-    assert el_dict["position"]["x_rel"] == 0.04
-    assert el_dict["position"]["w_rel"] == 0.92
+    # Now: subtitle text element + main chart element
+    assert len(elements) == 2
+    el_dicts = [
+        (e.model_dump() if hasattr(e, "model_dump") else e)
+        for e in elements
+    ]
+    # Subtitle text element first.
+    sub = next(e for e in el_dicts if e["kind"] == "text")
+    assert sub["content_source"]["text"] == "Distribución segmentada"
+    assert sub["style"]["bold"] is True
+    assert sub["style"]["align_h"] == "center"
+    # Chart element (TABLE_WITH_MINIBARS).
+    chart_el = next(e for e in el_dicts if e["kind"] == "chart")
+    assert chart_el["chart_type"] == "TABLE_WITH_MINIBARS"
+    assert chart_el["position"]["x_rel"] == 0.04
+    assert chart_el["position"]["w_rel"] == 0.92

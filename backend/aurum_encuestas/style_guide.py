@@ -566,6 +566,13 @@ BUILTIN_STYLE_GUIDE = StyleGuide.model_validate({
             "implementation": {
                 "elements": [
                     {
+                        "kind": "text",
+                        "id": "section_subtitle",
+                        "position": {"x_rel": 0.0, "y_rel": 0.05, "w_rel": 1.0, "h_rel": 0.08},
+                        "content_source": {"type": "static", "text": "Distribución segmentada"},
+                        "style": {"font_size": 16, "bold": True, "align_h": "center"},
+                    },
+                    {
                         "kind": "chart",
                         "id": "main_table",
                         "position": {"x_rel": 0.04, "y_rel": 0.18, "w_rel": 0.92, "h_rel": 0.70},
