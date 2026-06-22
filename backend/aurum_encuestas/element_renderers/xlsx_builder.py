@@ -49,7 +49,6 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
     body_font_bold_11 = Font(color=BODY_FONT_HEX, bold=True, name="Calibri", size=11)
     center = Alignment(horizontal="center", vertical="center")
     right = Alignment(horizontal="right", vertical="center")
-    left = Alignment(horizontal="left", vertical="center")
 
     cur_col = 1
     for bd_id, bd in bds:

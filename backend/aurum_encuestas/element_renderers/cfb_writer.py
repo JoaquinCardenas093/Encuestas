@@ -136,7 +136,6 @@ def _sort_dir_entries_indices(entries_with_names: list[tuple[int, str]]) -> list
 
 
 def _assign_balanced_tree(
-    n_entries: int,
     sorted_indices: list[int],
 ) -> tuple[int, dict[int, tuple[int, int, int]]]:
     """Build a balanced binary tree over `sorted_indices`.
@@ -295,7 +294,7 @@ def build_excel_ole_cfb(xlsx_bytes: bytes) -> bytes:
 
     # Build balanced red-black tree over physical slots [1..N]
     physical_slots_in_order = list(range(1, n_non_root + 1))
-    tree_root, sib_color = _assign_balanced_tree(n_non_root, physical_slots_in_order)
+    tree_root, sib_color = _assign_balanced_tree(physical_slots_in_order)
 
     # Serialize Root entry (slot 0): child = tree_root
     entries = []
