@@ -60,12 +60,8 @@ def render_pattern(
     for el in ordered_elements:
         if el.get("_repeat") == "per_chart" and charts_list:
             n = len(charts_list)
-            # TABLE_WITH_MINIBARS: stack vertically (1 col). Other types: 3-col grid.
-            el_chart_type = (el.get("chart_type") or "").strip()
-            if el_chart_type == "TABLE_WITH_MINIBARS":
-                cols = 1
-            else:
-                cols = 3 if n <= 3 else (3 if n <= 6 else 3)  # always 3 cols
+            # N=1: full width. N=2: side-by-side. N=3+: 3-col grid.
+            cols = min(n, 3) if n >= 2 else 1
             rows = (n + cols - 1) // cols
             base_pos = el.get("position", {})
             base_x = base_pos.get("x_rel", 0.03)
@@ -74,8 +70,7 @@ def render_pattern(
             base_h = base_pos.get("h_rel", 0.74)
             gap_x = 0.02
             gap_y = 0.04
-            # For single-col stack: respect explicit w_rel from base. For grid:
-            # equal cells across the row.
+            # N=1: respect base w_rel (full width). N>=2: split evenly across row.
             if cols == 1 and base_w is not None:
                 cell_w = base_w
             else:
