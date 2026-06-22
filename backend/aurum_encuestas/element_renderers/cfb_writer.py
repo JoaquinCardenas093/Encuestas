@@ -119,6 +119,57 @@ def _dir_entry(
     return entry
 
 
+def _sort_dir_entries_indices(entries_with_names: list[tuple[int, str]]) -> list[int]:
+    """Return entry indices sorted per MS-CFB §2.6.4:
+       primary key = UTF-16 byte length of name (including NUL terminator),
+       secondary key = UPPER(name) encoded UTF-16-LE.
+
+    `entries_with_names`: list of (entry_index, name_string).
+    """
+    def sort_key(item):
+        idx, name = item
+        utf16_byte_len = (len(name) + 1) * 2  # include NUL
+        upper_utf16 = name.upper().encode("utf-16-le")
+        return (utf16_byte_len, upper_utf16)
+
+    return [idx for idx, _ in sorted(entries_with_names, key=sort_key)]
+
+
+def _assign_balanced_tree(
+    sorted_indices: list[int],
+) -> tuple[int, dict[int, tuple[int, int, int]]]:
+    """Build a balanced binary tree over `sorted_indices`.
+
+    Returns:
+      - root_index: index of the root entry in the directory.
+      - sib_color_map: {entry_idx: (left_sib, right_sib, color)} where color is 1=BLACK, 0=RED.
+                       left/right sib are entry indices or 0xFFFFFFFF (NOSTREAM).
+
+    Strategy: pick middle of sorted list as root (BLACK), recurse on left and right halves.
+    """
+    NOSTREAM = 0xFFFFFFFF
+    sib_color: dict[int, tuple[int, int, int]] = {}
+
+    def build(lo: int, hi: int, depth: int) -> int:
+        """Return the index of the subtree root, or NOSTREAM if empty."""
+        if lo > hi:
+            return NOSTREAM
+        mid = (lo + hi) // 2
+        idx = sorted_indices[mid]
+        left = build(lo, mid - 1, depth + 1)
+        right = build(mid + 1, hi, depth + 1)
+        # Color: alternate by depth. Root BLACK. Children RED on odd depth, BLACK on even.
+        color = 1 if depth % 2 == 0 else 0
+        sib_color[idx] = (left, right, color)
+        return idx
+
+    if not sorted_indices:
+        return NOSTREAM, sib_color
+
+    root = build(0, len(sorted_indices) - 1, 0)
+    return root, sib_color
+
+
 def build_excel_ole_cfb(xlsx_bytes: bytes) -> bytes:
     """Build a CFB blob wrapping the xlsx as Excel.Sheet.12 OLE.
 
@@ -210,55 +261,69 @@ def build_excel_ole_cfb(xlsx_bytes: bytes) -> bytes:
     fat_bytes = b"".join(struct.pack("<I", v) for v in fat)
 
     # ---- 7. Directory entries ----
-    # NOTE: directory siblings are stored as a right-leaning chain rather than
-    # a balanced red-black tree per [MS-CFB] §2.6.4. Also, entries are not
-    # sorted by (length, UPPER(name) UTF-16) — they're in allocation order
-    # (Package, \x01Ole, \x01CompObj, \x03ObjInfo). Both deviations are
-    # tolerated by olefile and by PowerPoint Mac/Windows in practice;
-    # strict OOXML validators (oletools) may emit warnings. If a future
-    # strict consumer rejects the blob, sort entries + build balanced tree.
+    # Per [MS-CFB] §2.6.4: siblings sorted by (UTF-16 byte length incl NUL, UPPER(name) UTF-16)
+    # arranged in a balanced binary tree with alternating depth-based colors (BLACK=1, RED=0).
     #
-    # Entry layout:
-    #   0: Root Entry (type 5) — clsid = Excel, start = MINISTREAM_IDX, size = mini_stream_size
-    #   1: Package          — start = PKG_FIRST_IDX, size = package_size
-    #   2: \x01Ole          — mini stream
-    #   3: \x01CompObj      — mini stream
-    #   4: \x03ObjInfo      — mini stream
-    # Tree: Root's child = 1 (Package). Sibling tree built as right-leaning chain:
-    #   Package.right_sib = 2; \x01Ole.right_sib = 3; \x01CompObj.right_sib = 4; \x03ObjInfo none.
+    # Strategy: build "logical" specs (Root at slot 0, then non-Root in any order),
+    # sort the non-Root specs, assign new physical slot numbers in sorted order,
+    # build a balanced tree over the new slot indices, then serialize in physical order.
     def name_len_bytes(s: str) -> int:
         return 2 * (len(s) + 1)
 
+    # Logical non-Root entry specs: (name, entry_type, clsid, start_sect, stream_size)
+    non_root_specs = [
+        ("Package", 2, b"\x00" * 16, PKG_FIRST_IDX, package_size),
+    ]
+    for mname, _, start_mini, msize in mini_alloc:
+        non_root_specs.append((mname, 2, b"\x00" * 16, start_mini, msize))
+
+    # Sort non-Root specs per MS-CFB §2.6.4 to determine physical slot order.
+    # Slots 1..N are assigned in sorted order so direntries[1..N] are sorted.
+    logical_with_names = list(enumerate(non_root_specs))  # [(0, spec), (1, spec), ...]
+    sorted_logical = _sort_dir_entries_indices(
+        [(li, spec[0]) for li, spec in logical_with_names]
+    )
+    # sorted_logical[0] is the logical index of the entry that goes to physical slot 1, etc.
+    # Assign physical slots: physical_slot[logical_idx] = 1-based physical position
+    n_non_root = len(non_root_specs)
+    physical_slot: dict[int, int] = {}
+    sorted_specs: list[tuple] = []
+    for phys_pos, li in enumerate(sorted_logical, start=1):
+        physical_slot[li] = phys_pos
+        sorted_specs.append(non_root_specs[li])
+
+    # Build balanced red-black tree over physical slots [1..N]
+    physical_slots_in_order = list(range(1, n_non_root + 1))
+    tree_root, sib_color = _assign_balanced_tree(physical_slots_in_order)
+
+    # Serialize Root entry (slot 0): child = tree_root
     entries = []
     entries.append(_dir_entry(
         name="Root Entry",
         entry_type=5,
         name_len_bytes=name_len_bytes("Root Entry"),
         color=1,
-        child=1,
+        left_sib=NOSTREAM,
+        right_sib=NOSTREAM,
+        child=tree_root,
         clsid=EXCEL_CLSID,
         start_sect=MINISTREAM_IDX,
         stream_size=mini_stream_size,
     ))
-    entries.append(_dir_entry(
-        name="Package",
-        entry_type=2,
-        name_len_bytes=name_len_bytes("Package"),
-        color=1,
-        right_sib=2,
-        start_sect=PKG_FIRST_IDX,
-        stream_size=package_size,
-    ))
-    for idx, (mname, _, start_mini, msize) in enumerate(mini_alloc, start=2):
-        right = idx + 1 if idx < (1 + 1 + len(mini_alloc) - 1) else NOSTREAM
+    # Serialize non-Root entries in sorted (physical) order
+    for phys_slot, (name, etype, clsid, start, size) in enumerate(sorted_specs, start=1):
+        left, right, color = sib_color.get(phys_slot, (NOSTREAM, NOSTREAM, 1))
         entries.append(_dir_entry(
-            name=mname,
-            entry_type=2,
-            name_len_bytes=name_len_bytes(mname),
-            color=1,
+            name=name,
+            entry_type=etype,
+            name_len_bytes=name_len_bytes(name),
+            color=color,
+            left_sib=left,
             right_sib=right,
-            start_sect=start_mini,
-            stream_size=msize,
+            child=NOSTREAM,
+            clsid=clsid,
+            start_sect=start,
+            stream_size=size,
         ))
     dir_bytes = b"".join(entries)
     # Pad with empty (zeroed) dir entries to fill the directory sectors

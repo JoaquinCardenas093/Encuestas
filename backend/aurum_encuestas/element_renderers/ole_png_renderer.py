@@ -10,7 +10,7 @@ HEADER_DARK = (89, 89, 89)
 BG_WHITE = (255, 255, 255)
 TEXT_BLACK = (0, 0, 0)
 TEXT_WHITE = (255, 255, 255)
-BAR_GRAY = (191, 191, 191)
+BAR_GRAY = (217, 217, 217)
 
 
 def render_table_preview_png(
@@ -19,8 +19,9 @@ def render_table_preview_png(
     w_emu: int,
     h_emu: int,
 ) -> bytes:
-    """PIL canvas: N panels side-by-side, each = own label col + dark headers
-    + white body + gray bars. Returns PNG bytes."""
+    """PIL canvas: N panels side-by-side, each = optional label col + dark headers
+    + white body + gray bars. Label col toggled by source_chart.show_legend.
+    Returns PNG bytes."""
     w_px = max(400, w_emu // EMU_PER_PX)
     h_px = max(200, h_emu // EMU_PER_PX)
     img = Image.new("RGB", (w_px, h_px), BG_WHITE)
@@ -47,6 +48,9 @@ def render_table_preview_png(
     except (IOError, OSError):
         font_hdr = font_cat = font_count = font_lbl = font_opt = default_font
 
+    # Read show_legend flag (default False)
+    show_legend = bool(getattr(source_chart, "show_legend", False))
+
     # Layout: per-panel label col + N cat cols, with horizontal gap between panels
     gap_px = 15
     n_bds = len(bds)
@@ -63,7 +67,10 @@ def render_table_preview_png(
             break
         label_col_w -= 5
     label_col_w = max(min_label_w, label_col_w)
-    available_for_cats = content_w - label_col_w * n_bds - gap_px * (n_bds - 1)
+
+    # Use effective_label_w: 0 when show_legend=False, otherwise label_col_w
+    effective_label_w = label_col_w if show_legend else 0
+    available_for_cats = content_w - effective_label_w * n_bds - gap_px * (n_bds - 1)
     cell_w = max(45, available_for_cats // max(total_cats, 1))
 
     row_hdr = 28
@@ -86,7 +93,7 @@ def render_table_preview_png(
         n_cats = len(cats)
         if n_cats == 0:
             continue
-        panel_w = label_col_w + cell_w * n_cats
+        panel_w = effective_label_w + cell_w * n_cats
 
         # Group header band — spans full panel width
         draw.rectangle([cur_x, y_hdr, cur_x + panel_w, y_hdr + row_hdr], fill=HEADER_DARK)
@@ -95,17 +102,18 @@ def render_table_preview_png(
 
         # Cat sub-headers — data cols only (label col empty in cat row)
         for i, (cat_label, _) in enumerate(cats.items()):
-            cx = cur_x + label_col_w + i * cell_w
+            cx = cur_x + effective_label_w + i * cell_w
             draw.rectangle([cx, y_cat, cx + cell_w, y_cat + row_cat], fill=HEADER_DARK)
             _centered_text(draw, cat_label, font_cat, TEXT_WHITE, cx, y_cat, cell_w, row_cat)
 
         # Counts row: label col = "Observaciones", data cols = totals
-        lx = cur_x
-        draw.rectangle([lx, y_count, lx + label_col_w, y_count + row_count], fill=BG_WHITE)
-        _centered_text(draw, "Observaciones", font_lbl, TEXT_BLACK,
-                       lx, y_count, label_col_w, row_count, align="right")
+        if show_legend:
+            lx = cur_x
+            draw.rectangle([lx, y_count, lx + effective_label_w, y_count + row_count], fill=BG_WHITE)
+            _centered_text(draw, "Observaciones", font_lbl, TEXT_BLACK,
+                           lx, y_count, effective_label_w, row_count, align="right")
         for i, (_, opt_cells) in enumerate(cats.items()):
-            cx = cur_x + label_col_w + i * cell_w
+            cx = cur_x + effective_label_w + i * cell_w
             total = sum(int((opt_cells.get(o) or {}).get("count") or 0) for o in options)
             draw.rectangle([cx, y_count, cx + cell_w, y_count + row_count], fill=BG_WHITE)
             _centered_text(draw, str(total) if total else "", font_count, TEXT_BLACK,
@@ -116,12 +124,14 @@ def render_table_preview_png(
             oy = y_opt0 + j * row_opt
 
             # Label col
-            draw.rectangle([lx, oy, lx + label_col_w, oy + row_opt], fill=BG_WHITE)
-            _centered_text(draw, opt, font_lbl, TEXT_BLACK,
-                           lx, oy, label_col_w, row_opt, align="right")
+            if show_legend:
+                lx = cur_x
+                draw.rectangle([lx, oy, lx + effective_label_w, oy + row_opt], fill=BG_WHITE)
+                _centered_text(draw, opt, font_lbl, TEXT_BLACK,
+                               lx, oy, effective_label_w, row_opt, align="right")
 
             for i, (_, opt_cells) in enumerate(cats.items()):
-                cx = cur_x + label_col_w + i * cell_w
+                cx = cur_x + effective_label_w + i * cell_w
                 pct = float((opt_cells.get(opt) or {}).get("pct") or 0)
                 draw.rectangle([cx, oy, cx + cell_w, oy + row_opt], fill=BG_WHITE)
 

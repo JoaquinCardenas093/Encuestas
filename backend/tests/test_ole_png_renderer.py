@@ -1,4 +1,4 @@
-# backend/tests/test_ole_png_renderer.py — new
+# backend/tests/test_ole_png_renderer.py — adapted for show_legend toggle
 from io import BytesIO
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -6,7 +6,7 @@ from unittest.mock import patch
 from PIL import Image
 
 
-def _make_source(n_options=2, bds_spec=None):
+def _make_source(n_options=2, bds_spec=None, show_legend=False):
     q = SimpleNamespace(options=[f"opt{i}" for i in range(n_options)])
     all_bds = {}
     for bd_id, label, cats in (bds_spec or []):
@@ -15,6 +15,7 @@ def _make_source(n_options=2, bds_spec=None):
         question=q,
         all_breakdowns_data=all_bds,
         breakdown_ids=[bd_id for bd_id, _, _ in (bds_spec or [])],
+        show_legend=show_legend,
     )
 
 
@@ -25,7 +26,7 @@ def test_returns_png_magic_bytes():
         ("edad", "Edad", [
             ("18-39", {"opt0": {"pct": 0.9, "count": 90}, "opt1": {"pct": 0.1, "count": 10}}),
         ]),
-    ])
+    ], show_legend=True)
     png = render_table_preview_png(src, ["edad"], 4_000_000, 2_000_000)
     assert png[:8] == b"\x89PNG\r\n\x1a\n"
 
@@ -37,7 +38,7 @@ def test_size_matches_emu_bbox():
         ("edad", "Edad", [
             ("18-39", {"opt0": {"pct": 0.9, "count": 90}, "opt1": {"pct": 0.1, "count": 10}}),
         ]),
-    ])
+    ], show_legend=True)
     # 4_000_000 EMU / 9525 ≈ 419 px; 2_000_000 / 9525 ≈ 210 px
     png = render_table_preview_png(src, ["edad"], 4_000_000, 2_000_000)
     img = Image.open(BytesIO(png))
@@ -47,7 +48,7 @@ def test_size_matches_emu_bbox():
 def test_empty_breakdown_returns_valid_white_image():
     from aurum_encuestas.element_renderers.ole_png_renderer import render_table_preview_png
 
-    src = _make_source(n_options=0, bds_spec=[])
+    src = _make_source(n_options=0, bds_spec=[], show_legend=True)
     png = render_table_preview_png(src, [], 4_000_000, 2_000_000)
     img = Image.open(BytesIO(png))
     # White majority pixel
@@ -62,7 +63,7 @@ def test_uses_default_font_when_calibri_missing():
         ("edad", "Edad", [
             ("18-39", {"opt0": {"pct": 0.9, "count": 90}, "opt1": {"pct": 0.1, "count": 10}}),
         ]),
-    ])
+    ], show_legend=True)
     with patch.object(ImageFont, "truetype", side_effect=IOError("font missing")):
         png = render_table_preview_png(src, ["edad"], 4_000_000, 2_000_000)
     assert png[:8] == b"\x89PNG\r\n\x1a\n"
@@ -84,6 +85,7 @@ def test_palette_dark_header_white_body():
             }},
         },
         breakdown_ids=["edad"],
+        show_legend=True,
     )
     png = render_table_preview_png(src, ["edad"], 6_000_000, 3_000_000)
     img = Image.open(BytesIO(png))
@@ -122,6 +124,7 @@ def test_multi_bd_renders_n_panels_with_gap():
             }},
         },
         breakdown_ids=["edad", "sexo"],
+        show_legend=True,
     )
     png = render_table_preview_png(src, ["edad", "sexo"], 8_000_000, 3_000_000)
     img = Image.open(BytesIO(png))
@@ -141,3 +144,49 @@ def test_multi_bd_renders_n_panels_with_gap():
     # Must see at least D, W, D — two distinct dark clusters with white gap between
     dark_runs = sum(1 for r in runs if r == "D")
     assert dark_runs >= 2, f"expected >=2 dark panels separated by white gap; runs={runs}"
+
+
+def test_show_legend_false_skips_label_column():
+    """When show_legend=False, label columns should not be rendered.
+    Render TWO versions (True & False) and sample pixels in the count row:
+    - With show_legend=True: label col text "Observaciones" drawn → black pixels
+    - With show_legend=False: label column skipped → white pixels
+    This ensures the guard doesn't regress silently."""
+    from aurum_encuestas.element_renderers.ole_png_renderer import render_table_preview_png
+
+    bds_spec = [
+        ("edad", "Edad", [
+            ("18-39", {"opt0": {"pct": 0.9, "count": 90}, "opt1": {"pct": 0.1, "count": 10}}),
+        ]),
+    ]
+
+    # Render with show_legend=True
+    src_true = _make_source(n_options=2, bds_spec=bds_spec, show_legend=True)
+    png_true = render_table_preview_png(src_true, ["edad"], 4_000_000, 2_000_000)
+    img_true = Image.open(BytesIO(png_true))
+
+    # Render with show_legend=False
+    src_false = _make_source(n_options=2, bds_spec=bds_spec, show_legend=False)
+    png_false = render_table_preview_png(src_false, ["edad"], 4_000_000, 2_000_000)
+    img_false = Image.open(BytesIO(png_false))
+
+    # Both should be valid PNGs
+    assert png_true[:8] == b"\x89PNG\r\n\x1a\n"
+    assert png_false[:8] == b"\x89PNG\r\n\x1a\n"
+
+    # Sample label-col text pixels in the count row where "Observaciones" is drawn.
+    # Layout: y_hdr=0, y_cat=28, y_count=52, y_count+row_count=74 (so y ~59-65 is text area)
+    # With show_legend=True: label text "Observaciones" rendered at (x ~15-40, y ~59-65) in black
+    # With show_legend=False: label column is 0-width, so this region is white
+    sample_x, sample_y = 20, 61
+
+    pixel_true = img_true.getpixel((sample_x, sample_y))
+    pixel_false = img_false.getpixel((sample_x, sample_y))
+
+    # When show_legend=True: text drawn in label column → should be black
+    assert pixel_true[0] < 100 and pixel_true[1] < 100 and pixel_true[2] < 100, \
+        f"expected black text in label column at ({sample_x},{sample_y}) with show_legend=True, got {pixel_true}"
+
+    # When show_legend=False: label column skipped → pixel should be pure white
+    assert pixel_false[0] > 240 and pixel_false[1] > 240 and pixel_false[2] > 240, \
+        f"expected white at ({sample_x},{sample_y}) with show_legend=False, got {pixel_false}"

@@ -29,6 +29,8 @@ def _slide_config(
         analyses = []
     if breakdowns is None:
         breakdowns = ["general"]
+    # Filter out "general" from _meta.breakdowns; extract_context will derive from charts
+    real_breakdowns = [b for b in (breakdowns or []) if b and b.lower() != "general"]
     return {
         "charts": charts,
         "analyses": analyses,
@@ -36,7 +38,7 @@ def _slide_config(
         "_meta": {
             "n_options": n_options,
             "question_text": question_text,
-            "breakdowns": breakdowns,
+            "breakdowns": real_breakdowns,
         },
     }
 
@@ -87,7 +89,8 @@ class TestExtractContext:
     def test_n_breakdowns(self):
         bds = ["general", "sexo", "edad"]
         ctx = extract_context(_slide_config(breakdowns=bds), _parsed_db(breakdowns=bds))
-        assert ctx["n_breakdowns"] == 3
+        # "general" is filtered out; only real breakdowns count
+        assert ctx["n_breakdowns"] == 2
 
     def test_n_analyses_by_scope(self):
         analyses = [
@@ -117,7 +120,8 @@ class TestExtractContext:
     def test_breakdowns_used(self):
         bds = ["general", "sexo"]
         ctx = extract_context(_slide_config(breakdowns=bds), _parsed_db(breakdowns=bds))
-        assert set(ctx["breakdowns_used"]) == {"general", "sexo"}
+        # "general" is filtered out; only real breakdowns are used
+        assert set(ctx["breakdowns_used"]) == {"sexo"}
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -530,3 +534,26 @@ def test_enriched_chart_propagates_phase_b_fields():
     assert ec.grid_cols == 2
     assert ec.title == "Plazo del crédito"
     assert ec.cat_titles == {"18-39": "Jóvenes", "40-59": "Adultos"}
+
+
+def test_table_only_full_width_wins_for_binary_breakdown():
+    """Verify table_only_full_width (priority -10) wins over binary_general (0)
+    and binary_with_demographics (1) when binary question has >= 1 breakdown."""
+    clear_cache()
+
+    # Test 1: binary + n_breakdowns == 1 should match table_only_full_width
+    cfg1 = _slide_config(n_options=2, breakdowns=["general", "sexo"])
+    db1 = _parsed_db(n_options=2, breakdowns=["general", "sexo"])
+    result1 = classify(cfg1, db1, BUILTIN_STYLE_GUIDE)
+    assert result1 is not None, "Expected a pattern match for binary + 1 breakdown"
+    assert result1.id == "table_only_full_width", \
+        f"Expected table_only_full_width, got {result1.id}"
+
+    # Test 2: binary + n_breakdowns >= 2 should also match table_only_full_width
+    # (not binary_with_demographics which normally takes this case)
+    cfg2 = _slide_config(n_options=2, breakdowns=["general", "sexo", "edad"])
+    db2 = _parsed_db(n_options=2, breakdowns=["general", "sexo", "edad"])
+    result2 = classify(cfg2, db2, BUILTIN_STYLE_GUIDE)
+    assert result2 is not None, "Expected a pattern match for binary + 2+ breakdowns"
+    assert result2.id == "table_only_full_width", \
+        f"Expected table_only_full_width, got {result2.id}"
