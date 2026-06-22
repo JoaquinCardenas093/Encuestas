@@ -130,15 +130,20 @@ def build_pptx(state: ProjectState, out_path: str) -> None:
         else:
             new_slide = _duplicate_slide(prs, shell_src)
             notes_text = slide_def.auto_notes or f"Respuesta única. Número de observaciones: {state.parsed_db.sample_size if state.parsed_db else 500}."
-            # Title: include question text if all charts share one question, prefixed by code
+            # @Titulo = section title (slide.title from UI). @Subtitulo = question text.
             unique_q_ids = {c.question_id for c in slide_def.charts} if slide_def.charts else set()
             if len(unique_q_ids) == 1 and state.parsed_db:
                 qid = next(iter(unique_q_ids))
                 q = next((q for q in state.parsed_db.questions if q.id == qid), None)
-                title_text = f"{q.code}. {q.text}" if q else (slide_def.title or "")
+                subtitle_text = f"{q.code}. {q.text}" if q else ""
             else:
-                title_text = slide_def.title or ""
-            _substitute_placeholders(new_slide, {"@Titulo": title_text, "@Notas": notes_text})
+                subtitle_text = ""
+            title_text = slide_def.title or ""
+            _substitute_placeholders(new_slide, {
+                "@Titulo": title_text,
+                "@Subtitulo": subtitle_text,
+                "@Notas": notes_text,
+            })
             _add_slide_content(new_slide, slide_def, state, free_area)
 
     # Remove the 2 template source slides (they're at positions 0 and 1)
