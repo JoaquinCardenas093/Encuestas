@@ -28,7 +28,7 @@ def _xlsx_bytes():
     return buf.getvalue()
 
 
-def test_embedded_xlsx_part_added():
+def test_embedded_ole_bin_part_added():
     from aurum_encuestas.element_renderers.ole_embedder import embed_ole_xlsx_with_preview
     _prs, slide = _make_slide()
     embed_ole_xlsx_with_preview(
@@ -37,7 +37,7 @@ def test_embedded_xlsx_part_added():
     )
     package = slide.part.package
     partnames = [str(p.partname) for p in package.iter_parts()]
-    assert any(p.startswith("/ppt/embeddings/oleObject") and p.endswith(".xlsx") for p in partnames)
+    assert any(p.startswith("/ppt/embeddings/oleObject") and p.endswith(".bin") for p in partnames)
 
 
 def test_image_part_added():
@@ -85,9 +85,9 @@ def test_multiple_embeds_get_distinct_partnames():
     embed_ole_xlsx_with_preview(slide, 0, 0, 4_572_000, 2_286_000, _xlsx_bytes(), _png_bytes())
     embed_ole_xlsx_with_preview(slide, 0, 3_000_000, 4_572_000, 2_286_000, _xlsx_bytes(), _png_bytes())
     package = slide.part.package
-    xlsx_parts = [str(p.partname) for p in package.iter_parts() if str(p.partname).endswith(".xlsx")]
+    bin_parts = [str(p.partname) for p in package.iter_parts() if str(p.partname).endswith(".bin") and "embeddings" in str(p.partname)]
     png_parts = [str(p.partname) for p in package.iter_parts() if str(p.partname).endswith(".png")]
-    assert len(set(xlsx_parts)) == 2
+    assert len(set(bin_parts)) == 2
     assert len(set(png_parts)) == 2
 
 
@@ -106,11 +106,11 @@ def test_round_trip_save_and_reopen_succeeds():
     buf.seek(0)
     # Reopen the saved pptx — fails if Part blob was a Package object
     prs2 = Presentation(buf)
-    # Embedded xlsx part should be readable
-    xlsx_parts = [p for p in prs2.part.package.iter_parts() if str(p.partname).endswith(".xlsx") and "embeddings" in str(p.partname)]
-    assert len(xlsx_parts) == 1
-    # Its blob is the original xlsx bytes (xlsx file magic = b"PK\x03\x04")
-    assert xlsx_parts[0].blob[:4] == b"PK\x03\x04"
+    # Embedded OLE bin part should be readable
+    bin_parts = [p for p in prs2.part.package.iter_parts() if str(p.partname).endswith(".bin") and "embeddings" in str(p.partname)]
+    assert len(bin_parts) == 1
+    # Its blob is a CFB file (Compound File Binary magic)
+    assert bin_parts[0].blob[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
 
 
 def test_graphic_frame_contains_mc_alternate_content():
@@ -183,3 +183,53 @@ def test_both_branches_reference_same_xlsx_rid():
     rid_key = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"
     assert len(choice_oleobj) == 1 and len(fallback_oleobj) == 1
     assert choice_oleobj[0].get(rid_key) == fallback_oleobj[0].get(rid_key)
+
+
+def test_embedded_part_is_bin_not_xlsx():
+    from aurum_encuestas.element_renderers.ole_embedder import embed_ole_xlsx_with_preview
+    _prs, slide = _make_slide()
+    embed_ole_xlsx_with_preview(
+        slide, x=0, y=0, w=4_572_000, h=2_286_000,
+        xlsx_bytes=_xlsx_bytes(), png_bytes=_png_bytes(),
+    )
+    package = slide.part.package
+    partnames = [str(p.partname) for p in package.iter_parts()]
+    assert any(p.startswith("/ppt/embeddings/oleObject") and p.endswith(".bin") for p in partnames)
+    assert not any(p.startswith("/ppt/embeddings/oleObject") and p.endswith(".xlsx") for p in partnames)
+
+
+def test_embedded_part_content_type_is_oleObject():
+    from aurum_encuestas.element_renderers.ole_embedder import embed_ole_xlsx_with_preview
+    _prs, slide = _make_slide()
+    embed_ole_xlsx_with_preview(
+        slide, x=0, y=0, w=4_572_000, h=2_286_000,
+        xlsx_bytes=_xlsx_bytes(), png_bytes=_png_bytes(),
+    )
+    package = slide.part.package
+    for p in package.iter_parts():
+        if str(p.partname).startswith("/ppt/embeddings/oleObject") and str(p.partname).endswith(".bin"):
+            assert p.content_type == "application/vnd.openxmlformats-officedocument.oleObject"
+            return
+    raise AssertionError("no .bin oleObject part found")
+
+
+def test_embedded_blob_is_cfb():
+    from io import BytesIO
+    import olefile
+    from aurum_encuestas.element_renderers.ole_embedder import embed_ole_xlsx_with_preview
+    _prs, slide = _make_slide()
+    embed_ole_xlsx_with_preview(
+        slide, x=0, y=0, w=4_572_000, h=2_286_000,
+        xlsx_bytes=_xlsx_bytes(), png_bytes=_png_bytes(),
+    )
+    package = slide.part.package
+    for p in package.iter_parts():
+        if str(p.partname).startswith("/ppt/embeddings/oleObject") and str(p.partname).endswith(".bin"):
+            blob = p.blob
+            assert blob[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+            ole = olefile.OleFileIO(BytesIO(blob))
+            streams = {"/".join(s) if isinstance(s, list) else s for s in ole.listdir()}
+            assert "Package" in streams
+            ole.close()
+            return
+    raise AssertionError("no .bin oleObject part found")

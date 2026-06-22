@@ -11,7 +11,9 @@ from pptx.opc.package import Part
 from pptx.opc.packuri import PackURI
 from pptx.oxml.ns import qn
 
-CT_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+from .cfb_writer import build_excel_ole_cfb
+
+CT_OLE_OBJECT = "application/vnd.openxmlformats-officedocument.oleObject"
 PROG_ID = "Excel.Sheet.12"
 
 
@@ -28,9 +30,10 @@ def embed_ole_xlsx_with_preview(
     slide_part = slide.part
     package = slide_part.package
 
-    xlsx_partname = _next_partname(package, "/ppt/embeddings/oleObject{}.xlsx")
-    xlsx_part = Part(xlsx_partname, CT_XLSX, package, xlsx_bytes)
-    rid_xlsx = slide_part.relate_to(xlsx_part, RT.OLE_OBJECT)
+    cfb_blob = build_excel_ole_cfb(xlsx_bytes)
+    bin_partname = _next_partname(package, "/ppt/embeddings/oleObject{}.bin")
+    bin_part = Part(bin_partname, CT_OLE_OBJECT, package, cfb_blob)
+    rid_xlsx = slide_part.relate_to(bin_part, RT.OLE_OBJECT)
 
     png_partname = _next_partname(package, "/ppt/media/image{}.png")
     png_part = Part(png_partname, CT.PNG, package, png_bytes)

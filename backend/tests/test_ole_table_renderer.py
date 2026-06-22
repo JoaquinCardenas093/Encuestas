@@ -52,7 +52,7 @@ def test_render_creates_xlsx_part_image_part_and_graphicFrame():
     render(slide, element, ctx)
     package = slide.part.package
     partnames = [str(p.partname) for p in package.iter_parts()]
-    assert any(p.startswith("/ppt/embeddings/oleObject") and p.endswith(".xlsx") for p in partnames)
+    assert any(p.startswith("/ppt/embeddings/oleObject") and p.endswith(".bin") for p in partnames)
     assert any(p.startswith("/ppt/media/image") and p.endswith(".png") for p in partnames)
     spTree = slide.shapes._spTree
     from lxml.etree import tostring
