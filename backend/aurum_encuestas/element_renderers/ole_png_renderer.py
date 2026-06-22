@@ -3,13 +3,14 @@ from io import BytesIO
 
 from PIL import Image, ImageDraw, ImageFont
 
-EMU_PER_PX = 9525  # 914400 EMU/inch ÷ 96 px/inch
+EMU_PER_PX = 9525
 
-# Colors (palette role hexes, verbatim from Fase B)
-GRAY = (127, 127, 127)
-DARK = (64, 64, 64)
-YELLOW = (238, 194, 69)
-WHITE = (255, 255, 255)
+# Palette (matches xlsx_builder hex literals)
+HEADER_DARK = (89, 89, 89)
+BG_WHITE = (255, 255, 255)
+TEXT_BLACK = (0, 0, 0)
+TEXT_WHITE = (255, 255, 255)
+BAR_GRAY = (191, 191, 191)
 
 
 def render_table_preview_png(
@@ -18,10 +19,11 @@ def render_table_preview_png(
     w_emu: int,
     h_emu: int,
 ) -> bytes:
-    """Render PIL preview mirroring the xlsx layout. Returns PNG bytes."""
+    """PIL canvas: N panels side-by-side, each = own label col + dark headers
+    + white body + gray bars. Returns PNG bytes."""
     w_px = max(400, w_emu // EMU_PER_PX)
     h_px = max(200, h_emu // EMU_PER_PX)
-    img = Image.new("RGB", (w_px, h_px), WHITE)
+    img = Image.new("RGB", (w_px, h_px), BG_WHITE)
     draw = ImageDraw.Draw(img)
 
     question = getattr(source_chart, "question", None)
@@ -32,86 +34,107 @@ def render_table_preview_png(
     if not bds or not options:
         return _save_png(img)
 
+    if hasattr(ImageFont, "load_default_imagefont"):
+        default_font = ImageFont.load_default_imagefont()
+    else:
+        default_font = ImageFont.load_default()
     try:
-        font_hdr = ImageFont.truetype("Calibri Bold", 16)
-        font_cat = ImageFont.truetype("Calibri Bold", 13)
-        font_count = ImageFont.truetype("Calibri Bold", 14)
-        font_lbl = ImageFont.truetype("Calibri Bold", 13)
-        font_opt = ImageFont.truetype("Calibri", 12)
+        font_hdr = ImageFont.truetype("Calibri Bold", 14)
+        font_cat = ImageFont.truetype("Calibri Bold", 12)
+        font_count = ImageFont.truetype("Calibri Bold", 13)
+        font_lbl = ImageFont.truetype("Calibri Bold", 12)
+        font_opt = ImageFont.truetype("Calibri", 11)
     except (IOError, OSError):
-        default = (
-            ImageFont.load_default_imagefont()
-            if hasattr(ImageFont, "load_default_imagefont")
-            else ImageFont.load_default()
-        )
-        font_hdr = font_cat = font_count = font_lbl = font_opt = default
+        font_hdr = font_cat = font_count = font_lbl = font_opt = default_font
 
-    label_col_w = 110
-    gap_w = 12
+    # Layout: per-panel label col + N cat cols, with horizontal gap between panels
+    gap_px = 15
+    n_bds = len(bds)
+    total_cats = sum(len(bd.get("categories", {}) or {}) for _, bd in bds)
+    content_w = w_px - 10
+
+    # Try preferred label_col_w; shrink if necessary so cell_w >= 45
+    preferred_label_w = 95
+    min_label_w = 40
+    label_col_w = preferred_label_w
+    while label_col_w >= min_label_w:
+        available_for_cats = content_w - label_col_w * n_bds - gap_px * (n_bds - 1)
+        if available_for_cats >= total_cats * 45:
+            break
+        label_col_w -= 5
+    label_col_w = max(min_label_w, label_col_w)
+    available_for_cats = content_w - label_col_w * n_bds - gap_px * (n_bds - 1)
+    cell_w = max(45, available_for_cats // max(total_cats, 1))
 
     row_hdr = 28
-    row_cat = 26
+    row_cat = 24
     row_count = 22
-    row_opt = 34
-    total_h_needed = row_hdr + row_cat + row_count + row_opt * len(options)
-    if total_h_needed < h_px:
-        extra = (h_px - total_h_needed) // max(len(options), 1)
+    row_opt = 32
+    total_rows_h = row_hdr + row_cat + row_count + row_opt * len(options)
+    if total_rows_h < h_px:
+        extra = (h_px - total_rows_h) // max(len(options), 1)
         row_opt += extra
-
-    sum_cats = sum(len(bd.get("categories", {}) or {}) for _, bd in bds)
-    total_data_w = w_px - label_col_w - gap_w * (len(bds) - 1) - 10
-    cell_w = max(60, total_data_w // max(sum_cats, 1))
 
     y_hdr = 0
     y_cat = y_hdr + row_hdr
     y_count = y_cat + row_cat
     y_opt0 = y_count + row_count
 
-    # Label col B
-    draw.rectangle([0, y_count, label_col_w, y_count + row_count], fill=GRAY)
-    _centered_text(draw, "Observaciones", font_lbl, YELLOW, 0, y_count, label_col_w, row_count, align="right")
-    for j, opt in enumerate(options):
-        oy = y_opt0 + j * row_opt
-        draw.rectangle([0, oy, label_col_w, oy + row_opt], fill=GRAY)
-        _centered_text(draw, opt, font_lbl, WHITE, 0, oy, label_col_w, row_opt, align="right")
-
-    cur_x = label_col_w + 5
+    cur_x = 5
     for bd_id, bd in bds:
         cats = bd.get("categories", {}) or {}
         n_cats = len(cats)
         if n_cats == 0:
             continue
-        panel_w = cell_w * n_cats
+        panel_w = label_col_w + cell_w * n_cats
 
-        draw.rectangle([cur_x, y_hdr, cur_x + panel_w, y_hdr + row_hdr], fill=DARK)
-        _centered_text(draw, bd.get("label") or bd_id, font_hdr, YELLOW, cur_x, y_hdr, panel_w, row_hdr)
+        # Group header band — spans full panel width
+        draw.rectangle([cur_x, y_hdr, cur_x + panel_w, y_hdr + row_hdr], fill=HEADER_DARK)
+        _centered_text(draw, bd.get("label") or bd_id, font_hdr, TEXT_WHITE,
+                       cur_x, y_hdr, panel_w, row_hdr)
 
-        for i, (cat_label, opt_cells) in enumerate(cats.items()):
-            cx = cur_x + i * cell_w
+        # Cat sub-headers — data cols only (label col empty in cat row)
+        for i, (cat_label, _) in enumerate(cats.items()):
+            cx = cur_x + label_col_w + i * cell_w
+            draw.rectangle([cx, y_cat, cx + cell_w, y_cat + row_cat], fill=HEADER_DARK)
+            _centered_text(draw, cat_label, font_cat, TEXT_WHITE, cx, y_cat, cell_w, row_cat)
 
-            draw.rectangle([cx, y_cat, cx + cell_w, y_cat + row_cat], fill=GRAY)
-            _centered_text(draw, cat_label, font_cat, YELLOW, cx, y_cat, cell_w, row_cat)
-
+        # Counts row: label col = "Observaciones", data cols = totals
+        lx = cur_x
+        draw.rectangle([lx, y_count, lx + label_col_w, y_count + row_count], fill=BG_WHITE)
+        _centered_text(draw, "Observaciones", font_lbl, TEXT_BLACK,
+                       lx, y_count, label_col_w, row_count, align="right")
+        for i, (_, opt_cells) in enumerate(cats.items()):
+            cx = cur_x + label_col_w + i * cell_w
             total = sum(int((opt_cells.get(o) or {}).get("count") or 0) for o in options)
-            draw.rectangle([cx, y_count, cx + cell_w, y_count + row_count], fill=GRAY)
-            _centered_text(draw, str(total) if total else "", font_count, YELLOW,
+            draw.rectangle([cx, y_count, cx + cell_w, y_count + row_count], fill=BG_WHITE)
+            _centered_text(draw, str(total) if total else "", font_count, TEXT_BLACK,
                            cx, y_count, cell_w, row_count)
 
-            for j, opt in enumerate(options):
-                oy = y_opt0 + j * row_opt
-                pct = float((opt_cells.get(opt) or {}).get("pct") or 0)
-                draw.rectangle([cx, oy, cx + cell_w, oy + row_opt], fill=GRAY)
+        # Option rows
+        for j, opt in enumerate(options):
+            oy = y_opt0 + j * row_opt
 
-                bar_h = int(row_opt * 0.6)
+            # Label col
+            draw.rectangle([lx, oy, lx + label_col_w, oy + row_opt], fill=BG_WHITE)
+            _centered_text(draw, opt, font_lbl, TEXT_BLACK,
+                           lx, oy, label_col_w, row_opt, align="right")
+
+            for i, (_, opt_cells) in enumerate(cats.items()):
+                cx = cur_x + label_col_w + i * cell_w
+                pct = float((opt_cells.get(opt) or {}).get("pct") or 0)
+                draw.rectangle([cx, oy, cx + cell_w, oy + row_opt], fill=BG_WHITE)
+
+                bar_h = int(row_opt * 0.5)
                 bar_y = oy + (row_opt - bar_h) // 2
                 bar_w = int((cell_w - 50) * min(1.0, max(0.0, pct)))
                 if bar_w > 0:
-                    draw.rectangle([cx + 50, bar_y, cx + 50 + bar_w, bar_y + bar_h], fill=DARK)
+                    draw.rectangle([cx + 50, bar_y, cx + 50 + bar_w, bar_y + bar_h], fill=BAR_GRAY)
 
                 pct_text = f"{pct * 100:.1f}%"
-                draw.text((cx + 6, oy + (row_opt - 14) // 2), pct_text, font=font_opt, fill=WHITE)
+                draw.text((cx + 6, oy + (row_opt - 14) // 2), pct_text, font=font_opt, fill=TEXT_BLACK)
 
-        cur_x += panel_w + gap_w
+        cur_x += panel_w + gap_px
 
     return _save_png(img)
 
