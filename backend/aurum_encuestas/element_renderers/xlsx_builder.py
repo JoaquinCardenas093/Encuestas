@@ -7,12 +7,12 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 # Hex palette (no role mapping — direct hex to avoid color_resolver remapping)
-HEADER_FILL_HEX = "999999"   # medium gray (matches target design)
-HEADER_FONT_HEX = "FFFFFF"   # white
-BODY_FILL_HEX = "FFFFFF"     # white
-BODY_FONT_HEX = "000000"     # black
-DATABAR_HEX = "D9D9D9"       # light gray bar
-BORDER_HEX = "BFBFBF"        # cell borders
+HEADER_FILL_HEX = "FF999999"   # medium gray ARGB (alpha FF for full opacity)
+HEADER_FONT_HEX = "FFFFFFFF"   # white ARGB
+BODY_FILL_HEX = "FFFFFFFF"     # white ARGB
+BODY_FONT_HEX = "FF000000"     # black ARGB
+DATABAR_HEX = "FFD9D9D9"       # light gray bar ARGB
+BORDER_HEX = "FFBFBFBF"        # cell borders ARGB
 
 HEADER_ROW = 2
 CAT_ROW = 3
@@ -136,6 +136,9 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
                 color=DATABAR_HEX,
                 showValue=True,
             )
+            # gradient=False matches target design (solid bar fill).
+            if rule.dataBar is not None:
+                rule.dataBar.gradient = False
             ws.conditional_formatting.add(range_str, rule)
 
         # Column widths for this bd
@@ -157,4 +160,111 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
     buf = BytesIO()
     wb.save(buf)
     buf.seek(0)
-    return buf
+    return _force_databar_solid(buf)
+
+
+def _force_databar_solid(xlsx_buf: BytesIO) -> BytesIO:
+    """Post-process xlsx to force DataBar solid fill (gradient=False).
+
+    openpyxl 3.1.5 doesn't expose the x14 dataBar extension `gradient` attribute.
+    Bare <dataBar> defaults to gradient=true in Excel; the x14:dataBar override
+    must be added via worksheet-level <extLst> with paired <x14:id> inside each
+    cfRule's <extLst>.
+    """
+    import re
+    import zipfile
+
+    xlsx_buf.seek(0)
+    out = BytesIO()
+    with zipfile.ZipFile(xlsx_buf, "r") as zin:
+        with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zout:
+            for item in zin.namelist():
+                data = zin.read(item)
+                if item.startswith("xl/worksheets/sheet") and item.endswith(".xml"):
+                    try:
+                        data = _inject_solid_databar_ext(data.decode("utf-8")).encode("utf-8")
+                    except Exception:
+                        pass  # Fall back to gradient bars if injection fails.
+                zout.writestr(item, data)
+    out.seek(0)
+    return out
+
+
+def _inject_solid_databar_ext(sheet_xml: str) -> str:
+    """Inject x14 namespace + per-cfRule extLst id + worksheet extLst with
+    gradient="0" override. Idempotent: short-circuits if no <dataBar> present."""
+    import re
+
+    if "<dataBar" not in sheet_xml:
+        return sheet_xml
+
+    # Add x14 + xm namespaces on worksheet root if missing.
+    if 'xmlns:x14=' not in sheet_xml:
+        sheet_xml = sheet_xml.replace(
+            "<worksheet ",
+            '<worksheet xmlns:x14="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main" '
+            'xmlns:xm="http://schemas.microsoft.com/office/excel/2006/main" ',
+            1,
+        )
+
+    # Locate each <conditionalFormatting sqref="..."> block containing a dataBar.
+    # Inject <extLst><ext uri="{B025...}"><x14:id>{GUID}</x14:id></ext></extLst>
+    # inside each cfRule (right before </cfRule>). Build a global x14 block at end.
+    cf_pattern = re.compile(
+        r'(<conditionalFormatting sqref="([^"]+)">)(.*?)(</conditionalFormatting>)',
+        re.DOTALL,
+    )
+
+    x14_blocks: list[tuple[str, str]] = []
+    counter = [0]
+
+    def _replace_cf(match: "re.Match[str]") -> str:
+        open_tag, sqref, body, close_tag = match.group(1), match.group(2), match.group(3), match.group(4)
+        if "<dataBar" not in body:
+            return match.group(0)
+        counter[0] += 1
+        guid = "{B025F937-C7B1-47D3-B67F-A62EFF66%04dE}" % counter[0]
+        # Inject inside cfRule's child dataBar's tail (before </cfRule>)
+        new_body = re.sub(
+            r"(</cfRule>)",
+            '<extLst><ext uri="{B025F937-C7B1-47D3-B67F-A62EFF666E3E}" '
+            'xmlns:x14="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main">'
+            '<x14:id>' + guid + '</x14:id></ext></extLst>\\1',
+            body,
+            count=1,
+        )
+        x14_blocks.append((sqref, guid))
+        return open_tag + new_body + close_tag
+
+    sheet_xml = cf_pattern.sub(_replace_cf, sheet_xml)
+
+    if not x14_blocks:
+        return sheet_xml
+
+    parts = []
+    for sqref, guid in x14_blocks:
+        parts.append(
+            '<x14:conditionalFormatting xmlns:xm="http://schemas.microsoft.com/office/excel/2006/main">'
+            '<x14:cfRule type="dataBar" id="' + guid + '">'
+            '<x14:dataBar minLength="0" maxLength="100" gradient="0">'
+            '<x14:cfvo type="num"><xm:f>0</xm:f></x14:cfvo>'
+            '<x14:cfvo type="num"><xm:f>1</xm:f></x14:cfvo>'
+            '</x14:dataBar>'
+            '</x14:cfRule>'
+            '<xm:sqref>' + sqref + '</xm:sqref>'
+            '</x14:conditionalFormatting>'
+        )
+
+    ext_block = (
+        '<extLst><ext uri="{78C0D931-6437-407D-A8EE-F0AAD7539E65}" '
+        'xmlns:x14="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main">'
+        '<x14:conditionalFormattings>' + "".join(parts) + '</x14:conditionalFormattings>'
+        '</ext></extLst>'
+    )
+
+    if re.search(r"<extLst\s*>", sheet_xml):
+        sheet_xml = re.sub(r"<extLst\s*>.*?</extLst>", ext_block, sheet_xml, count=1, flags=re.DOTALL)
+    else:
+        sheet_xml = sheet_xml.replace("</worksheet>", ext_block + "</worksheet>")
+
+    return sheet_xml

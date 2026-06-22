@@ -172,13 +172,12 @@ def render_table_preview_png(
                 pct = float((opt_cells.get(opt) or {}).get("pct") or 0)
                 draw.rectangle([cx, oy, cx + cell_w, oy + row_opt], fill=BG_WHITE)
 
-                # Gradient bar: solid BAR_GRAY at left fading to BG_WHITE at right
-                # (Excel DataBar gradient style).
+                # Solid bar (no gradient — matches xlsx DataBarRule gradient=False).
                 bar_h = min(row_opt - 6, 22)
                 bar_y = oy + (row_opt - bar_h) // 2
                 bar_w = int(cell_w * min(1.0, max(0.0, pct)))
                 if bar_w > 0:
-                    _draw_gradient_bar(draw, cx, bar_y, bar_w, bar_h, BAR_GRAY, BG_WHITE)
+                    draw.rectangle([cx, bar_y, cx + bar_w, bar_y + bar_h], fill=BAR_GRAY)
 
                 # Cell bottom border (1px) for table grid look.
                 draw.line([(cx, oy + row_opt - 1), (cx + cell_w, oy + row_opt - 1)],
@@ -212,17 +211,6 @@ def _centered_text(draw, text, font, color, x, y, w, h, align="center"):
         tx = x + (w - tw) // 2
     ty = y + (h - th) // 2
     draw.text((tx, ty), text, font=font, fill=color)
-
-
-def _draw_gradient_bar(draw, x, y, w, h, start_color, end_color):
-    """Linear gradient bar from start_color (left) to end_color (right).
-    Drawn as 1px vertical strips with interpolated color."""
-    if w <= 0 or h <= 0:
-        return
-    for i in range(w):
-        t = i / max(w - 1, 1)
-        color = tuple(int(start_color[c] + (end_color[c] - start_color[c]) * t) for c in range(3))
-        draw.line([(x + i, y), (x + i, y + h)], fill=color, width=1)
 
 
 def _save_png(img: Image.Image) -> bytes:
