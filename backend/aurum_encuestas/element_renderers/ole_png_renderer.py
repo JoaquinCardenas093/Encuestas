@@ -77,10 +77,14 @@ def render_table_preview_png(
     row_cat = 24
     row_count = 22
     row_opt = 32
+    # Cap row_opt stretch to keep cells compact (matches Excel DataBar render).
+    # Without cap, tall canvases stretch each row to fill, making bars look square.
+    max_row_opt = 44
     total_rows_h = row_hdr + row_cat + row_count + row_opt * len(options)
     if total_rows_h < h_px:
-        extra = (h_px - total_rows_h) // max(len(options), 1)
-        row_opt += extra
+        extra = min((h_px - total_rows_h) // max(len(options), 1), max_row_opt - row_opt)
+        if extra > 0:
+            row_opt += extra
 
     y_hdr = 0
     y_cat = y_hdr + row_hdr
@@ -135,14 +139,22 @@ def render_table_preview_png(
                 pct = float((opt_cells.get(opt) or {}).get("pct") or 0)
                 draw.rectangle([cx, oy, cx + cell_w, oy + row_opt], fill=BG_WHITE)
 
-                bar_h = int(row_opt * 0.5)
+                # Bar fills cell from left to pct% width (Excel DataBar style).
+                bar_h = min(row_opt - 6, 22)
                 bar_y = oy + (row_opt - bar_h) // 2
-                bar_w = int((cell_w - 50) * min(1.0, max(0.0, pct)))
+                bar_w = int(cell_w * min(1.0, max(0.0, pct)))
                 if bar_w > 0:
-                    draw.rectangle([cx + 50, bar_y, cx + 50 + bar_w, bar_y + bar_h], fill=BAR_GRAY)
+                    draw.rectangle([cx, bar_y, cx + bar_w, bar_y + bar_h], fill=BAR_GRAY)
 
+                # Text right-aligned with indent, overlays bar.
                 pct_text = f"{pct * 100:.1f}%"
-                draw.text((cx + 6, oy + (row_opt - 14) // 2), pct_text, font=font_opt, fill=TEXT_BLACK)
+                try:
+                    tbbox = draw.textbbox((0, 0), pct_text, font=font_opt)
+                    tw = tbbox[2] - tbbox[0]
+                except Exception:
+                    tw = len(pct_text) * 7
+                tx = cx + cell_w - tw - 6
+                draw.text((tx, oy + (row_opt - 14) // 2), pct_text, font=font_opt, fill=TEXT_BLACK)
 
         cur_x += panel_w + gap_px
 
