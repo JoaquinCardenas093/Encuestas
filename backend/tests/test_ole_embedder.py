@@ -130,17 +130,127 @@ def test_graphic_frame_contains_mc_alternate_content():
     assert "Fallback" in xml
 
 
-def test_choice_has_xmlns_v_and_spid():
+def test_choice_oleobj_has_no_pic():
     from aurum_encuestas.element_renderers.ole_embedder import embed_ole_xlsx_with_preview
+    from lxml import etree
     _prs, slide = _make_slide()
-    embed_ole_xlsx_with_preview(
-        slide, x=0, y=0, w=4_572_000, h=2_286_000,
-        xlsx_bytes=_xlsx_bytes(), png_bytes=_png_bytes(),
-    )
-    from lxml.etree import tostring
-    xml = tostring(slide.shapes._spTree, encoding="unicode")
+    embed_ole_xlsx_with_preview(slide, 0, 0, 4_572_000, 2_286_000, _xlsx_bytes(), _png_bytes())
+    root = etree.fromstring(etree.tostring(slide.shapes._spTree))
+    nsmap = {"mc": "http://schemas.openxmlformats.org/markup-compatibility/2006",
+             "p": "http://schemas.openxmlformats.org/presentationml/2006/main"}
+    pics = root.xpath(".//mc:Choice/p:oleObj/p:pic", namespaces=nsmap)
+    assert len(pics) == 0, f"mc:Choice/p:oleObj must NOT contain <p:pic>, got {len(pics)}"
+
+
+def test_choice_oleobj_only_has_embed_child():
+    from aurum_encuestas.element_renderers.ole_embedder import embed_ole_xlsx_with_preview
+    from lxml import etree
+    _prs, slide = _make_slide()
+    embed_ole_xlsx_with_preview(slide, 0, 0, 4_572_000, 2_286_000, _xlsx_bytes(), _png_bytes())
+    root = etree.fromstring(etree.tostring(slide.shapes._spTree))
+    nsmap = {"mc": "http://schemas.openxmlformats.org/markup-compatibility/2006",
+             "p": "http://schemas.openxmlformats.org/presentationml/2006/main"}
+    choice_oleobj = root.xpath(".//mc:Choice/p:oleObj", namespaces=nsmap)
+    assert len(choice_oleobj) == 1
+    children = list(choice_oleobj[0])
+    assert len(children) == 1, f"Choice oleObj must have exactly 1 child, got {len(children)}"
+    assert etree.QName(children[0].tag).localname == "embed"
+
+
+def test_oleobj_name_is_Worksheet():
+    from aurum_encuestas.element_renderers.ole_embedder import embed_ole_xlsx_with_preview
+    from lxml import etree
+    _prs, slide = _make_slide()
+    embed_ole_xlsx_with_preview(slide, 0, 0, 4_572_000, 2_286_000, _xlsx_bytes(), _png_bytes())
+    root = etree.fromstring(etree.tostring(slide.shapes._spTree))
+    nsmap = {"mc": "http://schemas.openxmlformats.org/markup-compatibility/2006",
+             "p": "http://schemas.openxmlformats.org/presentationml/2006/main"}
+    for ole in root.xpath(".//p:oleObj", namespaces=nsmap):
+        assert ole.get("name") == "Worksheet", f"expected name=Worksheet, got {ole.get('name')!r}"
+
+
+def test_embed_element_has_no_attributes():
+    from aurum_encuestas.element_renderers.ole_embedder import embed_ole_xlsx_with_preview
+    from lxml import etree
+    _prs, slide = _make_slide()
+    embed_ole_xlsx_with_preview(slide, 0, 0, 4_572_000, 2_286_000, _xlsx_bytes(), _png_bytes())
+    root = etree.fromstring(etree.tostring(slide.shapes._spTree))
+    nsmap = {"p": "http://schemas.openxmlformats.org/presentationml/2006/main"}
+    for embed in root.xpath(".//p:embed", namespaces=nsmap):
+        assert len(embed.attrib) == 0, f"<p:embed> must have no attributes, got {dict(embed.attrib)}"
+
+
+def test_choice_has_xmlns_v_and_no_spid():
+    from aurum_encuestas.element_renderers.ole_embedder import embed_ole_xlsx_with_preview
+    from lxml import etree
+    _prs, slide = _make_slide()
+    embed_ole_xlsx_with_preview(slide, 0, 0, 4_572_000, 2_286_000, _xlsx_bytes(), _png_bytes())
+    xml = etree.tostring(slide.shapes._spTree, encoding="unicode")
     assert 'xmlns:v="urn:schemas-microsoft-com:vml"' in xml
-    assert 'spid="_x0000_s' in xml
+    root = etree.fromstring(etree.tostring(slide.shapes._spTree))
+    nsmap = {"mc": "http://schemas.openxmlformats.org/markup-compatibility/2006",
+             "p": "http://schemas.openxmlformats.org/presentationml/2006/main"}
+    choice_oleobj = root.xpath(".//mc:Choice/p:oleObj", namespaces=nsmap)
+    assert len(choice_oleobj) == 1
+    assert choice_oleobj[0].get("spid") is None, "Choice oleObj must NOT carry spid"
+
+
+def test_fallback_pic_uses_absolute_slide_coords():
+    from aurum_encuestas.element_renderers.ole_embedder import embed_ole_xlsx_with_preview
+    from lxml import etree
+    _prs, slide = _make_slide()
+    embed_ole_xlsx_with_preview(slide, x=914_400, y=914_400, w=4_572_000, h=2_286_000,
+                                xlsx_bytes=_xlsx_bytes(), png_bytes=_png_bytes())
+    root = etree.fromstring(etree.tostring(slide.shapes._spTree))
+    nsmap = {"mc": "http://schemas.openxmlformats.org/markup-compatibility/2006",
+             "p": "http://schemas.openxmlformats.org/presentationml/2006/main",
+             "a": "http://schemas.openxmlformats.org/drawingml/2006/main"}
+    off = root.xpath(".//mc:Fallback//p:pic/p:spPr/a:xfrm/a:off", namespaces=nsmap)
+    assert len(off) == 1
+    assert int(off[0].get("x")) == 914_400
+    assert int(off[0].get("y")) == 914_400
+
+
+def test_fallback_pic_cnvpr_id_matches_outer():
+    from aurum_encuestas.element_renderers.ole_embedder import embed_ole_xlsx_with_preview
+    from lxml import etree
+    _prs, slide = _make_slide()
+    embed_ole_xlsx_with_preview(slide, 0, 0, 4_572_000, 2_286_000, _xlsx_bytes(), _png_bytes())
+    root = etree.fromstring(etree.tostring(slide.shapes._spTree))
+    nsmap = {"mc": "http://schemas.openxmlformats.org/markup-compatibility/2006",
+             "p": "http://schemas.openxmlformats.org/presentationml/2006/main"}
+    outer_cnvpr = root.xpath(".//p:graphicFrame/p:nvGraphicFramePr/p:cNvPr", namespaces=nsmap)
+    pic_cnvpr = root.xpath(".//mc:Fallback//p:pic/p:nvPicPr/p:cNvPr", namespaces=nsmap)
+    assert len(outer_cnvpr) == 1 and len(pic_cnvpr) == 1
+    assert outer_cnvpr[0].get("id") == pic_cnvpr[0].get("id")
+
+
+def test_picLocks_present_in_fallback_pic():
+    from aurum_encuestas.element_renderers.ole_embedder import embed_ole_xlsx_with_preview
+    from lxml import etree
+    _prs, slide = _make_slide()
+    embed_ole_xlsx_with_preview(slide, 0, 0, 4_572_000, 2_286_000, _xlsx_bytes(), _png_bytes())
+    root = etree.fromstring(etree.tostring(slide.shapes._spTree))
+    nsmap = {"mc": "http://schemas.openxmlformats.org/markup-compatibility/2006",
+             "p": "http://schemas.openxmlformats.org/presentationml/2006/main",
+             "a": "http://schemas.openxmlformats.org/drawingml/2006/main"}
+    locks = root.xpath(".//mc:Fallback//p:pic/p:nvPicPr/p:cNvPicPr/a:picLocks", namespaces=nsmap)
+    assert len(locks) == 1
+    assert locks[0].get("noChangeAspect") == "1"
+    assert locks[0].get("noChangeArrowheads") == "1"
+
+
+def test_srcRect_present_in_fallback_blipFill():
+    from aurum_encuestas.element_renderers.ole_embedder import embed_ole_xlsx_with_preview
+    from lxml import etree
+    _prs, slide = _make_slide()
+    embed_ole_xlsx_with_preview(slide, 0, 0, 4_572_000, 2_286_000, _xlsx_bytes(), _png_bytes())
+    root = etree.fromstring(etree.tostring(slide.shapes._spTree))
+    nsmap = {"mc": "http://schemas.openxmlformats.org/markup-compatibility/2006",
+             "p": "http://schemas.openxmlformats.org/presentationml/2006/main",
+             "a": "http://schemas.openxmlformats.org/drawingml/2006/main"}
+    srcrects = root.xpath(".//mc:Fallback//p:pic/p:blipFill/a:srcRect", namespaces=nsmap)
+    assert len(srcrects) == 1
 
 
 def test_fallback_branch_has_no_spid():

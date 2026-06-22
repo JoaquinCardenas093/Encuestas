@@ -42,24 +42,23 @@ def embed_ole_xlsx_with_preview(
     nsmap_decl = (
         'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
         'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
-        'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" '
-        'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"'
+        'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"'
     )
 
-    choice_oleobj = _render_oleobj_xml(
-        rid_xlsx=rid_xlsx, rid_img=rid_img,
-        w=w, h=h, nv_id=nv_id,
-        with_spid=True,
+    choice_oleobj = (
+        f'<p:oleObj name="Worksheet" r:id="{rid_xlsx}" '
+        f'imgW="{int(w)}" imgH="{int(h)}" progId="{PROG_ID}">'
+        f'<p:embed/>'
+        f'</p:oleObj>'
     )
-    fallback_oleobj = _render_oleobj_xml(
+    fallback_oleobj = _render_fallback_oleobj_xml(
         rid_xlsx=rid_xlsx, rid_img=rid_img,
-        w=w, h=h, nv_id=nv_id,
-        with_spid=False,
+        x=x, y=y, w=w, h=h, nv_id=nv_id,
     )
 
-    xml = f"""<p:graphicFrame {nsmap_decl} mc:Ignorable="v">
+    xml = f"""<p:graphicFrame {nsmap_decl}>
   <p:nvGraphicFramePr>
-    <p:cNvPr id="{nv_id}" name="OLEObject {nv_id}"/>
+    <p:cNvPr id="{nv_id}" name="Object {nv_id}"/>
     <p:cNvGraphicFramePr>
       <a:graphicFrameLocks noChangeAspect="1"/>
     </p:cNvGraphicFramePr>
@@ -71,7 +70,7 @@ def embed_ole_xlsx_with_preview(
   </p:xfrm>
   <a:graphic>
     <a:graphicData uri="http://schemas.openxmlformats.org/presentationml/2006/ole">
-      <mc:AlternateContent>
+      <mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">
         <mc:Choice xmlns:v="urn:schemas-microsoft-com:vml" Requires="v">
           {choice_oleobj}
         </mc:Choice>
@@ -84,36 +83,35 @@ def embed_ole_xlsx_with_preview(
 </p:graphicFrame>"""
 
     graphic_frame = etree.fromstring(xml)
-    # NOTE: do NOT call cleanup_namespaces — it would strip xmlns:v from mc:Choice.
     spTree.append(graphic_frame)
 
 
-def _render_oleobj_xml(
+def _render_fallback_oleobj_xml(
     *, rid_xlsx: str, rid_img: str,
-    w: int, h: int, nv_id: int,
-    with_spid: bool,
+    x: int, y: int, w: int, h: int, nv_id: int,
 ) -> str:
-    """Return one <p:oleObj> XML fragment.
+    """Render Fallback <p:oleObj> with embedded <p:pic> preview.
 
-    Choice branch: with_spid=True (also lives inside a mc:Choice declaring xmlns:v).
-    Fallback branch: with_spid=False.
+    Matches structure produced by real Office 2016+ Excel-embed slides.
     """
-    spid_attr = f'spid="_x0000_s{nv_id}" ' if with_spid else ""
-    return f"""<p:oleObj {spid_attr}name="" r:id="{rid_xlsx}" imgW="{int(w)}" imgH="{int(h)}" progId="{PROG_ID}">
-            <p:embed followColorScheme="full"/>
+    return f"""<p:oleObj name="Worksheet" r:id="{rid_xlsx}" imgW="{int(w)}" imgH="{int(h)}" progId="{PROG_ID}">
+            <p:embed/>
             <p:pic>
               <p:nvPicPr>
-                <p:cNvPr id="0" name=""/>
-                <p:cNvPicPr/>
+                <p:cNvPr id="{nv_id}" name="Object {nv_id}"/>
+                <p:cNvPicPr>
+                  <a:picLocks noChangeAspect="1" noChangeArrowheads="1"/>
+                </p:cNvPicPr>
                 <p:nvPr/>
               </p:nvPicPr>
               <p:blipFill>
                 <a:blip r:embed="{rid_img}"/>
+                <a:srcRect/>
                 <a:stretch><a:fillRect/></a:stretch>
               </p:blipFill>
               <p:spPr bwMode="auto">
                 <a:xfrm>
-                  <a:off x="0" y="0"/>
+                  <a:off x="{int(x)}" y="{int(y)}"/>
                   <a:ext cx="{int(w)}" cy="{int(h)}"/>
                 </a:xfrm>
                 <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
