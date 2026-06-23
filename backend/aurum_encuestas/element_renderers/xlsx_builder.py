@@ -74,6 +74,17 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
     ws.title = "Datos"
     # Hide worksheet gridlines (rely on explicit cell borders).
     ws.sheet_view.showGridLines = False
+    # Page setup: landscape A3 + fit-to-width so libreoffice xlsx→PDF render
+    # doesn't truncate wide tables.
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.paperSize = 8  # A3
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 1
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.page_margins.left = 0.1
+    ws.page_margins.right = 0.1
+    ws.page_margins.top = 0.1
+    ws.page_margins.bottom = 0.1
 
     question = getattr(source_chart, "question", None)
     options = list(getattr(question, "options", []) or [])
