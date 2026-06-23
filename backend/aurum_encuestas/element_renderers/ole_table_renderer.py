@@ -87,6 +87,18 @@ def render(slide, element: dict, ctx) -> None:
             log.error("ole_table_renderer: PIL PNG render failed: %s", exc)
             return
 
+    # Resize shape bbox to match cropped PNG aspect ratio at target dpi 200.
+    # 1 px @ 200 DPI = 9525 * (96/200) ≈ 4572 EMU
+    try:
+        import io
+        from PIL import Image
+        img = Image.open(io.BytesIO(png_bytes))
+        emu_per_px = int(9525 * 96 / 200)
+        cx = img.size[0] * emu_per_px
+        cy = img.size[1] * emu_per_px
+    except Exception:
+        pass
+
     try:
         embed_ole_xlsx_with_preview(slide, x, y, cx, cy, xlsx_bytes, png_bytes)
     except Exception as exc:
