@@ -24,6 +24,44 @@ LABEL_COL_W_MAX = 40
 DATA_COL_W = 14
 
 
+# Excel column width unit ≈ 7px at 96 DPI for default font (Calibri 11).
+# 1 px = 9525 EMU. So 1 col_width unit ≈ 66675 EMU.
+EMU_PER_COL_W = 66675
+EMU_PER_PT = 12700  # for row heights
+
+
+def compute_xlsx_natural_dim_emu(source_chart, breakdown_groups: list[str]) -> tuple[int, int]:
+    """Compute xlsx natural rendered dim (w_emu, h_emu) for given chart+bds.
+    Uses default col widths from constants. Used to know "Excel would render this big"."""
+    question = getattr(source_chart, "question", None)
+    options = list(getattr(question, "options", []) or [])
+    all_bds = getattr(source_chart, "all_breakdowns_data", {}) or {}
+    bds = [(b, all_bds.get(b, {})) for b in breakdown_groups if b in all_bds]
+    if not bds or not options:
+        return 0, 0
+
+    label_strings = list(options) + ["Observaciones"]
+    longest = max((len(str(s)) for s in label_strings), default=0)
+    label_col_w = max(LABEL_COL_W_MIN, min(LABEL_COL_W_MAX, longest + 2))
+
+    total_cw = 0.0
+    for i, (_, bd) in enumerate(bds):
+        n_cats = len(bd.get("categories", {}) or {})
+        if n_cats == 0:
+            continue
+        if i == 0:
+            total_cw += label_col_w
+        total_cw += n_cats * DATA_COL_W
+        total_cw += 2  # spacer
+
+    w_emu = int(total_cw * EMU_PER_COL_W)
+
+    # rows: HEADER 24 + CAT 22 + COUNTS 18 + OPT 28 × N
+    total_h_pt = 24 + 22 + 18 + 28 * len(options)
+    h_emu = int(total_h_pt * EMU_PER_PT)
+    return w_emu, h_emu
+
+
 def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
     """Return in-memory xlsx with N independent tables side-by-side.
 
