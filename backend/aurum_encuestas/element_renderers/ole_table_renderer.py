@@ -72,11 +72,20 @@ def render(slide, element: dict, ctx) -> None:
         log.error("ole_table_renderer: xlsx build failed: %s", exc)
         return
 
+    # Prefer libreoffice xlsx → PNG render (pixel-perfect Excel render).
+    # Fallback: PIL canvas approximation if soffice unavailable.
+    png_bytes: bytes | None = None
     try:
-        png_bytes = render_table_preview_png(source_chart, breakdown_groups, cx, cy)
+        from ..render_service import render_xlsx_to_png
+        png_bytes = render_xlsx_to_png(xlsx_bytes)
     except Exception as exc:
-        log.error("ole_table_renderer: PNG render failed: %s", exc)
-        return
+        log.warning("ole_table_renderer: libreoffice xlsx→png failed: %s", exc)
+    if not png_bytes:
+        try:
+            png_bytes = render_table_preview_png(source_chart, breakdown_groups, cx, cy)
+        except Exception as exc:
+            log.error("ole_table_renderer: PIL PNG render failed: %s", exc)
+            return
 
     try:
         embed_ole_xlsx_with_preview(slide, x, y, cx, cy, xlsx_bytes, png_bytes)

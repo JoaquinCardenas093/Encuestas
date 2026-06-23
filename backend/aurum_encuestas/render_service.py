@@ -23,6 +23,59 @@ def _find_soffice() -> str | None:
     return None
 
 
+def render_xlsx_to_png(xlsx_bytes: bytes, dpi: int = 120) -> bytes | None:
+    """Render xlsx → PNG via libreoffice headless. None if soffice missing or fails.
+    Used to produce OLE placeholder PNG matching real Excel render."""
+    soffice = _find_soffice()
+    if not soffice:
+        return None
+    with tempfile.TemporaryDirectory() as tmpdir:
+        outdir = Path(tmpdir)
+        xlsx_path = outdir / "in.xlsx"
+        xlsx_path.write_bytes(xlsx_bytes)
+
+        # xlsx → pdf (libreoffice handles native xlsx render with DataBar, fonts, etc.)
+        try:
+            subprocess.run(
+                [soffice, "--headless", "--convert-to", "pdf", "--outdir", str(outdir), str(xlsx_path)],
+                capture_output=True, timeout=60, check=True,
+            )
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            return None
+        pdfs = list(outdir.glob("*.pdf"))
+        if not pdfs:
+            return None
+        pdf_path = pdfs[0]
+
+        # pdf → png via pdftoppm
+        pdftoppm = shutil.which("pdftoppm")
+        if pdftoppm:
+            try:
+                subprocess.run(
+                    [pdftoppm, "-png", "-r", str(dpi),
+                     "-f", "1", "-l", "1",
+                     str(pdf_path), str(outdir / "page")],
+                    capture_output=True, timeout=30, check=True,
+                )
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+                return None
+            pngs = sorted(outdir.glob("page-*.png"))
+            if pngs:
+                return pngs[0].read_bytes()
+        # Fallback pdf2image
+        try:
+            from pdf2image import convert_from_path
+            images = convert_from_path(str(pdf_path), dpi=dpi, first_page=1, last_page=1)
+            if images:
+                import io
+                buf = io.BytesIO()
+                images[0].save(buf, "PNG")
+                return buf.getvalue()
+        except Exception:
+            return None
+        return None
+
+
 def render_slide_to_png(pptx_path: str, slide_index: int = 0) -> bytes:
     """Render a specific slide as PNG. Uses pptx→pdf (libreoffice) → png (pdftoppm or pdf2image)."""
     soffice = _find_soffice()
