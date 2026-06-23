@@ -420,20 +420,12 @@ def test_builtin_has_table_only_full_width_pattern():
     p = matched[0]
     assert p.priority == -10
     elements = list(p.implementation.elements)
-    # Now: subtitle text element + main chart element
-    assert len(elements) == 2
+    # Only chart element — subtitle removed (chart title renders via chart_renderer).
+    assert len(elements) == 1
     el_dicts = [
         (e.model_dump() if hasattr(e, "model_dump") else e)
         for e in elements
     ]
-    # Subtitle text element first. Sources from chart.title (UI-defined, optional).
-    sub = next(e for e in el_dicts if e["kind"] == "text")
-    assert sub["content_source"]["type"] == "computed"
-    assert sub["content_source"]["scope"] == "chart"
-    assert sub["content_source"]["field"] == "title"
-    assert sub["style"]["bold"] is True
-    assert sub["style"]["align_h"] == "center"
-    # Chart element (TABLE_WITH_MINIBARS).
     chart_el = next(e for e in el_dicts if e["kind"] == "chart")
     assert chart_el["chart_type"] == "TABLE_WITH_MINIBARS"
     assert chart_el["position"]["x_rel"] == 0.04
