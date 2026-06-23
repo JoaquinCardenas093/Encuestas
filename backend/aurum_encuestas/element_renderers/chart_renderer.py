@@ -262,13 +262,24 @@ def render(slide, element: dict, ctx: RenderContext) -> None:
             angle = int(round(-90 - dom_frac * 180)) % 360
         _set_pie_first_slice_angle(chart, angle)
 
-    # Chart title (all single-shape types)
+    # Chart title (all single-shape types) — moderate font, bold, black.
     sc_title = (getattr(source_chart, "title", None) or "").strip()
     el_title = (element.get("title") or "").strip()
     title_str = sc_title or el_title
     if title_str:
         chart.has_title = True
-        chart.chart_title.text_frame.text = title_str
+        tf = chart.chart_title.text_frame
+        tf.text = title_str
+        try:
+            for para in tf.paragraphs:
+                for run in para.runs:
+                    run.font.size = Pt(16)
+                    run.font.bold = True
+                    run.font.name = "Calibri"
+                    from pptx.dml.color import RGBColor
+                    run.font.color.rgb = RGBColor(0, 0, 0)
+        except Exception:
+            pass
     else:
         chart.has_title = False
 
