@@ -34,6 +34,31 @@ def render(slide, element: dict, ctx) -> None:
 
     source_chart = charts_list[chart_ref_index]
 
+    # Render chart.title above OLE block if set. Reserve top strip for it.
+    title_str = (getattr(source_chart, "title", None) or "").strip()
+    title_h_emu = 0
+    if title_str:
+        from pptx.util import Emu, Pt
+        from pptx.enum.text import PP_ALIGN
+        from pptx.dml.color import RGBColor
+        title_h_emu = 360000  # ~0.4" reserve
+        tb = slide.shapes.add_textbox(Emu(x), Emu(y), Emu(cx), Emu(title_h_emu))
+        tf = tb.text_frame
+        tf.word_wrap = True
+        tf.margin_top = 0
+        tf.margin_bottom = 0
+        p = tf.paragraphs[0]
+        p.alignment = PP_ALIGN.CENTER
+        run = p.add_run()
+        run.text = title_str
+        run.font.size = Pt(16)
+        run.font.bold = True
+        run.font.name = "Calibri"
+        run.font.color.rgb = RGBColor(0, 0, 0)
+        # Shrink OLE region to leave room.
+        y += title_h_emu
+        cy -= title_h_emu
+
     try:
         xlsx_buf = build_xlsx_for_table(source_chart, breakdown_groups)
         xlsx_bytes = xlsx_buf.getvalue()
