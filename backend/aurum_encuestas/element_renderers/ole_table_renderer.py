@@ -5,7 +5,7 @@ import logging
 
 from .ole_embedder import embed_ole_xlsx_with_preview
 from .ole_png_renderer import render_table_preview_png
-from .xlsx_builder import build_xlsx_for_table
+from .xlsx_builder import build_xlsx_for_table, compute_xlsx_natural_dim_emu
 
 log = logging.getLogger(__name__)
 
@@ -33,6 +33,12 @@ def render(slide, element: dict, ctx) -> None:
         return
 
     source_chart = charts_list[chart_ref_index]
+
+    # Override pattern position cx/cy with NATURAL xlsx render dim so
+    # placeholder PNG + OLE shape match Excel's real render size on double-click.
+    nat_w, nat_h = compute_xlsx_natural_dim_emu(source_chart, breakdown_groups)
+    if nat_w > 0 and nat_h > 0:
+        cx, cy = nat_w, nat_h
 
     # Render chart.title above OLE block if set. Reserve top strip for it.
     title_str = (getattr(source_chart, "title", None) or "").strip()
