@@ -23,9 +23,36 @@ def _find_soffice() -> str | None:
     return None
 
 
-def render_xlsx_to_png(xlsx_bytes: bytes, dpi: int = 120) -> bytes | None:
-    """Render xlsx → PNG via libreoffice headless. None if soffice missing or fails.
-    Used to produce OLE placeholder PNG matching real Excel render."""
+def _crop_to_content(png_bytes: bytes, margin: int = 8, white_thresh: int = 245) -> bytes:
+    """Crop PNG to non-white bounding box plus a small margin. Returns cropped PNG."""
+    try:
+        import io
+        from PIL import Image, ImageChops
+        img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
+        # White background subtract → bbox of non-white pixels
+        bg = Image.new("RGB", img.size, (255, 255, 255))
+        diff = ImageChops.difference(img, bg)
+        # Threshold: anything within white_thresh of pure white treated as bg
+        diff_l = diff.convert("L").point(lambda p: 0 if p < (255 - white_thresh) else 255)
+        bbox = diff_l.getbbox()
+        if not bbox:
+            return png_bytes
+        x0, y0, x1, y1 = bbox
+        x0 = max(0, x0 - margin)
+        y0 = max(0, y0 - margin)
+        x1 = min(img.size[0], x1 + margin)
+        y1 = min(img.size[1], y1 + margin)
+        cropped = img.crop((x0, y0, x1, y1))
+        out = io.BytesIO()
+        cropped.save(out, "PNG")
+        return out.getvalue()
+    except Exception:
+        return png_bytes
+
+
+def render_xlsx_to_png(xlsx_bytes: bytes, dpi: int = 200) -> bytes | None:
+    """Render xlsx → PNG via libreoffice headless, cropped to content bbox.
+    None if soffice missing or fails. Used for OLE placeholder PNG."""
     soffice = _find_soffice()
     if not soffice:
         return None
@@ -61,7 +88,7 @@ def render_xlsx_to_png(xlsx_bytes: bytes, dpi: int = 120) -> bytes | None:
                 return None
             pngs = sorted(outdir.glob("page-*.png"))
             if pngs:
-                return pngs[0].read_bytes()
+                return _crop_to_content(pngs[0].read_bytes())
         # Fallback pdf2image
         try:
             from pdf2image import convert_from_path
@@ -70,7 +97,7 @@ def render_xlsx_to_png(xlsx_bytes: bytes, dpi: int = 120) -> bytes | None:
                 import io
                 buf = io.BytesIO()
                 images[0].save(buf, "PNG")
-                return buf.getvalue()
+                return _crop_to_content(buf.getvalue())
         except Exception:
             return None
         return None
