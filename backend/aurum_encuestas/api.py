@@ -418,6 +418,53 @@ def _enforce_multi_row(positions: dict, payload_shapes: list) -> None:
         cur_x += positions[cid]["cx_emu"] + gap
 
 
+def _rects_overlap(r1: dict, r2: dict) -> bool:
+    return not (
+        r1["x_emu"] + r1["cx_emu"] <= r2["x_emu"]
+        or r2["x_emu"] + r2["cx_emu"] <= r1["x_emu"]
+        or r1["y_emu"] + r1["cy_emu"] <= r2["y_emu"]
+        or r2["y_emu"] + r2["cy_emu"] <= r1["y_emu"]
+    )
+
+
+def _reposition_analyses(positions: dict, payload_shapes: list) -> None:
+    """Slide-scope analyses: if overlap any chart, move to safe band above charts
+    (y between question subtitle and first chart row)."""
+    EMU = 360000
+    SAFE_X_MIN_EMU = int(1.3 * EMU)
+    SAFE_W_EMU = int(30.6 * EMU)
+    SAFE_Y_MIN_EMU = int(2.8 * EMU)  # below question
+
+    chart_rects = []
+    for s in payload_shapes:
+        if s.get("kind") != "chart":
+            continue
+        cid = s["id"][len("chart_"):]
+        if cid in positions:
+            chart_rects.append(positions[cid])
+
+    if not chart_rects:
+        return
+    top_chart_y = min(r["y_emu"] for r in chart_rects)
+    available_h = top_chart_y - SAFE_Y_MIN_EMU - int(0.2 * EMU)
+
+    for s in payload_shapes:
+        if s.get("kind") != "analysis" or s.get("scope") != "slide":
+            continue
+        aid = s["id"][len("analysis_"):]
+        if aid not in positions:
+            continue
+        a = positions[aid]
+        # Check overlap with any chart.
+        if not any(_rects_overlap(a, c) for c in chart_rects):
+            continue
+        # Move to top band, full width.
+        a["x_emu"] = SAFE_X_MIN_EMU
+        a["y_emu"] = SAFE_Y_MIN_EMU
+        a["cx_emu"] = SAFE_W_EMU
+        a["cy_emu"] = max(int(1.5 * EMU), available_h)
+
+
 class SuggestSlideLayoutRequest(BaseModel):
     state: dict
     slide_id: str
@@ -517,8 +564,9 @@ async def suggest_slide_layout_endpoint(req: SuggestSlideLayoutRequest):
             "cy_emu": int(float(el.get("h_cm", 0)) * EMU),
             "font_pt": font_pt,
         }
-    # Post-process: enforce multi-row when single-row overflow detected.
+    # Post-process: enforce multi-row + reposition analyses below chart band.
     _enforce_multi_row(positions, payload_shapes)
+    _reposition_analyses(positions, payload_shapes)
 
     # Convert extras (new shapes) cm → EMU.
     extras_emu = []
