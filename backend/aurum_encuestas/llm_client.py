@@ -225,18 +225,38 @@ def suggest_layout(
 LAYOUT_MODEL = "claude-sonnet-4-6"
 
 
-def correct_slide_layout(slide_payload: dict) -> dict:
-    """Send slide structure to Claude with LAYOUT_CORRECTOR_SYSTEM. Returns
-    `{elements: [{id, x_cm, y_cm, w_cm, h_cm, font_pt?}], changes: [...]}`.
-    Uses Sonnet for layout reasoning. Raises LLMError on API failure."""
+def correct_slide_layout(slide_payload: dict, slide_png_bytes: bytes | None = None) -> dict:
+    """Send slide structure (+ optional rendered PNG for vision) to Sonnet.
+    Returns `{elements, extras?, changes}`. Raises LLMError on API failure."""
     if _client is None:
         raise LLMError("ANTHROPIC_API_KEY no configurada.")
+    import base64
+    user_content: list = []
+    if slide_png_bytes:
+        user_content.append({
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": "image/png",
+                "data": base64.b64encode(slide_png_bytes).decode("ascii"),
+            },
+        })
+        user_content.append({
+            "type": "text",
+            "text": (
+                "Arriba va la imagen del slide actual con sus problemas visibles. "
+                "Analizá lo que ves + el JSON estructural abajo y devolvé el layout corregido.\n\n"
+                + json.dumps(slide_payload, ensure_ascii=False)
+            ),
+        })
+    else:
+        user_content.append({"type": "text", "text": json.dumps(slide_payload, ensure_ascii=False)})
     try:
         msg = _client.messages.create(
             model=LAYOUT_MODEL,
             max_tokens=3000,
             system=[{"type": "text", "text": LAYOUT_CORRECTOR_SYSTEM, "cache_control": {"type": "ephemeral"}}],
-            messages=[{"role": "user", "content": json.dumps(slide_payload, ensure_ascii=False)}],
+            messages=[{"role": "user", "content": user_content}],
         )
     except APIStatusError as e:
         raise LLMError(f"LLM API error: {e}") from e

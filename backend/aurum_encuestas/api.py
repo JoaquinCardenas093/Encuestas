@@ -529,8 +529,23 @@ async def suggest_slide_layout_endpoint(req: SuggestSlideLayoutRequest):
         "needs_multi_row": total_natural_w > 30.0,
         "shapes": payload_shapes,
     }
+    # Render current slide → PNG so Sonnet sees actual layout problems (vision).
+    slide_png_bytes: bytes | None = None
     try:
-        raw = correct_slide_layout(slide_payload)
+        # Find slide index in state.
+        slide_index = next((i for i, s in enumerate(state.slides) if s.id == req.slide_id), 0)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pptx") as tmp:
+            tmp_path = tmp.name
+        try:
+            build_pptx(state, tmp_path)
+            slide_png_bytes = render_slide_to_png(tmp_path, slide_index=slide_index)
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
+    except Exception:
+        slide_png_bytes = None  # Fallback: structural-only
+
+    try:
+        raw = correct_slide_layout(slide_payload, slide_png_bytes=slide_png_bytes)
     except Exception as e:
         return {"error": str(e), "positions": {}, "changes": []}
 
