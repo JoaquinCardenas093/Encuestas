@@ -18,10 +18,10 @@ export default function AddAnalysisModal({ open, slide, db, onClose, onAdd }: Pr
   const [text, setText] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const state = useProjectStore((s) => s.state)
 
   if (!open || !slide || !db) return null
 
-  const state = useProjectStore((s) => s.state)
   const handleGenerate = async () => {
     setBusy(true); setError(null)
     try {
