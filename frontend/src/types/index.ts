@@ -58,8 +58,23 @@ export interface LayoutBox {
   font_pt?: number | null
 }
 
+export interface LayoutExtra {
+  kind: "line" | "callout" | "text"
+  x_emu: number
+  y_emu: number
+  cx_emu: number
+  cy_emu: number
+  text?: string | null
+  font_pt?: number | null
+  bold?: boolean
+  style?: string | null
+  color?: string | null
+  fill?: string | null
+}
+
 export interface SlideLayout {
   positions: Record<string, LayoutBox>
+  extras?: LayoutExtra[]
   changes: string[]
 }
 

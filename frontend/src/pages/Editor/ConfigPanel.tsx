@@ -332,8 +332,9 @@ export default function ConfigPanel({ slideId }: Props) {
                   return
                 }
                 const positions = r.positions || {}
+                const extras = r.extras || []
                 const changes = r.changes || []
-                setSlideLayout(slide.id, { positions, changes })
+                setSlideLayout(slide.id, { positions, extras, changes })
                 alert(
                   `AI layout corrector aplicado.\n\n` +
                   `Elementos: ${Object.keys(positions).length}\n\n` +
