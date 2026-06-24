@@ -579,30 +579,8 @@ async def suggest_slide_layout_endpoint(req: SuggestSlideLayoutRequest):
             "cy_emu": int(float(el.get("h_cm", 0)) * EMU),
             "font_pt": font_pt,
         }
-    # Post-process: enforce multi-row + reposition analyses below chart band.
-    _enforce_multi_row(positions, payload_shapes)
-    _reposition_analyses(positions, payload_shapes)
-
-    # Convert extras (new shapes) cm → EMU.
-    extras_emu = []
-    for ex in raw.get("extras", []) or []:
-        kind = ex.get("kind")
-        if kind not in ("line", "callout", "text"):
-            continue
-        extras_emu.append({
-            "kind": kind,
-            "x_emu": int(float(ex.get("x_cm", 0)) * EMU),
-            "y_emu": int(float(ex.get("y_cm", 0)) * EMU),
-            "cx_emu": int(float(ex.get("w_cm", 0)) * EMU),
-            "cy_emu": int(float(ex.get("h_cm", 0)) * EMU),
-            "text": ex.get("text"),
-            "font_pt": ex.get("font_pt"),
-            "bold": bool(ex.get("bold", False)),
-            "style": ex.get("style"),
-            "color": ex.get("color"),
-            "fill": ex.get("fill"),
-        })
-    return {"positions": positions, "extras": extras_emu, "changes": raw.get("changes", [])}
+    # No hardcoded post-process. Sonnet decides multi-row + collision via vision.
+    return {"positions": positions, "extras": [], "changes": raw.get("changes", [])}
 
 
 @app.get("/api/recents")

@@ -327,41 +327,22 @@ DEFECTOS A DETECTAR Y CÓMO CORREGIRLOS
 10. Gráficos inconsistentes → sin título de gráfico, sin gridlines, eje de valores oculto, etiquetas de dato 0.0% a 8–9pt, leyenda abajo centrada solo si hay ≥2 series; series por entidad en gris 7F7F7F / negro 404040 / dorado EEC245.
 
 SALIDA
-Devolvé JSON estricto con la lista de elementos corregidos + extras. Coordenadas en cm. Podés:
-- Mover/redimensionar charts y analyses existentes (mismo id)
-- Usar múltiples FILAS de charts (decisión propia para evitar overflow horizontal)
-- AGREGAR shapes nuevas: separator lines (kind="line"), callout boxes con texto (kind="callout"), subtitle text (kind="text")
+Devolvé JSON estricto con la lista de elementos corregidos. Coordenadas en cm.
+REGLA: SOLO mové/redimensioná los elementos EXISTENTES (mismo id). NO agregues elementos nuevos, ni textos, ni líneas, ni callouts. Trabajás únicamente con los ids que vinieron en el payload.
 
 Formato exacto:
 {
   "elements": [
     {"id": "chart_<id>", "x_cm": 1.3, "y_cm": 3.5, "w_cm": 14.3, "h_cm": 10.0},
-    {"id": "analysis_<id>", "x_cm": 1.3, "y_cm": 14.0, "w_cm": 31.0, "h_cm": 2.4, "font_pt": 10}
-  ],
-  "extras": [
-    {"kind": "line", "x_cm": 11.0, "y_cm": 4.0, "w_cm": 0.0, "h_cm": 10.0, "style": "dotted", "color": "D9D9D9"},
-    {"kind": "callout", "x_cm": 1.3, "y_cm": 12.0, "w_cm": 7.5, "h_cm": 3.5, "text": "458 personas (91.6%) ...", "font_pt": 9, "fill": "D9D9D9"},
-    {"kind": "text", "x_cm": 1.3, "y_cm": 3.0, "w_cm": 10.0, "h_cm": 0.6, "text": "Distribución general", "font_pt": 12, "bold": true}
+    {"id": "analysis_<id>", "x_cm": 1.3, "y_cm": 4.0, "w_cm": 30.6, "h_cm": 1.8, "font_pt": 10.5}
   ],
   "changes": ["ajuste 1", "ajuste 2"]
 }
 
-Reglas extras:
-- line: usar para separadores verticales/horizontales. w_cm=0 → vertical, h_cm=0 → horizontal. style: "dotted"|"dashed"|"solid". color hex sin #.
-- callout: texto destacado dentro caja con fill gris claro. Útil para insights numéricos al lado del PIE.
-- text: subtítulos como "Distribución general", "Distribución segmentada".
+REGLA MULTI-FILA:
+El payload incluye `needs_multi_row` y `sum_natural_chart_w_cm`. Si la suma de anchos naturales supera ~30cm o si visualmente ves overflow horizontal en la imagen, distribuí los charts en 2 o más filas (asignando y_cm diferentes). Cada fila ≤ 30.6 cm de ancho total.
 
-REGLA MULTI-FILA OBLIGATORIA:
-El payload incluye `needs_multi_row: true|false` y `sum_natural_chart_w_cm`.
-SI `needs_multi_row=true` O `sum_natural_chart_w_cm > 30`: DEBÉS distribuir en 2 o más filas.
-PROHIBIDO ponerlos todos en y=mismo en una sola fila — esto produce overflow horizontal y tablas cortadas.
-
-Layout obligatorio cuando needs_multi_row=true (3+ charts o suma > 30cm):
-- Distribuí charts en 2 filas: fila 1 (y≈3.5–9.5), fila 2 (y≈10.0–15.0)
-- Cada fila ocupa el ancho completo: x desde 1.3, total w≤30.6
-- Sumá widths por fila: cada fila debe respetar w_total ≤ 30.6 cm
-- Analysis slide-scope: y≈3.0–4.5 (DEBAJO de la pregunta, ANTES de los charts), w≤30
-- Si querés: insertá línea separadora horizontal entre filas a y≈9.7
+Si analysis con scope=slide está → ubicalo DEBAJO de la pregunta (y_cm ≈ 3.0–4.5), antes de los charts. NO al fondo del slide.
 
 Solo JSON válido sin texto explicativo fuera del JSON.
 
