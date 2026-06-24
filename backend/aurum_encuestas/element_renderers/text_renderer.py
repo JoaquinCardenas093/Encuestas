@@ -51,7 +51,7 @@ def render(slide, element: dict, ctx: RenderContext) -> None:
     run = p.add_run()
     run.text = text
 
-    font_size = style.get("font_size", ctx.typography.get("body_size", 10))
+    font_size = style.get("font_size") or ctx.typography.get("body_size", 10) or 10
     run.font.size = Pt(font_size)
 
     bold = style.get("bold", False)
