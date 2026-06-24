@@ -485,20 +485,25 @@ def _apply_training_style(chart, chart_type: str, specific_style: dict | None = 
 def _add_textbox(slide, text: str, el: dict, font_name: str | None = None, font_pt: int | None = None) -> None:
     tb = slide.shapes.add_textbox(Emu(el["x"]), Emu(el["y"]), Emu(el["cx"]), Emu(el["cy"]))
     tf = tb.text_frame
-    tf.text = text
     tf.word_wrap = True
-    # Disable autofit-shrink (AI sets explicit font_pt → don't let pptx scale up).
+    # Disable autofit-shrink (AI sets explicit font_pt → don't let pptx scale).
     from pptx.enum.text import MSO_AUTO_SIZE
     try:
         tf.auto_size = MSO_AUTO_SIZE.NONE
     except Exception:
         pass
-    for para in tf.paragraphs:
-        for run in para.runs:
-            if font_name:
-                run.font.name = font_name
-            if font_pt:
-                run.font.size = Pt(font_pt)
+    # Build paragraph with explicit run so font props stick (tf.text creates
+    # a paragraph but the runs lose set font.size on serialization in some cases).
+    p = tf.paragraphs[0]
+    # Clear any default empty run.
+    for run in list(p.runs):
+        run.text = ""
+    run = p.add_run()
+    run.text = text
+    if font_name:
+        run.font.name = font_name
+    if font_pt:
+        run.font.size = Pt(font_pt)
 
 
 def _substitute_placeholders(slide, mapping: dict[str, str]) -> None:

@@ -102,7 +102,7 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str], target_w_emu
     data_col_w = DATA_COL_W
 
     # If target_w_emu provided (AI-corrected bbox), scale cols down so xlsx
-    # natural render width ≤ target.
+    # natural render width ≤ target. Min 10 col units so "100.0%" (6 chars) fits.
     if target_w_emu and target_w_emu > 0:
         total_data_cols = 0
         total_spacers = 0
@@ -115,7 +115,7 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str], target_w_emu
         if total_data_cols > 0:
             target_cw = target_w_emu / EMU_PER_COL_W
             avail_for_data = target_cw - label_col_w - 2 * total_spacers
-            new_data_w = max(6, int(avail_for_data / total_data_cols))
+            new_data_w = max(10, int(avail_for_data / total_data_cols))
             data_col_w = new_data_w
 
     header_fill = PatternFill("solid", fgColor=HEADER_FILL_HEX)
