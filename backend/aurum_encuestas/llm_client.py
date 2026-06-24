@@ -9,8 +9,8 @@ from .errors import LLMError
 load_dotenv()
 
 MODEL = "claude-haiku-4-5-20251001"
-MAX_OUTPUT_TOKENS = 400
-MAX_TEXT_LENGTH = 500
+MAX_OUTPUT_TOKENS = 1500
+MAX_TEXT_LENGTH = 3000
 
 SYSTEM_PROMPT = """Sos analista de encuestas. Generás análisis técnicos breves en español neutral.
 
