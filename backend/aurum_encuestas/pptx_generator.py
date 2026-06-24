@@ -287,14 +287,16 @@ def _add_analyses_textboxes(slide, slide_def: Slide, free_area: dict, font_overr
 
     no_ai_index = 0
     for a in slide_def.analyses:
+        font_pt = None
         if a.id in ai_positions:
             box = ai_positions[a.id]
             el = {"x": box.x_emu, "y": box.y_emu, "cx": box.cx_emu, "cy": box.cy_emu}
+            font_pt = box.font_pt
         else:
             el = {"x": band_x, "y": band_y + no_ai_index * per_cy, "cx": band_cx, "cy": per_cy}
             no_ai_index += 1
         try:
-            _add_textbox(slide, a.text, el, font_override)
+            _add_textbox(slide, a.text, el, font_override, font_pt=font_pt)
         except Exception as exc:
             _log.warning("_add_analyses_textboxes: failed analysis %s: %s", a.id, exc)
 
@@ -480,15 +482,23 @@ def _apply_training_style(chart, chart_type: str, specific_style: dict | None = 
         pass
 
 
-def _add_textbox(slide, text: str, el: dict, font_name: str | None = None) -> None:
+def _add_textbox(slide, text: str, el: dict, font_name: str | None = None, font_pt: int | None = None) -> None:
     tb = slide.shapes.add_textbox(Emu(el["x"]), Emu(el["y"]), Emu(el["cx"]), Emu(el["cy"]))
     tf = tb.text_frame
     tf.text = text
     tf.word_wrap = True
-    if font_name:
-        for para in tf.paragraphs:
-            for run in para.runs:
+    # Disable autofit-shrink (AI sets explicit font_pt → don't let pptx scale up).
+    from pptx.enum.text import MSO_AUTO_SIZE
+    try:
+        tf.auto_size = MSO_AUTO_SIZE.NONE
+    except Exception:
+        pass
+    for para in tf.paragraphs:
+        for run in para.runs:
+            if font_name:
                 run.font.name = font_name
+            if font_pt:
+                run.font.size = Pt(font_pt)
 
 
 def _substitute_placeholders(slide, mapping: dict[str, str]) -> None:
