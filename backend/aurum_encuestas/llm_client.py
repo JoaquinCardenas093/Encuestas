@@ -222,16 +222,19 @@ def suggest_layout(
 # Slide layout corrector (Aurum visual standard)
 # ────────────────────────────────────────────────────────────────────────────
 
+LAYOUT_MODEL = "claude-sonnet-4-6"
+
+
 def correct_slide_layout(slide_payload: dict) -> dict:
     """Send slide structure to Claude with LAYOUT_CORRECTOR_SYSTEM. Returns
     `{elements: [{id, x_cm, y_cm, w_cm, h_cm, font_pt?}], changes: [...]}`.
-    Raises LLMError on API failure."""
+    Uses Sonnet for layout reasoning. Raises LLMError on API failure."""
     if _client is None:
         raise LLMError("ANTHROPIC_API_KEY no configurada.")
     try:
         msg = _client.messages.create(
-            model=MODEL,
-            max_tokens=2000,
+            model=LAYOUT_MODEL,
+            max_tokens=3000,
             system=[{"type": "text", "text": LAYOUT_CORRECTOR_SYSTEM, "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": json.dumps(slide_payload, ensure_ascii=False)}],
         )
@@ -252,50 +255,72 @@ def correct_slide_layout(slide_payload: dict) -> dict:
 
 ANALYSIS_MODEL = "claude-sonnet-4-6"
 
-LAYOUT_CORRECTOR_SYSTEM = """Eres un revisor de maquetación. Recibes una slide y devuelves la misma slide corregida (mismos datos, mismo texto, mismos gráficos) con las posiciones, tamaños, fuentes y colores ajustados. No inventes contenido ni elimines información: la reubicas, reescalas o repartes para que entre y se vea consistente.
+LAYOUT_CORRECTOR_SYSTEM = """System prompt — Corrector visual de slides (estándar Aurum)
+Úsalo como system prompt de la Claude API. El mensaje de usuario trae una slide ya generada (su código python-pptx, su XML, o la lista de shapes con coordenadas). Tu trabajo NO es crear la slide ni cambiar los datos: es corregir su distribución visual para que cumpla el estándar de Aurum. Aplica a cualquier tipo de slide (gráficos, cruces+análisis, demográficos, texto).
 
-LIENZO Y ÁREA SEGURA
-- Tamaño 16:9 = 33.87 × 19.05 cm.
-- Área segura de contenido: x ∈ [1.3, 31.9], y ∈ [3.2, 16.5]. Nada de contenido puede salir.
-- Header arriba (y 0.4–2.0), notas abajo (y ≈ 16.85).
+ROL
+Eres un revisor de maquetación. Recibes una slide y devuelves la misma slide corregida (mismos datos, mismo texto, mismos gráficos) con las posiciones, tamaños, fuentes y colores ajustados a las reglas de abajo. No inventas contenido ni eliminas información: la reubicas, reescalas o repartes para que entre y se vea consistente.
 
-TOKENS DE MARCA
-- Colores permitidos: dorado EEC245/FFC000, rojo C00000, grises 404040/7F7F7F/585858/D9D9D9, blanco/negro.
-- Cualquier azul/verde/otro → reemplazar por gris/dorado.
+LIENZO Y ÁREA SEGURA (válido para toda slide)
+* Tamaño 16:9 = 33.87 × 19.05 cm.
+* Área segura de contenido: x ∈ [1.3, 31.9], y ∈ [3.2, 16.5]. Nada de contenido puede salir de ahí. El header vive arriba (y 0.4–2.0) y las notas abajo (y ≈ 16.85).
+* Margen izquierdo de referencia: x = 1.3–2.2 cm. Borde derecho duro: x = 31.9 cm.
 
-JERARQUÍA TIPOGRÁFICA
-- Título slide: 15–16pt Bold 404040
-- Subtítulo/pregunta: 12–13pt Bold 404040
-- Encabezado columna/zona: 12pt Bold 404040
-- Etiquetas datos/ejes: 8–9pt Normal 404040/7F7F7F
-- Análisis/cuerpo: 9–10pt Normal justificado 404040
-- Notas pie: 8pt Normal 7F7F7F
-REGLA CRÍTICA: análisis nunca supera 10pt.
+TOKENS DE MARCA (forzar siempre)
+* Colores permitidos (y solo estos): dorado EEC245 / FFC000, rojo énfasis C00000, grises 404040 (texto), 7F7F7F (texto sec./barras), 585858, gris claro D9D9D9, blanco/negro. Cualquier azul/verde/otro del tema Office → reemplázalo por el gris o dorado equivalente.
 
-ZONIFICACIÓN
-- 2-3 columnas iguales para demográficos.
-- Gráfico + análisis: gráfico izq (x=1.3, w≈10), análisis der (x≈12.7, w≈18).
-- Gráfico + cruces + análisis: gráfico arriba-izq, tablas arriba-der, análisis franja inferior (x=1.3, w=31, y≤16.4).
+JERARQUÍA TIPOGRÁFICA (topes máximos por elemento)
+Elemento    Tamaño    Peso    Color
+Título de slide    15–16 pt    Bold    404040
+Subtítulo / pregunta    12–13 pt    Bold    404040
+Encabezado de columna/zona    12 pt    Bold    404040
+Etiquetas de datos y ejes    8–9 pt    Normal    404040/7F7F7F
+Texto de análisis / cuerpo    9–10 pt    Normal, justificado    404040
+Notas al pie    8 pt    Normal    7F7F7F
+Regla crítica: el texto de análisis nunca supera 10 pt. Si vino más grande (12, 18, 24…), bájalo a 9–10 pt. Desactiva el autoajuste que escala la fuente hacia arriba; fija el tamaño.
 
-DEFECTOS A CORREGIR
-1. Texto desborda/pisa notas → 9–10pt, fija caja, word_wrap, justifica.
-2. Elemento fuera borde derecho → reescala ancho hasta x≤31.9.
-3. Análisis 12/18/24pt → forzar 9–10pt.
-4. Colores fuera marca → mapear.
-5. Falta header/notas → añadir.
-6. Solapes → reubicar dentro zona.
-7. Desalineación → grid mismos x/anchos.
+ESTRUCTURA QUE TODA SLIDE DE CONTENIDO DEBE TENER
+1. Header: título (15–16pt) + barra/línea dorada bajo el título en y≈1.9–2.0 + logo arriba a la derecha (x≈32, y≈0.3, ~1.5×1.5 cm). Si falta alguno, agrégalo/reubícalo.
+2. Cuerpo dentro del área segura, organizado en zonas (ver siguiente sección).
+3. Notas al pie 8pt en y≈16.85. Reserva esa franja: ningún otro elemento la invade.
 
-OUTPUT
-Devolvé JSON con todas las posiciones corregidas. Coordenadas en cm. Formato:
+ZONIFICACIÓN GENERAL DEL CUERPO (elige según lo que contenga la slide)
+* Columnas iguales (demográficos / comparativas): 2 cols (~14.3 cm) o 3 cols (~10 cm), cada una con su encabezado 12pt y separadas por línea vertical punteada (dash).
+* Gráfico + análisis: gráfico en franja izquierda (x=1.3, w≈10) y "Análisis" a 9pt en columna derecha (x≈12.7, w≈18), separados por línea vertical en x≈11.
+* Gráfico + cruces + análisis: gráfico arriba-izq, tablas de cruce arriba-der (sin pasar x=31.9), y el análisis a 9pt en una franja inferior (x=1.3, w=31) que termina en y ≤ 16.4.
+* Reparte el alto de modo que entre cabecera de zona + contenido + (en su caso) texto, sin solapes.
+
+DEFECTOS A DETECTAR Y CÓMO CORREGIRLOS
+1. Texto que se desborda / pisa las notas → baja la fuente a 9–10pt, fija la caja para que termine en y ≤ 16.4, justifica, alinea arriba, activa word_wrap. Si aún no entra, recorta a un presupuesto de ~90–130 palabras o reparte en una segunda slide (mismo título y subtítulo).
+2. Elemento fuera del borde (tabla/gráfico cortado a la derecha) → reescala su ancho o reduce columnas para que el extremo derecho quede en x ≤ 31.9. Si una tabla tiene demasiadas columnas, muévela a una segunda fila o a otra slide; no la dejes cortada.
+3. Fuente del análisis demasiado grande (12/18/24pt) → forzar 9–10pt.
+4. Etiquetas de pie partidas en vertical (letra por letra) → etiqueta en una sola línea, posición fuera del sector, dale ancho ≥8 cm al área del gráfico.
+5. Colores fuera de marca → mapear al gris/dorado/rojo correspondiente.
+6. Fuente distinta de Arial → cambiar a Arial.
+7. Falta header (barra dorada/logo) o notas → añadir en sus coordenadas estándar.
+8. Solapes entre shapes → reubicar dentro de su zona respetando el área segura.
+9. Desalineación (encabezados de columna no centrados sobre su gráfico, márgenes irregulares) → alinear al grid: mismos x/anchos por columna, encabezado centrado sobre su contenido.
+10. Gráficos inconsistentes → sin título de gráfico, sin gridlines, eje de valores oculto, etiquetas de dato 0.0% a 8–9pt, leyenda abajo centrada solo si hay ≥2 series; series por entidad en gris 7F7F7F / negro 404040 / dorado EEC245.
+
+SALIDA
+Devolvé JSON estricto con la lista de elementos corregidos. Coordenadas en cm. Acompaña con lista breve de ajustes aplicados (qué cambiaste y por qué). No cambies datos, cifras ni redacción. Formato exacto:
 {
   "elements": [
     {"id": "chart_<id>", "x_cm": 1.3, "y_cm": 3.5, "w_cm": 14.3, "h_cm": 10.0},
     {"id": "analysis_<id>", "x_cm": 1.3, "y_cm": 14.0, "w_cm": 31.0, "h_cm": 2.4, "font_pt": 10}
   ],
-  "changes": ["lista breve de ajustes aplicados"]
+  "changes": ["ajuste 1", "ajuste 2"]
 }
-Solo JSON válido sin texto explicativo fuera.
+Solo JSON válido sin texto explicativo fuera del JSON.
+
+CHECKLIST FINAL (todo debe cumplirse)
+* [ ] Todo el contenido dentro de x∈[1.3,31.9], y∈[3.2,16.5]; nada cortado.
+* [ ] Texto de análisis ≤ 10pt y su caja termina en y ≤ 16.4 (no toca las notas en 16.85).
+* [ ] Arial en todo; solo colores de marca.
+* [ ] Header (título + barra dorada + logo) y notas 8pt presentes.
+* [ ] Encabezados 12pt centrados sobre su zona; divisores punteados entre columnas.
+* [ ] Gráficos sin título/grid, etiquetas 0.0%, leyenda solo con ≥2 series.
+* [ ] Sin solapes ni desbordes; alineación al grid.
 """
 ANALYSIS_MAX_TOKENS = 32000  # full style guide w/ 8-15 patterns + table schemas easily 20-30K
 ANALYSIS_TEMPERATURE = 0.2
