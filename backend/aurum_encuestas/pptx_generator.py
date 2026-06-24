@@ -256,6 +256,36 @@ def _add_slide_content(slide, slide_def: Slide, state: ProjectState, free_area: 
     except Exception as exc:
         _log.error("_add_slide_content: render_pattern failed: %s", exc, exc_info=True)
 
+    # 6. Render analyses as textboxes (pattern_renderer doesn't handle analyses).
+    _add_analyses_textboxes(slide, slide_def, free_area, state.inputs.font_override if state.inputs else None)
+
+
+def _add_analyses_textboxes(slide, slide_def: Slide, free_area: dict, font_override: str | None) -> None:
+    """Append analysis textboxes after pattern render. Stack at bottom of free_area."""
+    if not slide_def.analyses:
+        return
+    from pptx.util import Emu, Pt
+    fa_x = free_area.get("x", 0)
+    fa_y = free_area.get("y", 0)
+    fa_cx = free_area.get("cx", 1)
+    fa_cy = free_area.get("cy", 1)
+
+    # Reserve bottom band for analyses. Stack each in equal slices.
+    band_h_frac = 0.20  # 20% of free_area height
+    band_y = fa_y + int(fa_cy * (1.0 - band_h_frac))
+    band_cy = int(fa_cy * band_h_frac)
+    band_x = fa_x + int(fa_cx * 0.04)
+    band_cx = int(fa_cx * 0.92)
+
+    n = len(slide_def.analyses)
+    per_cy = band_cy // n if n else band_cy
+    for i, a in enumerate(slide_def.analyses):
+        el = {"x": band_x, "y": band_y + i * per_cy, "cx": band_cx, "cy": per_cy}
+        try:
+            _add_textbox(slide, a.text, el, font_override)
+        except Exception as exc:
+            _log.warning("_add_analyses_textboxes: failed analysis %d: %s", i, exc)
+
 
 def _add_slide_content_legacy(slide, slide_def: Slide, state: ProjectState, free_area: dict) -> None:
     """Legacy heuristic chart insertion — fallback when no pattern available."""
