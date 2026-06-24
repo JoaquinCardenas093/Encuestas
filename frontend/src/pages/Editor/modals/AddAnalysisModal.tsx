@@ -1,6 +1,7 @@
 import { useState } from "react"
 import Modal from "../../../components/Modal"
 import * as api from "../../../api/client"
+import { useProjectStore } from "../../../store/project"
 import type { Analysis, AnalysisScope, ParsedDB, Slide } from "../../../types"
 
 interface Props {
@@ -20,11 +21,16 @@ export default function AddAnalysisModal({ open, slide, db, onClose, onAdd }: Pr
 
   if (!open || !slide || !db) return null
 
+  const state = useProjectStore((s) => s.state)
   const handleGenerate = async () => {
     setBusy(true); setError(null)
     try {
       const ctx = _buildContext(scope, targetId, slide, db)
-      const r = await api.generateAnalysis(scope, ctx)
+      const r = await api.generateAnalysis(scope, ctx, {
+        state,
+        slide_id: slide.id,
+        target_id: scope === "slide" ? null : targetId,
+      })
       setText(r.text)
     } catch (e) {
       setError((e as { message?: string }).message || "Error")
