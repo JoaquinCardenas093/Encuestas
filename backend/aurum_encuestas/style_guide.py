@@ -650,11 +650,16 @@ def load_active() -> StyleGuide:
     """Return the active StyleGuide.
 
     Precedence:
+    0. AURUM_FORCE_BUILTIN env var → skip AI file, always BUILTIN.
     1. ~/.aurum/training/style_guide.json  (AI-generated or manually edited)
     2. BUILTIN_STYLE_GUIDE  (fallback when file absent or corrupt)
     """
     import logging
+    import os
     log = logging.getLogger(__name__)
+
+    if os.environ.get("AURUM_FORCE_BUILTIN"):
+        return BUILTIN_STYLE_GUIDE
 
     sg_path = _get_aurum_dir() / "training" / "style_guide.json"
     if sg_path.exists():
