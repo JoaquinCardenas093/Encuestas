@@ -415,6 +415,7 @@ async def suggest_slide_layout_endpoint(req: SuggestSlideLayoutRequest):
             "kind": "analysis",
             "scope": a.scope,
             "text_chars": len(a.text or ""),
+            "text_preview": (a.text or "")[:100],
         })
 
     # Canvas hint + sum natural widths so Sonnet can detect overflow risk.
@@ -446,10 +447,15 @@ async def suggest_slide_layout_endpoint(req: SuggestSlideLayoutRequest):
             key = eid[len("analysis_"):]
         else:
             key = eid
-        # Default font_pt: analyses=10 (per prompt rule), charts None.
+        # Default font_pt: analyses=11 (per prompt rule 10.5–11), charts None.
         font_pt = el.get("font_pt")
         if font_pt is None and is_analysis:
-            font_pt = 10
+            font_pt = 11
+        if font_pt is not None:
+            try:
+                font_pt = float(font_pt)
+            except (TypeError, ValueError):
+                font_pt = 11 if is_analysis else None
         positions[key] = {
             "x_emu": int(float(el.get("x_cm", 0)) * EMU),
             "y_emu": int(float(el.get("y_cm", 0)) * EMU),

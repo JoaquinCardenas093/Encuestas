@@ -275,9 +275,13 @@ Título de slide    15–16 pt    Bold    404040
 Subtítulo / pregunta    12–13 pt    Bold    404040
 Encabezado de columna/zona    12 pt    Bold    404040
 Etiquetas de datos y ejes    8–9 pt    Normal    404040/7F7F7F
-Texto de análisis / cuerpo    9–10 pt    Normal, justificado    404040
+Texto de análisis / cuerpo    10.5–11 pt    Normal, justificado    404040
 Notas al pie    8 pt    Normal    7F7F7F
-Regla crítica: el texto de análisis nunca supera 10 pt. Si vino más grande (12, 18, 24…), bájalo a 9–10 pt. Desactiva el autoajuste que escala la fuente hacia arriba; fija el tamaño.
+Regla crítica: el texto de análisis va entre 10.5 y 11 pt (vos decidís según la cantidad de texto). Si vino más grande (12, 18, 24…), bájalo a 10.5–11 pt. Desactiva el autoajuste que escala la fuente hacia arriba; fija el tamaño.
+
+REGLA POSICIÓN ANÁLISIS:
+- analysis con scope="slide" → DEBE colocarse DEBAJO de la pregunta/subtítulo (y_cm ≈ 3.0–4.5), antes de los gráficos. NO al fondo del slide.
+- analysis con scope="chart" → al lado/debajo del chart específico.
 
 ESTRUCTURA QUE TODA SLIDE DE CONTENIDO DEBE TENER
 1. Header: título (15–16pt) + barra/línea dorada bajo el título en y≈1.9–2.0 + logo arriba a la derecha (x≈32, y≈0.3, ~1.5×1.5 cm). Si falta alguno, agrégalo/reubícalo.
@@ -327,14 +331,17 @@ Reglas extras:
 - callout: texto destacado dentro caja con fill gris claro. Útil para insights numéricos al lado del PIE.
 - text: subtítulos como "Distribución general", "Distribución segmentada".
 
-REGLA MULTI-FILA CRÍTICA:
-Si sumás los w_cm naturales de TODOS los charts y la suma supera ~30 cm (≥ área segura),
-DEBÉS distribuir en 2 o más filas. NO comprimas todos los charts en una sola fila.
-Layout sugerido cuando hay 3+ charts:
-- Fila 1 (y≈3.3–9.5): PIE/charts simples izquierda + tablas pequeñas en el resto
-- Fila 2 (y≈10.0–15.5): tablas grandes (NSE con muchas categorías, Punto con muchos puntos)
-- Análisis: arriba (compact) o al lado derecho como columna
-- Insertá líneas separadoras horizontales entre filas si ayuda a la lectura.
+REGLA MULTI-FILA OBLIGATORIA:
+El payload incluye `needs_multi_row: true|false` y `sum_natural_chart_w_cm`.
+SI `needs_multi_row=true` O `sum_natural_chart_w_cm > 30`: DEBÉS distribuir en 2 o más filas.
+PROHIBIDO ponerlos todos en y=mismo en una sola fila — esto produce overflow horizontal y tablas cortadas.
+
+Layout obligatorio cuando needs_multi_row=true (3+ charts o suma > 30cm):
+- Distribuí charts en 2 filas: fila 1 (y≈3.5–9.5), fila 2 (y≈10.0–15.0)
+- Cada fila ocupa el ancho completo: x desde 1.3, total w≤30.6
+- Sumá widths por fila: cada fila debe respetar w_total ≤ 30.6 cm
+- Analysis slide-scope: y≈3.0–4.5 (DEBAJO de la pregunta, ANTES de los charts), w≤30
+- Si querés: insertá línea separadora horizontal entre filas a y≈9.7
 
 Solo JSON válido sin texto explicativo fuera del JSON.
 

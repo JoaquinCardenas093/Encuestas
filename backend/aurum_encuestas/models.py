@@ -91,7 +91,7 @@ class LayoutBox(BaseModel):
     y_emu: int
     cx_emu: int
     cy_emu: int
-    font_pt: int | None = None
+    font_pt: float | None = None
 
 
 class LayoutExtra(BaseModel):
@@ -102,7 +102,7 @@ class LayoutExtra(BaseModel):
     cx_emu: int = 0
     cy_emu: int = 0
     text: str | None = None
-    font_pt: int | None = None
+    font_pt: float | None = None
     bold: bool = False
     style: str | None = None  # line: dotted|dashed|solid
     color: str | None = None  # hex no #
