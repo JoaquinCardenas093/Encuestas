@@ -179,15 +179,80 @@ async def export_pptx_endpoint(req: ExportPptxRequest):
 class GenerateAnalysisRequest(BaseModel):
     scope: str
     context: dict
+    state: dict | None = None  # ProjectState for backend data extraction
+    slide_id: str | None = None
+    target_id: str | None = None
 
 
 @app.post("/api/generate-analysis")
 async def generate_analysis_endpoint(req: GenerateAnalysisRequest):
+    ctx = dict(req.context)
+    # Backend extracts real data when state + slide_id provided.
+    if req.state and req.slide_id:
+        try:
+            ctx = _build_analysis_context(req.scope, req.target_id, req.slide_id, req.state, ctx)
+        except Exception:
+            pass  # keep frontend-provided ctx as fallback
     try:
-        text = generate_analysis(req.scope, req.context)
+        text = generate_analysis(req.scope, ctx)
         return {"text": text, "fallback": False}
     except Exception:
         return {"text": "[Análisis no disponible — editar manualmente]", "fallback": True}
+
+
+def _build_analysis_context(scope: str, target_id: str | None, slide_id: str, state_dict: dict, base_ctx: dict) -> dict:
+    """Server-side data extraction for analysis. Aggregates data across charts per scope."""
+    from .data_extractor import extract_chart_data, extract_all_breakdowns_data
+    state = ProjectState.model_validate(state_dict)
+    slide = next((s for s in state.slides if s.id == slide_id), None)
+    if slide is None or state.parsed_db is None or not state.inputs:
+        return base_ctx
+    db_path = state.inputs.db_path
+    data_blocks = state.parsed_db.data_blocks or {}
+
+    # Filter charts by scope.
+    if scope == "chart":
+        charts = [c for c in slide.charts if c.id == target_id]
+    elif scope == "question":
+        charts = [c for c in slide.charts if c.question_id == target_id]
+    else:  # slide → all
+        charts = list(slide.charts)
+    if not charts:
+        return base_ctx
+
+    # Aggregate data per chart by question_id + breakdown.
+    aggregated: dict = {}
+    questions_by_id = {q.id: q for q in state.parsed_db.questions}
+    bds_by_id = {b.id: b for b in state.parsed_db.breakdowns}
+    for c in charts:
+        q = questions_by_id.get(c.question_id)
+        if q is None:
+            continue
+        primary_bd = c.breakdown_ids[0] if c.breakdown_ids else "general"
+        try:
+            data = extract_chart_data(db_path, q, primary_bd, data_blocks)
+        except Exception:
+            data = {}
+        bd_label = bds_by_id.get(primary_bd).label if bds_by_id.get(primary_bd) else primary_bd
+        key = f"{q.code} — {bd_label}"
+        aggregated[key] = {
+            "question_text": q.text,
+            "breakdown_label": bd_label,
+            "options": q.options,
+            "data": data,
+        }
+
+    # Override context with aggregated. For single-chart, keep flat shape.
+    if len(charts) == 1:
+        first = next(iter(aggregated.values()))
+        base_ctx["question_text"] = first["question_text"]
+        base_ctx["breakdown_label"] = first["breakdown_label"]
+        base_ctx["options"] = first["options"]
+        base_ctx["data"] = first["data"]
+    else:
+        base_ctx["charts"] = aggregated
+        base_ctx["data"] = aggregated  # also as `data` for backwards compat
+    return base_ctx
 
 
 # M4 training endpoints (add/list/delete/reprocess/bank) removed in M6.2.

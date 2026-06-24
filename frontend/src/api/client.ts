@@ -74,11 +74,21 @@ export interface GenerateAnalysisContext {
   data: Record<string, Record<string, { count: number; pct: number | null }>>
 }
 
-export async function generateAnalysis(scope: "slide" | "question" | "chart", context: GenerateAnalysisContext): Promise<{ text: string; fallback: boolean }> {
+export async function generateAnalysis(
+  scope: "slide" | "question" | "chart",
+  context: GenerateAnalysisContext,
+  opts?: { state?: any; slide_id?: string; target_id?: string | null },
+): Promise<{ text: string; fallback: boolean }> {
   return request("/generate-analysis", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ scope, context }),
+    body: JSON.stringify({
+      scope,
+      context,
+      state: opts?.state ?? null,
+      slide_id: opts?.slide_id ?? null,
+      target_id: opts?.target_id ?? null,
+    }),
   })
 }
 
