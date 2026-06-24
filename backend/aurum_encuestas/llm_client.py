@@ -40,7 +40,26 @@ def generate_analysis(scope: str, context: dict) -> str:
     if _client is None:
         raise LLMError("ANTHROPIC_API_KEY no configurada. Agregá a .env y reiniciá el backend.")
 
-    user_msg = f"""Sección: "{context.get('section_title', '')}"
+    charts_block = context.get("charts")
+    if charts_block:
+        # Multi-chart slide-scope: pass full structured data per chart×breakdown.
+        per_chart_lines = []
+        for key, val in charts_block.items():
+            per_chart_lines.append(
+                f"- {key}\n  Pregunta: {val.get('question_text', '')}\n"
+                f"  Opciones: {val.get('options', [])}\n"
+                f"  Datos: {json.dumps(val.get('data', {}), ensure_ascii=False)}"
+            )
+        charts_text = "\n".join(per_chart_lines)
+        user_msg = (
+            f"Sección: \"{context.get('section_title', '')}\"\n"
+            f"Scope: {scope}\n"
+            f"Slide tiene {len(charts_block)} chart(s)/breakdown(s). "
+            f"Analizá TODOS y armá un análisis integral que cruce los hallazgos.\n\n"
+            f"Charts:\n{charts_text}\n"
+        )
+    else:
+        user_msg = f"""Sección: "{context.get('section_title', '')}"
 Pregunta: "{context.get('question_text', '')}"
 Opciones: {context.get('options', [])}
 Breakdown: {context.get('breakdown_label', '')}

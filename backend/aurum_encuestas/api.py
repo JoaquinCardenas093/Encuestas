@@ -220,7 +220,7 @@ def _build_analysis_context(scope: str, target_id: str | None, slide_id: str, st
     if not charts:
         return base_ctx
 
-    # Aggregate data per chart by question_id + breakdown.
+    # Aggregate per chart × per breakdown (every bd, not just primary).
     aggregated: dict = {}
     questions_by_id = {q.id: q for q in state.parsed_db.questions}
     bds_by_id = {b.id: b for b in state.parsed_db.breakdowns}
@@ -228,22 +228,24 @@ def _build_analysis_context(scope: str, target_id: str | None, slide_id: str, st
         q = questions_by_id.get(c.question_id)
         if q is None:
             continue
-        primary_bd = c.breakdown_ids[0] if c.breakdown_ids else "general"
-        try:
-            data = extract_chart_data(db_path, q, primary_bd, data_blocks)
-        except Exception:
-            data = {}
-        bd_label = bds_by_id.get(primary_bd).label if bds_by_id.get(primary_bd) else primary_bd
-        key = f"{q.code} — {bd_label}"
-        aggregated[key] = {
-            "question_text": q.text,
-            "breakdown_label": bd_label,
-            "options": q.options,
-            "data": data,
-        }
+        bd_ids = list(c.breakdown_ids or []) or ["general"]
+        for bd_id in bd_ids:
+            try:
+                data = extract_chart_data(db_path, q, bd_id, data_blocks)
+            except Exception:
+                data = {}
+            bd_obj = bds_by_id.get(bd_id)
+            bd_label = bd_obj.label if bd_obj else bd_id
+            key = f"{q.code} — {bd_label}"
+            aggregated[key] = {
+                "question_text": q.text,
+                "breakdown_label": bd_label,
+                "options": q.options,
+                "data": data,
+            }
 
-    # Override context with aggregated. For single-chart, keep flat shape.
-    if len(charts) == 1:
+    # Single-bd single-chart: flat shape (current Claude prompt expects this).
+    if len(aggregated) == 1:
         first = next(iter(aggregated.values()))
         base_ctx["question_text"] = first["question_text"]
         base_ctx["breakdown_label"] = first["breakdown_label"]
@@ -251,7 +253,15 @@ def _build_analysis_context(scope: str, target_id: str | None, slide_id: str, st
         base_ctx["data"] = first["data"]
     else:
         base_ctx["charts"] = aggregated
-        base_ctx["data"] = aggregated  # also as `data` for backwards compat
+        # Pass aggregated as the data field too so Claude sees it.
+        base_ctx["data"] = aggregated
+        # Build human-readable breakdown_label summarizing all bd labels.
+        bd_labels = [v["breakdown_label"] for v in aggregated.values()]
+        base_ctx["breakdown_label"] = " | ".join(sorted(set(bd_labels)))
+        # Use first question_text + options for prompt fields.
+        first = next(iter(aggregated.values()))
+        base_ctx["question_text"] = first["question_text"]
+        base_ctx["options"] = first["options"]
     return base_ctx
 
 
