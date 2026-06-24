@@ -71,6 +71,7 @@ export default function ConfigPanel({ slideId }: Props) {
   const updateSeparatorTitle = useProjectStore((s) => s.updateSeparatorTitle)
   const addAnalysis = useProjectStore((s) => s.addAnalysis)
   const removeAnalysis = useProjectStore((s) => s.removeAnalysis)
+  const updateAnalysisText = useProjectStore((s) => s.updateAnalysisText)
   const updateChartColors = useProjectStore((s) => s.updateChartColors)
   const [chartModalOpen, setChartModalOpen] = useState(false)
   const [analysisModalOpen, setAnalysisModalOpen] = useState(false)
@@ -278,13 +279,18 @@ export default function ConfigPanel({ slideId }: Props) {
           <h4 className="text-xs uppercase text-neutral-500 mt-4 mb-2">Análisis ({slide.analyses.length})</h4>
           {slide.analyses.map((a) => (
             <div key={a.id} className="bg-neutral-800 border border-neutral-700 rounded p-2 mb-2 flex items-start gap-2">
-              <span className={`text-xs px-1.5 rounded font-semibold ${
+              <span className={`text-xs px-1.5 rounded font-semibold mt-1 ${
                 a.scope === "slide" ? "bg-accent text-neutral-900" :
                 a.scope === "question" ? "bg-green-500 text-neutral-900" :
                 "bg-blue-400 text-neutral-900"
               }`}>{a.scope.slice(0, 4).toUpperCase()}</span>
-              <span className="text-xs flex-1 line-clamp-2">{a.text}</span>
-              <button onClick={() => removeAnalysis(slide.id, a.id)} className="text-neutral-500 hover:text-red-400">
+              <textarea
+                value={a.text}
+                onChange={(e) => updateAnalysisText(slide.id, a.id, e.target.value)}
+                rows={3}
+                className="text-xs flex-1 bg-neutral-900 border border-neutral-700 rounded px-2 py-1 resize-y min-h-[60px]"
+              />
+              <button onClick={() => removeAnalysis(slide.id, a.id)} className="text-neutral-500 hover:text-red-400 mt-1">
                 <Trash2 size={12} />
               </button>
             </div>
