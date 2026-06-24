@@ -327,6 +327,15 @@ Reglas extras:
 - callout: texto destacado dentro caja con fill gris claro. Útil para insights numéricos al lado del PIE.
 - text: subtítulos como "Distribución general", "Distribución segmentada".
 
+REGLA MULTI-FILA CRÍTICA:
+Si sumás los w_cm naturales de TODOS los charts y la suma supera ~30 cm (≥ área segura),
+DEBÉS distribuir en 2 o más filas. NO comprimas todos los charts en una sola fila.
+Layout sugerido cuando hay 3+ charts:
+- Fila 1 (y≈3.3–9.5): PIE/charts simples izquierda + tablas pequeñas en el resto
+- Fila 2 (y≈10.0–15.5): tablas grandes (NSE con muchas categorías, Punto con muchos puntos)
+- Análisis: arriba (compact) o al lado derecho como columna
+- Insertá líneas separadoras horizontales entre filas si ayuda a la lectura.
+
 Solo JSON válido sin texto explicativo fuera del JSON.
 
 CHECKLIST FINAL (todo debe cumplirse)

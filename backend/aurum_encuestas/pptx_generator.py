@@ -6,7 +6,7 @@ from lxml import etree
 from pptx import Presentation
 from pptx.chart.data import CategoryChartData
 from pptx.enum.chart import XL_CHART_TYPE
-from pptx.util import Emu
+from pptx.util import Emu, Pt
 
 from .config import get_layout_bank_path
 from .data_extractor import extract_chart_data

@@ -417,9 +417,14 @@ async def suggest_slide_layout_endpoint(req: SuggestSlideLayoutRequest):
             "text_chars": len(a.text or ""),
         })
 
+    # Canvas hint + sum natural widths so Sonnet can detect overflow risk.
+    total_natural_w = sum(s.get("w_cm", 0) for s in payload_shapes if s.get("kind") == "chart")
     slide_payload = {
         "title": slide.title,
         "type": slide.type,
+        "canvas": {"safe_x_cm": [1.3, 31.9], "safe_y_cm": [3.2, 16.5], "total_w_cm": 30.6, "total_h_cm": 13.3},
+        "sum_natural_chart_w_cm": round(total_natural_w, 1),
+        "needs_multi_row": total_natural_w > 30.0,
         "shapes": payload_shapes,
     }
     try:
