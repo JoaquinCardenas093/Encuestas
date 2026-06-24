@@ -75,7 +75,7 @@ export interface GenerateAnalysisContext {
 }
 
 export async function generateAnalysis(
-  scope: "slide" | "question" | "chart",
+  scope: "slide" | "chart",
   context: GenerateAnalysisContext,
   opts?: { state?: any; slide_id?: string; target_id?: string | null },
 ): Promise<{ text: string; fallback: boolean }> {

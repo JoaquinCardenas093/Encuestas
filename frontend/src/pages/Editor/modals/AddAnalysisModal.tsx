@@ -59,26 +59,13 @@ export default function AddAnalysisModal({ open, slide, db, onClose, onAdd }: Pr
     }>
       <div className="text-xs text-neutral-400 mb-1">Scope</div>
       <div className="flex gap-3 mb-3">
-        {(["slide", "question", "chart"] as AnalysisScope[]).map((s) => (
+        {(["slide", "chart"] as AnalysisScope[]).map((s) => (
           <label key={s} className="flex items-center gap-1 text-sm">
             <input type="radio" name="scope" checked={scope === s} onChange={() => { setScope(s); setTargetId("") }} aria-label={s} />
             {s}
           </label>
         ))}
       </div>
-
-      {scope === "question" && (
-        <>
-          <label className="block text-xs text-neutral-400 mb-1">Pregunta</label>
-          <select value={targetId} onChange={(e) => setTargetId(e.target.value)} className="w-full mb-3 bg-neutral-900 border border-neutral-700 rounded px-3 py-2 text-sm">
-            <option value="">— Seleccionar —</option>
-            {Array.from(new Set(slide.charts.map((c) => c.question_id))).map((qid) => {
-              const q = db.questions.find((q) => q.id === qid)
-              return <option key={qid} value={qid}>{q?.code}: {q?.text}</option>
-            })}
-          </select>
-        </>
-      )}
 
       {scope === "chart" && (
         <>
@@ -119,9 +106,7 @@ export default function AddAnalysisModal({ open, slide, db, onClose, onAdd }: Pr
 function _buildContext(scope: AnalysisScope, targetId: string, slide: Slide, db: ParsedDB) {
   const charts = scope === "chart"
     ? slide.charts.filter((c) => c.id === targetId)
-    : scope === "question"
-      ? slide.charts.filter((c) => c.question_id === targetId)
-      : slide.charts
+    : slide.charts
 
   const firstChart = charts[0]
   const q = firstChart ? db.questions.find((q) => q.id === firstChart.question_id) : null

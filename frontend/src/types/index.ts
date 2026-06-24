@@ -5,7 +5,7 @@ export type ChartType =
   | "BAR_HORIZONTAL_GROUPED"
   | "TABLE_WITH_MINIBARS"
 
-export type AnalysisScope = "slide" | "question" | "chart"
+export type AnalysisScope = "slide" | "chart"
 export type SlideType = "separator" | "shell"
 
 export interface Question {

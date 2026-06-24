@@ -281,7 +281,6 @@ export default function ConfigPanel({ slideId }: Props) {
             <div key={a.id} className="bg-neutral-800 border border-neutral-700 rounded p-2 mb-2 flex items-start gap-2">
               <span className={`text-xs px-1.5 rounded font-semibold mt-1 ${
                 a.scope === "slide" ? "bg-accent text-neutral-900" :
-                a.scope === "question" ? "bg-green-500 text-neutral-900" :
                 "bg-blue-400 text-neutral-900"
               }`}>{a.scope.slice(0, 4).toUpperCase()}</span>
               <textarea
@@ -328,7 +327,7 @@ export default function ConfigPanel({ slideId }: Props) {
                 n_charts: slide.charts.length,
                 chart_types: slide.charts.map((c) => c.chart_type),
                 n_chart_an: slide.analyses.filter((a) => a.scope === "chart").length,
-                n_q_an: slide.analyses.filter((a) => a.scope === "question").length,
+                n_q_an: 0,
                 has_slide_an: slide.analyses.some((a) => a.scope === "slide"),
                 free_area,
               })
