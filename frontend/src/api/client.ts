@@ -110,7 +110,7 @@ export async function suggestLayout(req: SuggestLayoutRequest): Promise<{ source
 }
 
 export interface SuggestSlideLayoutResponse {
-  elements?: Array<{ id: string; x_cm: number; y_cm: number; w_cm: number; h_cm: number; font_pt?: number }>
+  positions?: Record<string, { x_emu: number; y_emu: number; cx_emu: number; cy_emu: number; font_pt?: number | null }>
   changes?: string[]
   error?: string
 }

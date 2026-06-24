@@ -50,6 +50,19 @@ export interface Analysis {
   edited: boolean
 }
 
+export interface LayoutBox {
+  x_emu: number
+  y_emu: number
+  cx_emu: number
+  cy_emu: number
+  font_pt?: number | null
+}
+
+export interface SlideLayout {
+  positions: Record<string, LayoutBox>
+  changes: string[]
+}
+
 export interface Slide {
   id: string
   type: SlideType
@@ -57,6 +70,7 @@ export interface Slide {
   charts: Chart[]
   analyses: Analysis[]
   auto_notes: string | null
+  layout?: SlideLayout | null
   matched_pattern?: string | null   // set by backend on preview; null = fallback heurístico
 }
 

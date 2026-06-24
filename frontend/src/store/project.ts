@@ -94,6 +94,7 @@ interface Store {
   addAnalysis(slideId: string, analysis: Omit<import("../types").Analysis, "id">): void
   removeAnalysis(slideId: string, analysisId: string): void
   updateAnalysisText(slideId: string, analysisId: string, text: string): void
+  setSlideLayout(slideId: string, layout: import("../types").SlideLayout | null): void
 }
 
 function applyTitleInheritance(slides: Slide[]): Slide[] {
@@ -302,6 +303,13 @@ export const useProjectStore = create<Store>()(
             analyses: sl.analyses.map((a) => (a.id === analysisId ? { ...a, text, edited: true } : a)),
           },
         )
+        set({ state: { ...s, slides } })
+      },
+
+      setSlideLayout(slideId, layout) {
+        const s = get().state
+        if (!s) return
+        const slides = s.slides.map((sl) => (sl.id === slideId ? { ...sl, layout } : sl))
         set({ state: { ...s, slides } })
       },
     }),

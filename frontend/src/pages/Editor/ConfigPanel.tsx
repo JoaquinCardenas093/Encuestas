@@ -323,6 +323,7 @@ export default function ConfigPanel({ slideId }: Props) {
           <button
             onClick={async () => {
               const state = useProjectStore.getState().state
+              const setSlideLayout = useProjectStore.getState().setSlideLayout
               if (!state) return
               try {
                 const r = await api.suggestSlideLayout(state, slide.id)
@@ -330,15 +331,14 @@ export default function ConfigPanel({ slideId }: Props) {
                   alert(`Error: ${r.error}`)
                   return
                 }
-                const elements = r.elements || []
+                const positions = r.positions || {}
                 const changes = r.changes || []
-                // TODO: apply elements to slide.layout for render override.
+                setSlideLayout(slide.id, { positions, changes })
                 alert(
-                  `AI layout corrector\n\n` +
-                  `Elementos: ${elements.length}\n\n` +
+                  `AI layout corrector aplicado.\n\n` +
+                  `Elementos: ${Object.keys(positions).length}\n\n` +
                   `Ajustes:\n${changes.map((c) => `• ${c}`).join("\n") || "(ninguno)"}`
                 )
-                console.log("[ai-layout] elements:", elements)
               } catch (e) {
                 alert(`Error: ${(e as Error).message}`)
               }

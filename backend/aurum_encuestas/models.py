@@ -86,6 +86,20 @@ class Analysis(BaseModel):
     edited: bool = False
 
 
+class LayoutBox(BaseModel):
+    x_emu: int
+    y_emu: int
+    cx_emu: int
+    cy_emu: int
+    font_pt: int | None = None
+
+
+class SlideLayout(BaseModel):
+    """AI-corrected positions per element id (chart_id or analysis_id)."""
+    positions: dict[str, LayoutBox] = {}
+    changes: list[str] = []
+
+
 class Slide(BaseModel):
     id: str
     type: SlideType
@@ -93,6 +107,7 @@ class Slide(BaseModel):
     charts: list[Chart] = []
     analyses: list[Analysis] = []
     auto_notes: str | None = None
+    layout: SlideLayout | None = None
 
 
 class ProjectInputs(BaseModel):

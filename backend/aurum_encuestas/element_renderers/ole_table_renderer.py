@@ -34,11 +34,28 @@ def render(slide, element: dict, ctx) -> None:
 
     source_chart = charts_list[chart_ref_index]
 
+    # AI layout override: if slide_config.layout has position for this chart_id,
+    # use those EMU coords (skip natural-dim and pattern position).
+    ai_overridden = False
+    layout = getattr(ctx.slide_config, "layout", None)
+    if layout is not None:
+        positions = getattr(layout, "positions", None) or {}
+        chart_id = getattr(source_chart, "id", None)
+        if chart_id and chart_id in positions:
+            box = positions[chart_id]
+            x = getattr(box, "x_emu", x)
+            y = getattr(box, "y_emu", y)
+            cx = getattr(box, "cx_emu", cx)
+            cy = getattr(box, "cy_emu", cy)
+            ai_overridden = True
+
     # Override pattern position cx/cy with NATURAL xlsx render dim so
     # placeholder PNG + OLE shape match Excel's real render size on double-click.
-    nat_w, nat_h = compute_xlsx_natural_dim_emu(source_chart, breakdown_groups)
-    if nat_w > 0 and nat_h > 0:
-        cx, cy = nat_w, nat_h
+    # Skip when AI layout already provided explicit dim.
+    if not ai_overridden:
+        nat_w, nat_h = compute_xlsx_natural_dim_emu(source_chart, breakdown_groups)
+        if nat_w > 0 and nat_h > 0:
+            cx, cy = nat_w, nat_h
 
     # Render chart.title above OLE block if set. Reserve top strip for it.
     title_str = (getattr(source_chart, "title", None) or "").strip()

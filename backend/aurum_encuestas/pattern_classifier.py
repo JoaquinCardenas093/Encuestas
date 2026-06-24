@@ -448,6 +448,7 @@ def build_slide_config(slide_def: Any, parsed_db: Any, db_path: str = "") -> Any
         n_breakdowns: int = 0
         n_analyses: int = 0
         parsed_db: _Any = None
+        layout: _Any = None  # SlideLayout from AI corrector — propagates to renderers
 
     @dataclass
     class EnrichedChart:
@@ -516,4 +517,5 @@ def build_slide_config(slide_def: Any, parsed_db: Any, db_path: str = "") -> Any
         n_charts=len(enriched_charts),
         n_analyses=len(analyses),
         parsed_db=parsed_db,
+        layout=getattr(slide_def, "layout", None),
     )

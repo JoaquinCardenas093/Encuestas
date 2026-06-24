@@ -261,30 +261,42 @@ def _add_slide_content(slide, slide_def: Slide, state: ProjectState, free_area: 
 
 
 def _add_analyses_textboxes(slide, slide_def: Slide, free_area: dict, font_override: str | None) -> None:
-    """Append analysis textboxes after pattern render. Stack at bottom of free_area."""
+    """Append analysis textboxes. Uses AI layout positions when present,
+    else stacks in bottom band of free_area."""
     if not slide_def.analyses:
         return
-    from pptx.util import Emu, Pt
+    ai_positions = {}
+    if slide_def.layout and slide_def.layout.positions:
+        ai_positions = slide_def.layout.positions
+
     fa_x = free_area.get("x", 0)
     fa_y = free_area.get("y", 0)
     fa_cx = free_area.get("cx", 1)
     fa_cy = free_area.get("cy", 1)
 
-    # Reserve bottom band for analyses. Stack each in equal slices.
-    band_h_frac = 0.20  # 20% of free_area height
+    # Fallback band for analyses without AI position.
+    band_h_frac = 0.20
     band_y = fa_y + int(fa_cy * (1.0 - band_h_frac))
     band_cy = int(fa_cy * band_h_frac)
     band_x = fa_x + int(fa_cx * 0.04)
     band_cx = int(fa_cx * 0.92)
 
-    n = len(slide_def.analyses)
-    per_cy = band_cy // n if n else band_cy
-    for i, a in enumerate(slide_def.analyses):
-        el = {"x": band_x, "y": band_y + i * per_cy, "cx": band_cx, "cy": per_cy}
+    no_ai_analyses = [a for a in slide_def.analyses if a.id not in ai_positions]
+    n_no_ai = len(no_ai_analyses)
+    per_cy = band_cy // n_no_ai if n_no_ai else band_cy
+
+    no_ai_index = 0
+    for a in slide_def.analyses:
+        if a.id in ai_positions:
+            box = ai_positions[a.id]
+            el = {"x": box.x_emu, "y": box.y_emu, "cx": box.cx_emu, "cy": box.cy_emu}
+        else:
+            el = {"x": band_x, "y": band_y + no_ai_index * per_cy, "cx": band_cx, "cy": per_cy}
+            no_ai_index += 1
         try:
             _add_textbox(slide, a.text, el, font_override)
         except Exception as exc:
-            _log.warning("_add_analyses_textboxes: failed analysis %d: %s", i, exc)
+            _log.warning("_add_analyses_textboxes: failed analysis %s: %s", a.id, exc)
 
 
 def _add_slide_content_legacy(slide, slide_def: Slide, state: ProjectState, free_area: dict) -> None:

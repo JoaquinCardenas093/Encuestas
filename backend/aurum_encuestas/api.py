@@ -423,9 +423,32 @@ async def suggest_slide_layout_endpoint(req: SuggestSlideLayoutRequest):
         "shapes": payload_shapes,
     }
     try:
-        return correct_slide_layout(slide_payload)
+        raw = correct_slide_layout(slide_payload)
     except Exception as e:
-        return {"error": str(e), "elements": [], "changes": []}
+        return {"error": str(e), "positions": {}, "changes": []}
+
+    # Convert AI cm coords → EMU positions keyed by element id (stripped of prefix).
+    EMU = 360000
+    positions = {}
+    for el in raw.get("elements", []) or []:
+        eid = str(el.get("id", "")).strip()
+        if not eid:
+            continue
+        # Strip prefix "chart_" / "analysis_" → keep raw id matching slide.charts[].id / analyses[].id
+        if eid.startswith("chart_"):
+            key = eid[len("chart_"):]
+        elif eid.startswith("analysis_"):
+            key = eid[len("analysis_"):]
+        else:
+            key = eid
+        positions[key] = {
+            "x_emu": int(float(el.get("x_cm", 0)) * EMU),
+            "y_emu": int(float(el.get("y_cm", 0)) * EMU),
+            "cx_emu": int(float(el.get("w_cm", 0)) * EMU),
+            "cy_emu": int(float(el.get("h_cm", 0)) * EMU),
+            "font_pt": el.get("font_pt"),
+        }
+    return {"positions": positions, "changes": raw.get("changes", [])}
 
 
 @app.get("/api/recents")

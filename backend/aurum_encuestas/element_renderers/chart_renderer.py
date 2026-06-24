@@ -212,8 +212,18 @@ def render(slide, element: dict, ctx: RenderContext) -> None:
     sort_order = element.get("sort", "none")
     chart_data, sorted_values = _build_chart_data(source_chart, value_field, sort_order)
 
-    # Resolve position
+    # Resolve position. AI layout overrides pattern position when set.
     x, y, cx, cy = _resolve_position(element.get("position", {}), ctx)
+    layout = getattr(ctx.slide_config, "layout", None)
+    if layout is not None:
+        positions = getattr(layout, "positions", None) or {}
+        chart_id = getattr(source_chart, "id", None)
+        if chart_id and chart_id in positions:
+            box = positions[chart_id]
+            x = getattr(box, "x_emu", x)
+            y = getattr(box, "y_emu", y)
+            cx = getattr(box, "cx_emu", cx)
+            cy = getattr(box, "cy_emu", cy)
 
     # Add chart shape
     try:
