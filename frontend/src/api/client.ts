@@ -110,8 +110,8 @@ export async function suggestLayout(req: SuggestLayoutRequest): Promise<{ source
 }
 
 export interface SuggestSlideLayoutResponse {
-  positions?: Record<string, { x_emu: number; y_emu: number; cx_emu: number; cy_emu: number; font_pt?: number | null }>
-  extras?: Array<{ kind: "line" | "callout"; x_emu: number; y_emu: number; cx_emu: number; cy_emu: number; text?: string | null; font_pt?: number | null; bold?: boolean; style?: string | null; color?: string | null; fill?: string | null }>
+  positions?: Record<string, { x_emu: number; y_emu: number; cx_emu: number; cy_emu: number; font_pt?: number | null; callout?: boolean }>
+  extras?: Array<{ kind: "line"; x_emu: number; y_emu: number; cx_emu: number; cy_emu: number; style?: string | null; color?: string | null }>
   changes?: string[]
   error?: string
 }

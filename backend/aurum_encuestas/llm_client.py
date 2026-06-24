@@ -331,19 +331,17 @@ Devolvé JSON estricto con la lista de elementos corregidos + extras opcionales.
 
 REGLAS:
 - SOLO mové/redimensioná elementos EXISTENTES (chart_<id>, analysis_<id>). NO inventes datos ni texto nuevo.
-- Podés AGREGAR shapes visuales (no informativas): líneas separadoras + callout boxes. SIN texto narrativo nuevo.
-  - line: separador visual (vertical/horizontal). NO contiene texto.
-  - callout: caja con fill destacado. Sólo si vos decidís que ayuda visualmente. NO inventes números ni hallazgos: el texto del callout debe ser cita exacta de un dato ya visible en el slide (ej: "91.6%", "458 personas"). Si no estás seguro, NO agregues callouts.
+- Podés agregar `callout: true` a un analysis_<id> para que se renderice como caja destacada (fill gris claro + borde redondeado). Es decisión propia si visualmente lo amerita.
+- Podés agregar shapes `line` (separadores visuales sin texto). NO callouts standalone — solo flag sobre analyses.
 
 Formato exacto:
 {
   "elements": [
     {"id": "chart_<id>", "x_cm": 1.3, "y_cm": 3.5, "w_cm": 14.3, "h_cm": 10.0},
-    {"id": "analysis_<id>", "x_cm": 1.3, "y_cm": 4.0, "w_cm": 30.6, "h_cm": 1.8, "font_pt": 10.5}
+    {"id": "analysis_<id>", "x_cm": 1.3, "y_cm": 4.0, "w_cm": 30.6, "h_cm": 1.8, "font_pt": 10.5, "callout": false}
   ],
   "extras": [
-    {"kind": "line", "x_cm": 11.0, "y_cm": 4.0, "w_cm": 0.0, "h_cm": 10.0, "style": "dotted", "color": "D9D9D9"},
-    {"kind": "callout", "x_cm": 1.3, "y_cm": 12.0, "w_cm": 7.5, "h_cm": 2.0, "text": "91.6%", "font_pt": 14, "fill": "D9D9D9"}
+    {"kind": "line", "x_cm": 11.0, "y_cm": 4.0, "w_cm": 0.0, "h_cm": 10.0, "style": "dotted", "color": "D9D9D9"}
   ],
   "changes": ["ajuste 1", "ajuste 2"]
 }

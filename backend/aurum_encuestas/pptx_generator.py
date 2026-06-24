@@ -294,30 +294,6 @@ def _add_layout_extras(slide, extras) -> None:
                     for old in ln.findall(qn("a:prstDash")):
                         ln.remove(old)
                     ln.append(prstDash)
-            elif ex.kind == "callout":
-                shape = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE,
-                                                Emu(ex.x_emu), Emu(ex.y_emu), Emu(ex.cx_emu), Emu(ex.cy_emu))
-                if ex.fill:
-                    shape.fill.solid()
-                    shape.fill.fore_color.rgb = RGBColor.from_string(ex.fill)
-                shape.line.fill.background()
-                if ex.text:
-                    tf = shape.text_frame
-                    tf.word_wrap = True
-                    try:
-                        tf.auto_size = MSO_AUTO_SIZE.NONE
-                    except Exception:
-                        pass
-                    p = tf.paragraphs[0]
-                    for run in list(p.runs):
-                        run.text = ""
-                    run = p.add_run()
-                    run.text = ex.text
-                    if ex.font_pt:
-                        run.font.size = Pt(ex.font_pt)
-                    if ex.bold:
-                        run.font.bold = True
-                    run.font.color.rgb = RGBColor(0x40, 0x40, 0x40)
         except Exception as exc:
             _log.warning("_add_layout_extras: failed extra %s: %s", ex.kind, exc)
 
@@ -350,17 +326,50 @@ def _add_analyses_textboxes(slide, slide_def: Slide, free_area: dict, font_overr
     no_ai_index = 0
     for a in slide_def.analyses:
         font_pt = None
+        callout = False
         if a.id in ai_positions:
             box = ai_positions[a.id]
             el = {"x": box.x_emu, "y": box.y_emu, "cx": box.cx_emu, "cy": box.cy_emu}
             font_pt = box.font_pt
+            callout = box.callout
         else:
             el = {"x": band_x, "y": band_y + no_ai_index * per_cy, "cx": band_cx, "cy": per_cy}
             no_ai_index += 1
         try:
-            _add_textbox(slide, a.text, el, font_override, font_pt=font_pt)
+            if callout:
+                _add_callout(slide, a.text, el, font_override, font_pt=font_pt)
+            else:
+                _add_textbox(slide, a.text, el, font_override, font_pt=font_pt)
         except Exception as exc:
             _log.warning("_add_analyses_textboxes: failed analysis %s: %s", a.id, exc)
+
+
+def _add_callout(slide, text: str, el: dict, font_name: str | None = None, font_pt: float | None = None) -> None:
+    """Render analysis as styled callout box: rounded rect, fill D9D9D9, black text."""
+    from pptx.enum.shapes import MSO_SHAPE
+    from pptx.enum.text import MSO_AUTO_SIZE
+    from pptx.dml.color import RGBColor
+    shape = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE,
+                                    Emu(el["x"]), Emu(el["y"]), Emu(el["cx"]), Emu(el["cy"]))
+    shape.fill.solid()
+    shape.fill.fore_color.rgb = RGBColor(0xD9, 0xD9, 0xD9)
+    shape.line.fill.background()
+    tf = shape.text_frame
+    tf.word_wrap = True
+    try:
+        tf.auto_size = MSO_AUTO_SIZE.NONE
+    except Exception:
+        pass
+    p = tf.paragraphs[0]
+    for run in list(p.runs):
+        run.text = ""
+    run = p.add_run()
+    run.text = text or ""
+    if font_name:
+        run.font.name = font_name
+    if font_pt:
+        run.font.size = Pt(font_pt)
+    run.font.color.rgb = RGBColor(0x40, 0x40, 0x40)
 
 
 def _add_slide_content_legacy(slide, slide_def: Slide, state: ProjectState, free_area: dict) -> None:

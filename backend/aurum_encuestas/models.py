@@ -92,12 +92,13 @@ class LayoutBox(BaseModel):
     cx_emu: int
     cy_emu: int
     font_pt: float | None = None
+    callout: bool = False  # Render analysis as styled callout box (fill + rounded)
 
 
 class LayoutExtra(BaseModel):
-    """AI-created extra visual shape: line separator or callout box.
-    No standalone narrative text — user constraint."""
-    kind: Literal["line", "callout"]
+    """AI-created extra visual shape: line separator only.
+    Callouts handled via LayoutBox.callout flag on existing analyses."""
+    kind: Literal["line"]
     x_emu: int
     y_emu: int
     cx_emu: int = 0

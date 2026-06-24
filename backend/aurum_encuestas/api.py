@@ -578,12 +578,13 @@ async def suggest_slide_layout_endpoint(req: SuggestSlideLayoutRequest):
             "cx_emu": int(float(el.get("w_cm", 0)) * EMU),
             "cy_emu": int(float(el.get("h_cm", 0)) * EMU),
             "font_pt": font_pt,
+            "callout": bool(el.get("callout", False)) if is_analysis else False,
         }
-    # Extras: only line + callout (no narrative text shapes — user constraint).
+    # Extras: only line (callouts handled via LayoutBox.callout flag).
     extras_emu = []
     for ex in raw.get("extras", []) or []:
         kind = ex.get("kind")
-        if kind not in ("line", "callout"):
+        if kind != "line":
             continue
         extras_emu.append({
             "kind": kind,
