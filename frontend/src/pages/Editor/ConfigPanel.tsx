@@ -322,16 +322,26 @@ export default function ConfigPanel({ slideId }: Props) {
 
           <button
             onClick={async () => {
-              const free_area = { x: 600000, y: 1200000, cx: 11000000, cy: 5000000 }
-              const r = await api.suggestLayout({
-                n_charts: slide.charts.length,
-                chart_types: slide.charts.map((c) => c.chart_type),
-                n_chart_an: slide.analyses.filter((a) => a.scope === "chart").length,
-                n_q_an: 0,
-                has_slide_an: slide.analyses.some((a) => a.scope === "slide"),
-                free_area,
-              })
-              alert(`AI suggest source: ${r.source}. (Vista previa requiere agregar este layout al state — feature v2.)`)
+              const state = useProjectStore.getState().state
+              if (!state) return
+              try {
+                const r = await api.suggestSlideLayout(state, slide.id)
+                if (r.error) {
+                  alert(`Error: ${r.error}`)
+                  return
+                }
+                const elements = r.elements || []
+                const changes = r.changes || []
+                // TODO: apply elements to slide.layout for render override.
+                alert(
+                  `AI layout corrector\n\n` +
+                  `Elementos: ${elements.length}\n\n` +
+                  `Ajustes:\n${changes.map((c) => `• ${c}`).join("\n") || "(ninguno)"}`
+                )
+                console.log("[ai-layout] elements:", elements)
+              } catch (e) {
+                alert(`Error: ${(e as Error).message}`)
+              }
             }}
             className="w-full mt-3 text-xs bg-gradient-to-r from-purple-700 to-violet-700 text-white py-2 rounded font-semibold"
           >
