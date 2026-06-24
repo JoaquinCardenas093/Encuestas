@@ -95,8 +95,9 @@ class LayoutBox(BaseModel):
 
 
 class LayoutExtra(BaseModel):
-    """AI-created extra shape: line, callout, or text."""
-    kind: Literal["line", "callout", "text"]
+    """AI-created extra visual shape: line separator or callout box.
+    No standalone narrative text — user constraint."""
+    kind: Literal["line", "callout"]
     x_emu: int
     y_emu: int
     cx_emu: int = 0

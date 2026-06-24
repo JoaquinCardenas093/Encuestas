@@ -318,24 +318,6 @@ def _add_layout_extras(slide, extras) -> None:
                     if ex.bold:
                         run.font.bold = True
                     run.font.color.rgb = RGBColor(0x40, 0x40, 0x40)
-            elif ex.kind == "text":
-                tb = slide.shapes.add_textbox(Emu(ex.x_emu), Emu(ex.y_emu), Emu(ex.cx_emu), Emu(ex.cy_emu))
-                tf = tb.text_frame
-                tf.word_wrap = True
-                try:
-                    tf.auto_size = MSO_AUTO_SIZE.NONE
-                except Exception:
-                    pass
-                p = tf.paragraphs[0]
-                for run in list(p.runs):
-                    run.text = ""
-                run = p.add_run()
-                run.text = ex.text or ""
-                if ex.font_pt:
-                    run.font.size = Pt(ex.font_pt)
-                if ex.bold:
-                    run.font.bold = True
-                run.font.color.rgb = RGBColor(0x40, 0x40, 0x40)
         except Exception as exc:
             _log.warning("_add_layout_extras: failed extra %s: %s", ex.kind, exc)
 

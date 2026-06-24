@@ -59,7 +59,7 @@ export interface LayoutBox {
 }
 
 export interface LayoutExtra {
-  kind: "line" | "callout" | "text"
+  kind: "line" | "callout"
   x_emu: number
   y_emu: number
   cx_emu: number

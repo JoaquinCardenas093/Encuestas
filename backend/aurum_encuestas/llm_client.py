@@ -327,8 +327,13 @@ DEFECTOS A DETECTAR Y CÓMO CORREGIRLOS
 10. Gráficos inconsistentes → sin título de gráfico, sin gridlines, eje de valores oculto, etiquetas de dato 0.0% a 8–9pt, leyenda abajo centrada solo si hay ≥2 series; series por entidad en gris 7F7F7F / negro 404040 / dorado EEC245.
 
 SALIDA
-Devolvé JSON estricto con la lista de elementos corregidos. Coordenadas en cm.
-REGLA: SOLO mové/redimensioná los elementos EXISTENTES (mismo id). NO agregues elementos nuevos, ni textos, ni líneas, ni callouts. Trabajás únicamente con los ids que vinieron en el payload.
+Devolvé JSON estricto con la lista de elementos corregidos + extras opcionales. Coordenadas en cm.
+
+REGLAS:
+- SOLO mové/redimensioná elementos EXISTENTES (chart_<id>, analysis_<id>). NO inventes datos ni texto nuevo.
+- Podés AGREGAR shapes visuales (no informativas): líneas separadoras + callout boxes. SIN texto narrativo nuevo.
+  - line: separador visual (vertical/horizontal). NO contiene texto.
+  - callout: caja con fill destacado. Sólo si vos decidís que ayuda visualmente. NO inventes números ni hallazgos: el texto del callout debe ser cita exacta de un dato ya visible en el slide (ej: "91.6%", "458 personas"). Si no estás seguro, NO agregues callouts.
 
 Formato exacto:
 {
@@ -336,13 +341,17 @@ Formato exacto:
     {"id": "chart_<id>", "x_cm": 1.3, "y_cm": 3.5, "w_cm": 14.3, "h_cm": 10.0},
     {"id": "analysis_<id>", "x_cm": 1.3, "y_cm": 4.0, "w_cm": 30.6, "h_cm": 1.8, "font_pt": 10.5}
   ],
+  "extras": [
+    {"kind": "line", "x_cm": 11.0, "y_cm": 4.0, "w_cm": 0.0, "h_cm": 10.0, "style": "dotted", "color": "D9D9D9"},
+    {"kind": "callout", "x_cm": 1.3, "y_cm": 12.0, "w_cm": 7.5, "h_cm": 2.0, "text": "91.6%", "font_pt": 14, "fill": "D9D9D9"}
+  ],
   "changes": ["ajuste 1", "ajuste 2"]
 }
 
 REGLA MULTI-FILA:
-El payload incluye `needs_multi_row` y `sum_natural_chart_w_cm`. Si la suma de anchos naturales supera ~30cm o si visualmente ves overflow horizontal en la imagen, distribuí los charts en 2 o más filas (asignando y_cm diferentes). Cada fila ≤ 30.6 cm de ancho total.
+El payload incluye `needs_multi_row` y `sum_natural_chart_w_cm`. Si suma > 30cm o ves overflow horizontal en la imagen, distribuí en 2+ filas (y_cm diferentes). Cada fila ≤ 30.6cm.
 
-Si analysis con scope=slide está → ubicalo DEBAJO de la pregunta (y_cm ≈ 3.0–4.5), antes de los charts. NO al fondo del slide.
+analysis scope=slide → DEBAJO de la pregunta (y_cm ≈ 3.0–4.5), ANTES de charts.
 
 Solo JSON válido sin texto explicativo fuera del JSON.
 
