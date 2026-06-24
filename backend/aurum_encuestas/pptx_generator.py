@@ -259,6 +259,86 @@ def _add_slide_content(slide, slide_def: Slide, state: ProjectState, free_area: 
     # 6. Render analyses as textboxes (pattern_renderer doesn't handle analyses).
     _add_analyses_textboxes(slide, slide_def, free_area, state.inputs.font_override if state.inputs else None)
 
+    # 7. Render AI-created extras (lines, callouts, subtitle text).
+    if slide_def.layout and slide_def.layout.extras:
+        _add_layout_extras(slide, slide_def.layout.extras)
+
+
+def _add_layout_extras(slide, extras) -> None:
+    """Render AI-generated extra shapes: separator lines, callout boxes, text."""
+    from pptx.util import Emu, Pt
+    from pptx.dml.color import RGBColor
+    from pptx.enum.shapes import MSO_SHAPE
+    from pptx.enum.text import MSO_AUTO_SIZE
+    for ex in extras:
+        try:
+            if ex.kind == "line":
+                # Horizontal: cx>0, cy=0 → end at (x+cx, y). Vertical: cx=0, cy>0.
+                x1, y1 = ex.x_emu, ex.y_emu
+                x2, y2 = ex.x_emu + ex.cx_emu, ex.y_emu + ex.cy_emu
+                from pptx.enum.shapes import MSO_CONNECTOR
+                line = slide.shapes.add_connector(MSO_CONNECTOR.STRAIGHT, Emu(x1), Emu(y1), Emu(x2), Emu(y2))
+                if ex.color:
+                    line.line.color.rgb = RGBColor.from_string(ex.color)
+                if ex.style == "dotted":
+                    from pptx.oxml.ns import qn
+                    ln = line.line._get_or_add_ln()
+                    prstDash = ln.makeelement(qn("a:prstDash"), {"val": "sysDot"})
+                    for old in ln.findall(qn("a:prstDash")):
+                        ln.remove(old)
+                    ln.append(prstDash)
+                elif ex.style == "dashed":
+                    from pptx.oxml.ns import qn
+                    ln = line.line._get_or_add_ln()
+                    prstDash = ln.makeelement(qn("a:prstDash"), {"val": "dash"})
+                    for old in ln.findall(qn("a:prstDash")):
+                        ln.remove(old)
+                    ln.append(prstDash)
+            elif ex.kind == "callout":
+                shape = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE,
+                                                Emu(ex.x_emu), Emu(ex.y_emu), Emu(ex.cx_emu), Emu(ex.cy_emu))
+                if ex.fill:
+                    shape.fill.solid()
+                    shape.fill.fore_color.rgb = RGBColor.from_string(ex.fill)
+                shape.line.fill.background()
+                if ex.text:
+                    tf = shape.text_frame
+                    tf.word_wrap = True
+                    try:
+                        tf.auto_size = MSO_AUTO_SIZE.NONE
+                    except Exception:
+                        pass
+                    p = tf.paragraphs[0]
+                    for run in list(p.runs):
+                        run.text = ""
+                    run = p.add_run()
+                    run.text = ex.text
+                    if ex.font_pt:
+                        run.font.size = Pt(ex.font_pt)
+                    if ex.bold:
+                        run.font.bold = True
+                    run.font.color.rgb = RGBColor(0x40, 0x40, 0x40)
+            elif ex.kind == "text":
+                tb = slide.shapes.add_textbox(Emu(ex.x_emu), Emu(ex.y_emu), Emu(ex.cx_emu), Emu(ex.cy_emu))
+                tf = tb.text_frame
+                tf.word_wrap = True
+                try:
+                    tf.auto_size = MSO_AUTO_SIZE.NONE
+                except Exception:
+                    pass
+                p = tf.paragraphs[0]
+                for run in list(p.runs):
+                    run.text = ""
+                run = p.add_run()
+                run.text = ex.text or ""
+                if ex.font_pt:
+                    run.font.size = Pt(ex.font_pt)
+                if ex.bold:
+                    run.font.bold = True
+                run.font.color.rgb = RGBColor(0x40, 0x40, 0x40)
+        except Exception as exc:
+            _log.warning("_add_layout_extras: failed extra %s: %s", ex.kind, exc)
+
 
 def _add_analyses_textboxes(slide, slide_def: Slide, free_area: dict, font_override: str | None) -> None:
     """Append analysis textboxes. Uses AI layout positions when present,

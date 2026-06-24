@@ -303,14 +303,30 @@ DEFECTOS A DETECTAR Y CÓMO CORREGIRLOS
 10. Gráficos inconsistentes → sin título de gráfico, sin gridlines, eje de valores oculto, etiquetas de dato 0.0% a 8–9pt, leyenda abajo centrada solo si hay ≥2 series; series por entidad en gris 7F7F7F / negro 404040 / dorado EEC245.
 
 SALIDA
-Devolvé JSON estricto con la lista de elementos corregidos. Coordenadas en cm. Acompaña con lista breve de ajustes aplicados (qué cambiaste y por qué). No cambies datos, cifras ni redacción. Formato exacto:
+Devolvé JSON estricto con la lista de elementos corregidos + extras. Coordenadas en cm. Podés:
+- Mover/redimensionar charts y analyses existentes (mismo id)
+- Usar múltiples FILAS de charts (decisión propia para evitar overflow horizontal)
+- AGREGAR shapes nuevas: separator lines (kind="line"), callout boxes con texto (kind="callout"), subtitle text (kind="text")
+
+Formato exacto:
 {
   "elements": [
     {"id": "chart_<id>", "x_cm": 1.3, "y_cm": 3.5, "w_cm": 14.3, "h_cm": 10.0},
     {"id": "analysis_<id>", "x_cm": 1.3, "y_cm": 14.0, "w_cm": 31.0, "h_cm": 2.4, "font_pt": 10}
   ],
+  "extras": [
+    {"kind": "line", "x_cm": 11.0, "y_cm": 4.0, "w_cm": 0.0, "h_cm": 10.0, "style": "dotted", "color": "D9D9D9"},
+    {"kind": "callout", "x_cm": 1.3, "y_cm": 12.0, "w_cm": 7.5, "h_cm": 3.5, "text": "458 personas (91.6%) ...", "font_pt": 9, "fill": "D9D9D9"},
+    {"kind": "text", "x_cm": 1.3, "y_cm": 3.0, "w_cm": 10.0, "h_cm": 0.6, "text": "Distribución general", "font_pt": 12, "bold": true}
+  ],
   "changes": ["ajuste 1", "ajuste 2"]
 }
+
+Reglas extras:
+- line: usar para separadores verticales/horizontales. w_cm=0 → vertical, h_cm=0 → horizontal. style: "dotted"|"dashed"|"solid". color hex sin #.
+- callout: texto destacado dentro caja con fill gris claro. Útil para insights numéricos al lado del PIE.
+- text: subtítulos como "Distribución general", "Distribución segmentada".
+
 Solo JSON válido sin texto explicativo fuera del JSON.
 
 CHECKLIST FINAL (todo debe cumplirse)

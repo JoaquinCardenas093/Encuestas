@@ -94,9 +94,25 @@ class LayoutBox(BaseModel):
     font_pt: int | None = None
 
 
+class LayoutExtra(BaseModel):
+    """AI-created extra shape: line, callout, or text."""
+    kind: Literal["line", "callout", "text"]
+    x_emu: int
+    y_emu: int
+    cx_emu: int = 0
+    cy_emu: int = 0
+    text: str | None = None
+    font_pt: int | None = None
+    bold: bool = False
+    style: str | None = None  # line: dotted|dashed|solid
+    color: str | None = None  # hex no #
+    fill: str | None = None   # hex no # (callout bg)
+
+
 class SlideLayout(BaseModel):
     """AI-corrected positions per element id (chart_id or analysis_id)."""
     positions: dict[str, LayoutBox] = {}
+    extras: list[LayoutExtra] = []
     changes: list[str] = []
 
 
