@@ -365,57 +365,66 @@ async def suggest_layout_endpoint(req: SuggestLayoutRequest):
 
 
 def _enforce_multi_row(positions: dict, payload_shapes: list) -> None:
-    """If Sonnet returned all charts at same y_cm but sum cx > safe canvas width,
-    redistribute into 2 rows in-place. Mutates positions dict."""
+    """Force multi-row layout when sum of NATURAL chart widths exceeds safe area.
+    Uses natural widths from payload (not Sonnet's potentially shrunk output)
+    so tables don't get crushed into unreadable cells."""
     EMU = 360000
-    SAFE_W_EMU = int(30.6 * EMU)
+    SAFE_W_CM = 30.6
     SAFE_X_MIN_EMU = int(1.3 * EMU)
+    GAP_EMU = int(0.3 * EMU)
 
-    chart_ids = [s["id"][len("chart_"):] for s in payload_shapes if s.get("kind") == "chart" and s["id"][len("chart_"):] in positions]
-    if len(chart_ids) < 2:
+    # Collect chart entries (id + natural_w_cm) preserving order.
+    charts: list[tuple[str, float]] = []
+    for s in payload_shapes:
+        if s.get("kind") != "chart":
+            continue
+        cid = s["id"][len("chart_"):]
+        if cid not in positions:
+            continue
+        charts.append((cid, float(s.get("w_cm", 0))))
+
+    if len(charts) < 2:
         return
-    # Check if all charts share same y (single row).
-    ys = [positions[cid]["y_emu"] for cid in chart_ids]
-    if max(ys) - min(ys) > int(0.5 * EMU):
-        return  # Already multi-row.
-    # Sum cx + gaps.
-    total_cx = sum(positions[cid]["cx_emu"] for cid in chart_ids)
-    gap = int(0.4 * EMU)
-    if total_cx + gap * (len(chart_ids) - 1) <= SAFE_W_EMU:
-        return  # Fits.
 
-    # Split into 2 rows. Greedy: fill row 1 until next chart would overflow.
-    base_y = ys[0]
-    row_h_emu = int(6.5 * EMU)  # ~6.5cm per row
-    row1_y = base_y
-    row2_y = base_y + row_h_emu + int(0.3 * EMU)
+    total_w = sum(w for _, w in charts)
+    if total_w <= SAFE_W_CM:
+        return  # Fits in single row at natural widths.
 
-    row1_ids, row2_ids = [], []
-    cur_w = 0
-    for cid in chart_ids:
-        cx = positions[cid]["cx_emu"]
-        if cur_w + cx + (gap if cur_w > 0 else 0) <= SAFE_W_EMU:
-            row1_ids.append(cid)
-            cur_w += cx + (gap if cur_w > 1 else 0)
-        else:
-            row2_ids.append(cid)
-    # If row1 is full and row2 empty, force split.
-    if not row2_ids and row1_ids:
-        row2_ids.append(row1_ids.pop())
+    # Greedy bin-pack into rows. Each row ≤ SAFE_W_CM.
+    rows: list[list[tuple[str, float]]] = [[]]
+    row_w = [0.0]
+    for cid, w in charts:
+        placed = False
+        for i in range(len(rows)):
+            gap = 0.3 if rows[i] else 0
+            if row_w[i] + gap + w <= SAFE_W_CM:
+                rows[i].append((cid, w))
+                row_w[i] += gap + w
+                placed = True
+                break
+        if not placed:
+            rows.append([(cid, w)])
+            row_w.append(w)
 
-    # Position row 1.
-    cur_x = SAFE_X_MIN_EMU
-    for cid in row1_ids:
-        positions[cid]["x_emu"] = cur_x
-        positions[cid]["y_emu"] = row1_y
-        positions[cid]["cy_emu"] = row_h_emu
-        cur_x += positions[cid]["cx_emu"] + gap
-    cur_x = SAFE_X_MIN_EMU
-    for cid in row2_ids:
-        positions[cid]["x_emu"] = cur_x
-        positions[cid]["y_emu"] = row2_y
-        positions[cid]["cy_emu"] = row_h_emu
-        cur_x += positions[cid]["cx_emu"] + gap
+    # Compute row heights: distribute available vertical space (y 3.5–15.5cm = 12cm).
+    avail_h_cm = 12.0
+    base_y_cm = 3.5
+    n_rows = len(rows)
+    gap_y_cm = 0.4
+    row_h_cm = (avail_h_cm - gap_y_cm * (n_rows - 1)) / n_rows
+
+    for i, row in enumerate(rows):
+        y_emu = int((base_y_cm + i * (row_h_cm + gap_y_cm)) * EMU)
+        cy_emu = int(row_h_cm * EMU)
+        # Center row horizontally (or left-align).
+        cur_x = SAFE_X_MIN_EMU
+        for cid, w in row:
+            cx_emu = int(w * EMU)
+            positions[cid]["x_emu"] = cur_x
+            positions[cid]["y_emu"] = y_emu
+            positions[cid]["cx_emu"] = cx_emu
+            positions[cid]["cy_emu"] = cy_emu
+            cur_x += cx_emu + GAP_EMU
 
 
 def _rects_overlap(r1: dict, r2: dict) -> bool:
@@ -580,6 +589,11 @@ async def suggest_slide_layout_endpoint(req: SuggestSlideLayoutRequest):
             "font_pt": font_pt,
             "callout": bool(el.get("callout", False)) if is_analysis else False,
         }
+    # Hardcoded safety net: Sonnet keeps returning single-row even with vision +
+    # OBLIGATORIO prompt. Backend forces multi-row when overflow detected.
+    _enforce_multi_row(positions, payload_shapes)
+    _reposition_analyses(positions, payload_shapes)
+
     # Extras: only line (callouts handled via LayoutBox.callout flag).
     extras_emu = []
     for ex in raw.get("extras", []) or []:
