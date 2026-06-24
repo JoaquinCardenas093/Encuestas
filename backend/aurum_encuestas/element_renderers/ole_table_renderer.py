@@ -83,7 +83,10 @@ def render(slide, element: dict, ctx) -> None:
         cy -= title_h_emu
 
     try:
-        xlsx_buf = build_xlsx_for_table(source_chart, breakdown_groups)
+        # When AI bbox set, pass target_w_emu so xlsx col widths scale down
+        # to fit (avoids overflow on AI-shrunken cells).
+        target_w = cx if ai_overridden else None
+        xlsx_buf = build_xlsx_for_table(source_chart, breakdown_groups, target_w_emu=target_w)
         xlsx_bytes = xlsx_buf.getvalue()
     except Exception as exc:
         log.error("ole_table_renderer: xlsx build failed: %s", exc)

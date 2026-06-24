@@ -62,7 +62,7 @@ def compute_xlsx_natural_dim_emu(source_chart, breakdown_groups: list[str]) -> t
     return w_emu, h_emu
 
 
-def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
+def build_xlsx_for_table(source_chart, breakdown_groups: list[str], target_w_emu: int | None = None) -> BytesIO:
     """Return in-memory xlsx with N independent tables side-by-side.
 
     One table per breakdown; each table has its own label col + group_header
@@ -99,6 +99,24 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
     label_strings = list(options) + ["Observaciones"]
     longest = max((len(str(s)) for s in label_strings), default=0)
     label_col_w = max(LABEL_COL_W_MIN, min(LABEL_COL_W_MAX, longest + 2))
+    data_col_w = DATA_COL_W
+
+    # If target_w_emu provided (AI-corrected bbox), scale cols down so xlsx
+    # natural render width ≤ target.
+    if target_w_emu and target_w_emu > 0:
+        total_data_cols = 0
+        total_spacers = 0
+        for i, (_, bd) in enumerate([(bd_id, all_bds.get(bd_id, {})) for bd_id in breakdown_groups if bd_id in all_bds]):
+            n_cats = len(bd.get("categories", {}) or {})
+            if n_cats == 0:
+                continue
+            total_data_cols += n_cats
+            total_spacers += 1
+        if total_data_cols > 0:
+            target_cw = target_w_emu / EMU_PER_COL_W
+            avail_for_data = target_cw - label_col_w - 2 * total_spacers
+            new_data_w = max(6, int(avail_for_data / total_data_cols))
+            data_col_w = new_data_w
 
     header_fill = PatternFill("solid", fgColor=HEADER_FILL_HEX)
     body_fill = PatternFill("solid", fgColor=BODY_FILL_HEX)
@@ -236,7 +254,7 @@ def build_xlsx_for_table(source_chart, breakdown_groups: list[str]) -> BytesIO:
         if label_col is not None:
             ws.column_dimensions[get_column_letter(label_col)].width = label_col_w
         for c in range(data_start, data_end + 1):
-            ws.column_dimensions[get_column_letter(c)].width = DATA_COL_W
+            ws.column_dimensions[get_column_letter(c)].width = data_col_w
 
         # Explicit narrow width for spacer col between bds
         ws.column_dimensions[get_column_letter(data_end + 1)].width = 2

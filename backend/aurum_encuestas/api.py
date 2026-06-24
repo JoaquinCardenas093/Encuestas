@@ -434,19 +434,23 @@ async def suggest_slide_layout_endpoint(req: SuggestSlideLayoutRequest):
         eid = str(el.get("id", "")).strip()
         if not eid:
             continue
-        # Strip prefix "chart_" / "analysis_" → keep raw id matching slide.charts[].id / analyses[].id
+        is_analysis = eid.startswith("analysis_")
         if eid.startswith("chart_"):
             key = eid[len("chart_"):]
-        elif eid.startswith("analysis_"):
+        elif is_analysis:
             key = eid[len("analysis_"):]
         else:
             key = eid
+        # Default font_pt: analyses=10 (per prompt rule), charts None.
+        font_pt = el.get("font_pt")
+        if font_pt is None and is_analysis:
+            font_pt = 10
         positions[key] = {
             "x_emu": int(float(el.get("x_cm", 0)) * EMU),
             "y_emu": int(float(el.get("y_cm", 0)) * EMU),
             "cx_emu": int(float(el.get("w_cm", 0)) * EMU),
             "cy_emu": int(float(el.get("h_cm", 0)) * EMU),
-            "font_pt": el.get("font_pt"),
+            "font_pt": font_pt,
         }
     return {"positions": positions, "changes": raw.get("changes", [])}
 
