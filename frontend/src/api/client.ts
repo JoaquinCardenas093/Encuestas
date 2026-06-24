@@ -108,3 +108,17 @@ export async function suggestLayout(req: SuggestLayoutRequest): Promise<{ source
     body: JSON.stringify(req),
   })
 }
+
+export interface SuggestSlideLayoutResponse {
+  elements?: Array<{ id: string; x_cm: number; y_cm: number; w_cm: number; h_cm: number; font_pt?: number }>
+  changes?: string[]
+  error?: string
+}
+
+export async function suggestSlideLayout(state: any, slide_id: string): Promise<SuggestSlideLayoutResponse> {
+  return request("/suggest-slide-layout", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ state, slide_id }),
+  })
+}

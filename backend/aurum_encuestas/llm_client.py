@@ -219,10 +219,84 @@ def suggest_layout(
 
 
 # ────────────────────────────────────────────────────────────────────────────
+# Slide layout corrector (Aurum visual standard)
+# ────────────────────────────────────────────────────────────────────────────
+
+def correct_slide_layout(slide_payload: dict) -> dict:
+    """Send slide structure to Claude with LAYOUT_CORRECTOR_SYSTEM. Returns
+    `{elements: [{id, x_cm, y_cm, w_cm, h_cm, font_pt?}], changes: [...]}`.
+    Raises LLMError on API failure."""
+    if _client is None:
+        raise LLMError("ANTHROPIC_API_KEY no configurada.")
+    try:
+        msg = _client.messages.create(
+            model=MODEL,
+            max_tokens=2000,
+            system=[{"type": "text", "text": LAYOUT_CORRECTOR_SYSTEM, "cache_control": {"type": "ephemeral"}}],
+            messages=[{"role": "user", "content": json.dumps(slide_payload, ensure_ascii=False)}],
+        )
+    except APIStatusError as e:
+        raise LLMError(f"LLM API error: {e}") from e
+    text = "".join(b.text for b in msg.content if hasattr(b, "text")).strip()
+    if text.startswith("```"):
+        text = "\n".join(l for l in text.split("\n") if not l.startswith("```"))
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as e:
+        raise LLMError(f"LLM returned non-JSON: {text[:200]}") from e
+
+
+# ────────────────────────────────────────────────────────────────────────────
 # M6.7: Style Guide AI Analysis — Sonnet 4.6 vision
 # ────────────────────────────────────────────────────────────────────────────
 
 ANALYSIS_MODEL = "claude-sonnet-4-6"
+
+LAYOUT_CORRECTOR_SYSTEM = """Eres un revisor de maquetación. Recibes una slide y devuelves la misma slide corregida (mismos datos, mismo texto, mismos gráficos) con las posiciones, tamaños, fuentes y colores ajustados. No inventes contenido ni elimines información: la reubicas, reescalas o repartes para que entre y se vea consistente.
+
+LIENZO Y ÁREA SEGURA
+- Tamaño 16:9 = 33.87 × 19.05 cm.
+- Área segura de contenido: x ∈ [1.3, 31.9], y ∈ [3.2, 16.5]. Nada de contenido puede salir.
+- Header arriba (y 0.4–2.0), notas abajo (y ≈ 16.85).
+
+TOKENS DE MARCA
+- Colores permitidos: dorado EEC245/FFC000, rojo C00000, grises 404040/7F7F7F/585858/D9D9D9, blanco/negro.
+- Cualquier azul/verde/otro → reemplazar por gris/dorado.
+
+JERARQUÍA TIPOGRÁFICA
+- Título slide: 15–16pt Bold 404040
+- Subtítulo/pregunta: 12–13pt Bold 404040
+- Encabezado columna/zona: 12pt Bold 404040
+- Etiquetas datos/ejes: 8–9pt Normal 404040/7F7F7F
+- Análisis/cuerpo: 9–10pt Normal justificado 404040
+- Notas pie: 8pt Normal 7F7F7F
+REGLA CRÍTICA: análisis nunca supera 10pt.
+
+ZONIFICACIÓN
+- 2-3 columnas iguales para demográficos.
+- Gráfico + análisis: gráfico izq (x=1.3, w≈10), análisis der (x≈12.7, w≈18).
+- Gráfico + cruces + análisis: gráfico arriba-izq, tablas arriba-der, análisis franja inferior (x=1.3, w=31, y≤16.4).
+
+DEFECTOS A CORREGIR
+1. Texto desborda/pisa notas → 9–10pt, fija caja, word_wrap, justifica.
+2. Elemento fuera borde derecho → reescala ancho hasta x≤31.9.
+3. Análisis 12/18/24pt → forzar 9–10pt.
+4. Colores fuera marca → mapear.
+5. Falta header/notas → añadir.
+6. Solapes → reubicar dentro zona.
+7. Desalineación → grid mismos x/anchos.
+
+OUTPUT
+Devolvé JSON con todas las posiciones corregidas. Coordenadas en cm. Formato:
+{
+  "elements": [
+    {"id": "chart_<id>", "x_cm": 1.3, "y_cm": 3.5, "w_cm": 14.3, "h_cm": 10.0},
+    {"id": "analysis_<id>", "x_cm": 1.3, "y_cm": 14.0, "w_cm": 31.0, "h_cm": 2.4, "font_pt": 10}
+  ],
+  "changes": ["lista breve de ajustes aplicados"]
+}
+Solo JSON válido sin texto explicativo fuera.
+"""
 ANALYSIS_MAX_TOKENS = 32000  # full style guide w/ 8-15 patterns + table schemas easily 20-30K
 ANALYSIS_TEMPERATURE = 0.2
 

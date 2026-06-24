@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 from .config import add_recent, get_corpus_dir, get_render_cache_dir, load_recents
 from .errors import AurumError
-from .llm_client import generate_analysis, suggest_layout
+from .llm_client import correct_slide_layout, generate_analysis, suggest_layout
 from .models import ProjectState
 from .pptx_generator import build_pptx
 from .pptx_template import load_template
@@ -362,6 +362,70 @@ async def suggest_layout_endpoint(req: SuggestLayoutRequest):
         has_slide_an=req.has_slide_an,
         free_area=req.free_area,
     )
+
+
+class SuggestSlideLayoutRequest(BaseModel):
+    state: dict
+    slide_id: str
+
+
+@app.post("/api/suggest-slide-layout")
+async def suggest_slide_layout_endpoint(req: SuggestSlideLayoutRequest):
+    """AI layout corrector. Returns {elements: [{id, x_cm, y_cm, w_cm, h_cm, font_pt?}], changes: [...]}."""
+    from .element_renderers.xlsx_builder import compute_xlsx_natural_dim_emu
+    state = ProjectState.model_validate(req.state)
+    slide = next((s for s in state.slides if s.id == req.slide_id), None)
+    if slide is None:
+        return {"error": "slide not found", "elements": [], "changes": []}
+
+    EMU_PER_CM = 360000
+    payload_shapes = []
+    for c in slide.charts:
+        # Compute natural dim for TABLE_WITH_MINIBARS; PIE/BAR use 10cm × 7cm default.
+        if c.chart_type == "TABLE_WITH_MINIBARS":
+            # Need source_chart context; use breakdown_ids real (non-general)
+            try:
+                # Build minimal source_chart-like object via classifier path
+                from .pattern_classifier import enrich_slide_config
+                from .data_extractor import extract_all_breakdowns_data
+                bds_real = [b for b in c.breakdown_ids if b and b.lower() != "general"]
+                q = next((qq for qq in state.parsed_db.questions if qq.id == c.question_id), None) if state.parsed_db else None
+                if q and state.parsed_db and state.inputs:
+                    all_bds_data = extract_all_breakdowns_data(state.inputs.db_path, q, state.parsed_db.breakdowns, state.parsed_db.data_blocks or {})
+                    from types import SimpleNamespace
+                    src = SimpleNamespace(question=q, all_breakdowns_data=all_bds_data, breakdown_ids=c.breakdown_ids, show_legend=c.show_legend)
+                    w_emu, h_emu = compute_xlsx_natural_dim_emu(src, bds_real)
+                else:
+                    w_emu, h_emu = 10 * EMU_PER_CM, 7 * EMU_PER_CM
+            except Exception:
+                w_emu, h_emu = 10 * EMU_PER_CM, 7 * EMU_PER_CM
+        else:
+            w_emu, h_emu = 10 * EMU_PER_CM, 7 * EMU_PER_CM
+        payload_shapes.append({
+            "id": f"chart_{c.id}",
+            "kind": "chart",
+            "chart_type": c.chart_type,
+            "title": c.title,
+            "w_cm": round(w_emu / EMU_PER_CM, 2),
+            "h_cm": round(h_emu / EMU_PER_CM, 2),
+        })
+    for a in slide.analyses:
+        payload_shapes.append({
+            "id": f"analysis_{a.id}",
+            "kind": "analysis",
+            "scope": a.scope,
+            "text_chars": len(a.text or ""),
+        })
+
+    slide_payload = {
+        "title": slide.title,
+        "type": slide.type,
+        "shapes": payload_shapes,
+    }
+    try:
+        return correct_slide_layout(slide_payload)
+    except Exception as e:
+        return {"error": str(e), "elements": [], "changes": []}
 
 
 @app.get("/api/recents")
