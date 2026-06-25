@@ -416,10 +416,14 @@ def _enforce_multi_row(positions: dict, payload_shapes: list) -> None:
     for i, row in enumerate(rows):
         y_emu = int((base_y_cm + i * (row_h_cm + gap_y_cm)) * EMU)
         cy_emu = int(row_h_cm * EMU)
-        # Center row horizontally (or left-align).
+        # If single chart overflows safe width, cap it (forces internal scale).
+        # If multi-chart row exceeds safe, proportionally shrink to fit.
+        row_total_w = sum(w for _, w in row) + 0.3 * (len(row) - 1)
+        scale = min(1.0, SAFE_W_CM / row_total_w) if row_total_w > SAFE_W_CM else 1.0
         cur_x = SAFE_X_MIN_EMU
         for cid, w in row:
-            cx_emu = int(w * EMU)
+            scaled_w = w * scale
+            cx_emu = int(scaled_w * EMU)
             positions[cid]["x_emu"] = cur_x
             positions[cid]["y_emu"] = y_emu
             positions[cid]["cx_emu"] = cx_emu
