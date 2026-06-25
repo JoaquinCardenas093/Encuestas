@@ -224,13 +224,27 @@ def suggest_layout(
 LAYOUT_MODEL = "claude-sonnet-4-6"
 
 
-def correct_slide_layout(slide_payload: dict, slide_png_bytes: bytes | None = None) -> dict:
+def correct_slide_layout(
+    slide_payload: dict,
+    slide_png_bytes: bytes | None = None,
+    user_hint: str | None = None,
+) -> dict:
     """Send slide structure (+ optional rendered PNG for vision) to Sonnet.
+    `user_hint` is free-text guidance from the user (high priority).
     Returns `{elements, extras?, changes}`. Raises LLMError on API failure."""
     if _client is None:
         raise LLMError("ANTHROPIC_API_KEY no configurada.")
     import base64
     user_content: list = []
+    hint = (user_hint or "").strip()
+    if hint:
+        user_content.append({
+            "type": "text",
+            "text": (
+                "INSTRUCCIÓN DEL USUARIO (PRIORIDAD ALTA — respetala salvo que "
+                "rompa el área segura o cause overflow):\n" + hint
+            ),
+        })
     if slide_png_bytes:
         user_content.append({
             "type": "image",

@@ -364,6 +364,22 @@ async def suggest_layout_endpoint(req: SuggestLayoutRequest):
     )
 
 
+def _estimate_analysis_band_cm(payload_shapes: list, positions: dict) -> float:
+    """Height (cm) to reserve at top for the slide-scope analysis sitting above
+    charts. 0 if no slide analysis present. ~110 chars/line @11pt, 0.5cm/line."""
+    band = 0.0
+    for s in payload_shapes:
+        if s.get("kind") != "analysis" or s.get("scope") != "slide":
+            continue
+        aid = s["id"][len("analysis_"):]
+        if aid not in positions:
+            continue
+        chars = int(s.get("text_chars", 0) or 0)
+        lines = max(1, -(-chars // 110))  # ceil
+        band = max(band, lines * 0.5 + 0.3)
+    return band
+
+
 def _enforce_multi_row(positions: dict, payload_shapes: list) -> None:
     """Force multi-row layout when sum of NATURAL chart widths exceeds safe area.
     Uses natural widths from payload (not Sonnet's potentially shrunk output)
@@ -406,9 +422,11 @@ def _enforce_multi_row(positions: dict, payload_shapes: list) -> None:
             rows.append([(cid, w)])
             row_w.append(w)
 
-    # Compute row heights: distribute available vertical space (y 3.5–15.5cm = 12cm).
-    avail_h_cm = 12.0
-    base_y_cm = 3.5
+    # Reserve top band for slide-scope analysis (sits above charts). Charts start
+    # below it. Safe vertical area y∈[3.3, 16.5].
+    band_cm = _estimate_analysis_band_cm(payload_shapes, positions)
+    base_y_cm = 3.3 + (band_cm + 0.3 if band_cm else 0.0)
+    avail_h_cm = 16.3 - base_y_cm
     n_rows = len(rows)
     gap_y_cm = 0.4
     row_h_cm = (avail_h_cm - gap_y_cm * (n_rows - 1)) / n_rows
@@ -458,8 +476,11 @@ def _reposition_analyses(positions: dict, payload_shapes: list) -> None:
 
     if not chart_rects:
         return
-    top_chart_y = min(r["y_emu"] for r in chart_rects)
-    available_h = top_chart_y - SAFE_Y_MIN_EMU - int(0.2 * EMU)
+    # Charts were packed below a reserved analysis band (see _enforce_multi_row).
+    # Place each slide-scope analysis in that band: full width, top, height = band.
+    band_cm = _estimate_analysis_band_cm(payload_shapes, positions)
+    band_top_emu = int(3.3 * EMU)
+    band_h_emu = int(max(band_cm, 1.0) * EMU)
 
     for s in payload_shapes:
         if s.get("kind") != "analysis" or s.get("scope") != "slide":
@@ -468,19 +489,16 @@ def _reposition_analyses(positions: dict, payload_shapes: list) -> None:
         if aid not in positions:
             continue
         a = positions[aid]
-        # Check overlap with any chart.
-        if not any(_rects_overlap(a, c) for c in chart_rects):
-            continue
-        # Move to top band, full width.
         a["x_emu"] = SAFE_X_MIN_EMU
-        a["y_emu"] = SAFE_Y_MIN_EMU
+        a["y_emu"] = band_top_emu
         a["cx_emu"] = SAFE_W_EMU
-        a["cy_emu"] = max(int(1.5 * EMU), available_h)
+        a["cy_emu"] = band_h_emu
 
 
 class SuggestSlideLayoutRequest(BaseModel):
     state: dict
     slide_id: str
+    user_hint: str | None = None
 
 
 @app.post("/api/suggest-slide-layout")
@@ -496,22 +514,28 @@ async def suggest_slide_layout_endpoint(req: SuggestSlideLayoutRequest):
     payload_shapes = []
     for c in slide.charts:
         # Compute natural dim for TABLE_WITH_MINIBARS; PIE/BAR use 10cm × 7cm default.
+        bd_labels: list[str] = []
         if c.chart_type == "TABLE_WITH_MINIBARS":
             # Need source_chart context; use breakdown_ids real (non-general)
             try:
-                # Build minimal source_chart-like object via classifier path
-                from .pattern_classifier import enrich_slide_config
+                # Build minimal source_chart-like object for natural-dim calc.
                 from .data_extractor import extract_all_breakdowns_data
                 bds_real = [b for b in c.breakdown_ids if b and b.lower() != "general"]
                 q = next((qq for qq in state.parsed_db.questions if qq.id == c.question_id), None) if state.parsed_db else None
                 if q and state.parsed_db and state.inputs:
                     all_bds_data = extract_all_breakdowns_data(state.inputs.db_path, q, state.parsed_db.breakdowns, state.parsed_db.data_blocks or {})
+                    bd_labels = [(all_bds_data.get(b, {}) or {}).get("label") or b for b in bds_real]
                     from types import SimpleNamespace
                     src = SimpleNamespace(question=q, all_breakdowns_data=all_bds_data, breakdown_ids=c.breakdown_ids, show_legend=c.show_legend)
                     w_emu, h_emu = compute_xlsx_natural_dim_emu(src, bds_real)
                 else:
                     w_emu, h_emu = 10 * EMU_PER_CM, 7 * EMU_PER_CM
             except Exception:
+                import logging as _lw, traceback as _tb
+                _lw.getLogger("ai_layout").warning(
+                    "[ai-layout] natural width FAILED for chart %s -> 10cm fallback:\n%s",
+                    c.id, _tb.format_exc(),
+                )
                 w_emu, h_emu = 10 * EMU_PER_CM, 7 * EMU_PER_CM
         else:
             w_emu, h_emu = 10 * EMU_PER_CM, 7 * EMU_PER_CM
@@ -520,6 +544,7 @@ async def suggest_slide_layout_endpoint(req: SuggestSlideLayoutRequest):
             "kind": "chart",
             "chart_type": c.chart_type,
             "title": c.title,
+            "breakdown_labels": bd_labels,  # which segments this chart contains (maps user hint → id)
             "w_cm": round(w_emu / EMU_PER_CM, 2),
             "h_cm": round(h_emu / EMU_PER_CM, 2),
         })
@@ -558,7 +583,7 @@ async def suggest_slide_layout_endpoint(req: SuggestSlideLayoutRequest):
         slide_png_bytes = None  # Fallback: structural-only
 
     try:
-        raw = correct_slide_layout(slide_payload, slide_png_bytes=slide_png_bytes)
+        raw = correct_slide_layout(slide_payload, slide_png_bytes=slide_png_bytes, user_hint=req.user_hint)
     except Exception as e:
         return {"error": str(e), "positions": {}, "changes": []}
 
@@ -593,16 +618,20 @@ async def suggest_slide_layout_endpoint(req: SuggestSlideLayoutRequest):
             "font_pt": font_pt,
             "callout": bool(el.get("callout", False)) if is_analysis else False,
         }
-    # Hardcoded safety net: Sonnet keeps returning single-row even with vision.
-    # Backend forces multi-row when overflow detected.
+    # Backend safety net (multi-row pack + analysis band) ONLY when the user did
+    # NOT provide a hint. With an explicit hint, trust Sonnet's positions fully —
+    # tables scale to Sonnet's cx via target_w_emu, so no forced overflow.
     import logging as _logmod
     _l = _logmod.getLogger("ai_layout")
-    chart_widths = [(s["id"], s.get("w_cm", 0)) for s in payload_shapes if s.get("kind") == "chart"]
-    _l.warning("[ai-layout] chart widths from payload: %s", chart_widths)
-    _l.warning("[ai-layout] positions before enforce: %s", {k: round(v["y_emu"]/360000, 2) for k, v in positions.items()})
-    _enforce_multi_row(positions, payload_shapes)
-    _l.warning("[ai-layout] positions after enforce: %s", {k: (round(v["x_emu"]/360000, 2), round(v["y_emu"]/360000, 2), round(v["cx_emu"]/360000, 2)) for k, v in positions.items()})
-    _reposition_analyses(positions, payload_shapes)
+    if (req.user_hint or "").strip():
+        _l.warning("[ai-layout] user_hint present -> trusting Sonnet positions (skip enforce)")
+    else:
+        chart_widths = [(s["id"], s.get("w_cm", 0)) for s in payload_shapes if s.get("kind") == "chart"]
+        _l.warning("[ai-layout] chart widths from payload: %s", chart_widths)
+        _l.warning("[ai-layout] positions before enforce: %s", {k: round(v["y_emu"]/360000, 2) for k, v in positions.items()})
+        _enforce_multi_row(positions, payload_shapes)
+        _l.warning("[ai-layout] positions after enforce: %s", {k: (round(v["x_emu"]/360000, 2), round(v["y_emu"]/360000, 2), round(v["cx_emu"]/360000, 2)) for k, v in positions.items()})
+        _reposition_analyses(positions, payload_shapes)
 
     # Extras: only line (callouts handled via LayoutBox.callout flag).
     extras_emu = []

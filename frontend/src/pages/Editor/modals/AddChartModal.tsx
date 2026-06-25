@@ -1,15 +1,12 @@
 import { useState, useEffect, useMemo } from "react"
 import Modal from "../../../components/Modal"
 import type { ChartType, ParsedDB } from "../../../types"
-import { ColorPicker } from "../../../components/ColorPicker"
-import { autoDeriveColors } from "../../../utils/colorUtils"
-import { useStyleGuideStore } from "../../../store/styleGuide"
 
-const BUILTIN_CHART_TYPES = [
-  "PIE", "PIE_GROUPED",
-  "BAR_HORIZONTAL", "BAR_HORIZONTAL_GROUPED",
-  "TABLE_WITH_MINIBARS",
-]
+// General (no real breakdowns) → only PIE / BAR_HORIZONTAL.
+// 1+ real breakdowns → only grouped/table types. Colors are edited after the
+// chart is placed, so no color picker here.
+const GENERAL_CHART_TYPES = ["PIE", "BAR_HORIZONTAL"]
+const SEGMENTED_CHART_TYPES = ["PIE_GROUPED", "BAR_HORIZONTAL_GROUPED", "TABLE_WITH_MINIBARS"]
 
 interface ApplyResult {
   questionId: string
@@ -30,35 +27,19 @@ interface Props {
 }
 
 export default function AddChartModal({ open, onClose, onApply, db }: Props) {
-  const styleGuide = useStyleGuideStore((s) => s.styleGuide)
-  const allChartTypes = styleGuide?.available_chart_types?.length
-    ? styleGuide.available_chart_types
-    : BUILTIN_CHART_TYPES
-
   const [questionId, setQuestionId] = useState<string>("")
   const [breakdownIds, setBreakdownIds] = useState<Set<string>>(new Set())
+  const generalSelected = breakdownIds.has("general")
   const realBreakdownIds = useMemo(
     () => Array.from(breakdownIds).filter((b) => b !== "general"),
     [breakdownIds],
   )
   const nReal = realBreakdownIds.length
-  const chartTypes = useMemo(() => {
-    if (nReal === 0) {
-      return allChartTypes.filter((t) =>
-        t !== "TABLE_WITH_MINIBARS" &&
-        t !== "PIE_GROUPED" &&
-        t !== "BAR_HORIZONTAL_GROUPED"
-      )
-    }
-    if (nReal >= 2) return ["TABLE_WITH_MINIBARS"]
-    return allChartTypes
-  }, [allChartTypes.join(","), nReal])
+  const chartTypes = useMemo(
+    () => (nReal >= 1 ? SEGMENTED_CHART_TYPES : GENERAL_CHART_TYPES),
+    [nReal],
+  )
   const [chartType, setChartType] = useState<ChartType>((chartTypes[0] ?? "PIE") as ChartType)
-  const [colorPickerOpen, setColorPickerOpen] = useState(false)
-  const [primaryColor, setPrimaryColor] = useState("")
-  const [showAdvanced, setShowAdvanced] = useState(false)
-  const [advancedColors, setAdvancedColors] = useState<string[]>([])
-  const [openAdvancedPicker, setOpenAdvancedPicker] = useState<number | null>(null)
   const [title, setTitle] = useState("")
   const [showLegend, setShowLegend] = useState(false)
   const [gridCols, setGridCols] = useState<number | null>(null)
@@ -81,9 +62,6 @@ export default function AddChartModal({ open, onClose, onApply, db }: Props) {
     if (open && db && db.questions.length > 0) {
       setQuestionId(db.questions[0].id)
       setBreakdownIds(new Set())
-      setPrimaryColor("")
-      setShowAdvanced(false)
-      setAdvancedColors([])
       setTitle("")
       setShowLegend(false)
       setGridCols(null)
@@ -91,18 +69,18 @@ export default function AddChartModal({ open, onClose, onApply, db }: Props) {
     }
   }, [open, db])
 
-  // Reset advanced colors count when breakdowns change
-  useEffect(() => {
-    setAdvancedColors(Array.from(breakdownIds).map(() => ""))
-  }, [breakdownIds])
-
   if (!db) return null
 
+  // Mutual exclusivity: "general" and real breakdowns can't coexist.
   const toggleBreakdown = (bid: string) => {
     const next = new Set(breakdownIds)
     if (next.has(bid)) {
       next.delete(bid)
+    } else if (bid === "general") {
+      next.clear()
+      next.add("general")
     } else {
+      next.delete("general")
       next.add(bid)
     }
     setBreakdownIds(next)
@@ -110,13 +88,6 @@ export default function AddChartModal({ open, onClose, onApply, db }: Props) {
 
   const handleApply = () => {
     if (!questionId) return
-    const nOptions = realBreakdownIds.length || breakdownIds.size
-    const finalColors = showAdvanced && advancedColors.some(Boolean)
-      ? advancedColors
-      : primaryColor
-        ? autoDeriveColors(primaryColor, nOptions)
-        : []
-
     const catTitlesPayload = Object.keys(catTitles).length ? catTitles : null
     onApply({
       questionId,
@@ -126,7 +97,7 @@ export default function AddChartModal({ open, onClose, onApply, db }: Props) {
       grid_cols: gridCols,
       title: title.trim() || null,
       cat_titles: catTitlesPayload,
-      colors: finalColors,
+      colors: [],
     })
     onClose()
   }
@@ -169,17 +140,26 @@ export default function AddChartModal({ open, onClose, onApply, db }: Props) {
 
       <div className="text-xs text-neutral-400 mb-1">Breakdowns (multi-select)</div>
       <div className="grid grid-cols-2 gap-1 mb-3">
-        {db.breakdowns.map((b) => (
-          <label key={b.id} className="flex items-center gap-2 text-sm bg-neutral-900 px-2 py-1.5 rounded cursor-pointer">
-            <input
-              type="checkbox"
-              checked={breakdownIds.has(b.id)}
-              onChange={() => toggleBreakdown(b.id)}
-              aria-label={b.label}
-            />
-            {b.label}
-          </label>
-        ))}
+        {db.breakdowns.map((b) => {
+          const isGeneral = b.id === "general"
+          // General disabled when any real bd picked; real bds disabled when general picked.
+          const disabled = isGeneral ? nReal >= 1 : generalSelected
+          return (
+            <label
+              key={b.id}
+              className={`flex items-center gap-2 text-sm bg-neutral-900 px-2 py-1.5 rounded ${disabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
+            >
+              <input
+                type="checkbox"
+                checked={breakdownIds.has(b.id)}
+                disabled={disabled}
+                onChange={() => toggleBreakdown(b.id)}
+                aria-label={b.label}
+              />
+              {b.label}
+            </label>
+          )
+        })}
       </div>
 
       <label htmlFor="ct-select" className="block text-xs text-neutral-400 mb-1">
@@ -189,7 +169,6 @@ export default function AddChartModal({ open, onClose, onApply, db }: Props) {
         id="ct-select"
         aria-label="Tipo de chart"
         value={chartType}
-        disabled={nReal >= 2}
         onChange={(e) => {
           const newType = e.target.value as ChartType
           setChartType(newType)
@@ -209,9 +188,6 @@ export default function AddChartModal({ open, onClose, onApply, db }: Props) {
           </option>
         ))}
       </select>
-      {nReal >= 2 && (
-        <p className="text-xs text-neutral-500 mt-1">Con 2+ breakdowns solo se permite TABLE_WITH_MINIBARS.</p>
-      )}
 
       <label className="block text-xs text-neutral-400 mb-1">Título (opcional)</label>
       <input
@@ -271,72 +247,9 @@ export default function AddChartModal({ open, onClose, onApply, db }: Props) {
         </div>
       )}
 
-      {/* Color section */}
-      <div className="mt-2">
-        <label className="block text-xs text-neutral-400 mb-2">Color principal</label>
-        <div className="relative">
-          <button
-            type="button"
-            aria-label="Abrir selector de color principal"
-            onClick={() => setColorPickerOpen((v) => !v)}
-            className="flex items-center gap-2 px-3 py-2 bg-neutral-800 border border-neutral-700 rounded text-sm hover:bg-neutral-700"
-          >
-            {primaryColor ? (
-              <div className="w-4 h-4 rounded border border-neutral-600" style={{ backgroundColor: primaryColor }} />
-            ) : (
-              <span className="text-neutral-500 text-xs">Auto</span>
-            )}
-            <span className="text-xs text-neutral-300">{primaryColor || "Auto"} ▾</span>
-          </button>
-          <ColorPicker
-            open={colorPickerOpen}
-            value={primaryColor}
-            onChange={(c) => { setPrimaryColor(c); setColorPickerOpen(false) }}
-            onClose={() => setColorPickerOpen(false)}
-          />
-        </div>
-
-        {/* Avanzados expand */}
-        <button
-          type="button"
-          onClick={() => setShowAdvanced((v) => !v)}
-          className="mt-2 text-xs text-neutral-500 hover:text-neutral-300"
-        >
-          {showAdvanced ? "▴" : "▾"} Avanzados (N colores individuales)
-        </button>
-
-        {showAdvanced && (
-          <div className="mt-2 space-y-2">
-            {advancedColors.map((color, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <span className="text-xs text-neutral-400 w-16">Color {i + 1}</span>
-                <div className="relative">
-                  <button
-                    type="button"
-                    aria-label={`Color avanzado ${i + 1}`}
-                    onClick={() => setOpenAdvancedPicker(openAdvancedPicker === i ? null : i)}
-                    className="flex items-center gap-2 px-2 py-1 bg-neutral-800 border border-neutral-700 rounded text-xs"
-                  >
-                    <div className="w-4 h-4 rounded border border-neutral-600" style={{ backgroundColor: color || "#7F7F7F" }} />
-                    <span>{color || "Auto"}</span>
-                  </button>
-                  <ColorPicker
-                    open={openAdvancedPicker === i}
-                    value={color}
-                    onChange={(c) => {
-                      const next = [...advancedColors]
-                      next[i] = c
-                      setAdvancedColors(next)
-                      setOpenAdvancedPicker(null)
-                    }}
-                    onClose={() => setOpenAdvancedPicker(null)}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      <p className="mt-2 text-xs text-neutral-500">
+        Los colores se editan una vez agregado el gráfico.
+      </p>
     </Modal>
   )
 }

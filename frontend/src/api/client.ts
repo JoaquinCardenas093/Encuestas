@@ -116,10 +116,14 @@ export interface SuggestSlideLayoutResponse {
   error?: string
 }
 
-export async function suggestSlideLayout(state: any, slide_id: string): Promise<SuggestSlideLayoutResponse> {
+export async function suggestSlideLayout(
+  state: any,
+  slide_id: string,
+  user_hint?: string | null,
+): Promise<SuggestSlideLayoutResponse> {
   return request("/suggest-slide-layout", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ state, slide_id }),
+    body: JSON.stringify({ state, slide_id, user_hint: user_hint ?? null }),
   })
 }

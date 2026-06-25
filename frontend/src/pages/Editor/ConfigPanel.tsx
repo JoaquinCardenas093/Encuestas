@@ -75,6 +75,8 @@ export default function ConfigPanel({ slideId }: Props) {
   const updateChartColors = useProjectStore((s) => s.updateChartColors)
   const [chartModalOpen, setChartModalOpen] = useState(false)
   const [analysisModalOpen, setAnalysisModalOpen] = useState(false)
+  const [layoutHint, setLayoutHint] = useState("")
+  const [layoutLoading, setLayoutLoading] = useState(false)
   const [chartColorOpen, setChartColorOpen] = useState<string | null>(null) // key: `${chartId}:${optionIdx}`
 
   const slide = state?.slides.find((s) => s.id === slideId)
@@ -320,13 +322,22 @@ export default function ConfigPanel({ slideId }: Props) {
             </div>
           )}
 
+          <textarea
+            value={layoutHint}
+            onChange={(e) => setLayoutHint(e.target.value)}
+            placeholder="Guía opcional para la AI (ej: PIE arriba a la izquierda, tablas en 2 filas, análisis más corto)"
+            rows={2}
+            className="w-full mt-3 text-xs bg-neutral-800 border border-neutral-700 rounded px-2 py-1.5 text-neutral-200 placeholder-neutral-500 resize-none focus:outline-none focus:border-violet-600"
+          />
           <button
+            disabled={layoutLoading}
             onClick={async () => {
               const state = useProjectStore.getState().state
               const setSlideLayout = useProjectStore.getState().setSlideLayout
               if (!state) return
+              setLayoutLoading(true)
               try {
-                const r = await api.suggestSlideLayout(state, slide.id)
+                const r = await api.suggestSlideLayout(state, slide.id, layoutHint)
                 if (r.error) {
                   alert(`Error: ${r.error}`)
                   return
@@ -342,11 +353,13 @@ export default function ConfigPanel({ slideId }: Props) {
                 )
               } catch (e) {
                 alert(`Error: ${(e as Error).message}`)
+              } finally {
+                setLayoutLoading(false)
               }
             }}
-            className="w-full mt-3 text-xs bg-gradient-to-r from-purple-700 to-violet-700 text-white py-2 rounded font-semibold"
+            className="w-full mt-2 text-xs bg-gradient-to-r from-purple-700 to-violet-700 text-white py-2 rounded font-semibold disabled:opacity-50"
           >
-            ✨ AI sugiere layout
+            {layoutLoading ? "⏳ Generando…" : "✨ AI sugiere layout"}
           </button>
         </>
       )}
