@@ -9,20 +9,19 @@ from .errors import LLMError
 load_dotenv()
 
 MODEL = "claude-haiku-4-5-20251001"
-MAX_OUTPUT_TOKENS = 1500
-MAX_TEXT_LENGTH = 3000
+MAX_OUTPUT_TOKENS = 500
+MAX_TEXT_LENGTH = 1200
 
-SYSTEM_PROMPT = """Sos analista de encuestas. Generás análisis técnicos breves en español neutral.
+SYSTEM_PROMPT = """Sos analista de encuestas. Generás análisis técnicos BREVES en español neutral.
 
-Tono: formal técnico, sin emojis, sin recomendaciones de acción salvo pedido.
-Formato: 2-4 oraciones. Frases tipo "El X% de los encuestados...".
-Datos: respetar números exactos provistos, no inventar cifras.
+Tono: formal técnico, sin emojis, sin recomendaciones, sin markdown (**bold** prohibido).
+Formato: 2-3 oraciones MÁXIMO. Frases tipo "El X% de los encuestados...".
+Datos: respetar números exactos, no inventar cifras.
 
-Si scope=chart: analizás SOLO ese chart específico (distribución, mayoría, contraste por categoría).
-Si scope=question: te paso TODOS los charts de la slide que pertenecen a esa pregunta. Comparás entre breakdowns, identificás patrones cruzados de esa pregunta.
-Si scope=slide: te paso TODOS los charts de la slide (de cualquier pregunta). Sintetizás insights cruzados entre charts y preguntas.
+Si scope=chart: 1-2 oraciones sobre el chart específico.
+Si scope=slide: 2-3 oraciones sintetizando insights cruzados entre todos los charts. NO listes hallazgos por bloques. NO uses párrafos múltiples.
 
-Idioma: español neutral. Longitud máxima: 4 oraciones.
+Idioma: español neutral. Longitud máxima ESTRICTA: 3 oraciones.
 """
 
 

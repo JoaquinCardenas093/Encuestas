@@ -593,9 +593,15 @@ async def suggest_slide_layout_endpoint(req: SuggestSlideLayoutRequest):
             "font_pt": font_pt,
             "callout": bool(el.get("callout", False)) if is_analysis else False,
         }
-    # Hardcoded safety net: Sonnet keeps returning single-row even with vision +
-    # OBLIGATORIO prompt. Backend forces multi-row when overflow detected.
+    # Hardcoded safety net: Sonnet keeps returning single-row even with vision.
+    # Backend forces multi-row when overflow detected.
+    import logging as _logmod
+    _l = _logmod.getLogger("ai_layout")
+    chart_widths = [(s["id"], s.get("w_cm", 0)) for s in payload_shapes if s.get("kind") == "chart"]
+    _l.warning("[ai-layout] chart widths from payload: %s", chart_widths)
+    _l.warning("[ai-layout] positions before enforce: %s", {k: round(v["y_emu"]/360000, 2) for k, v in positions.items()})
     _enforce_multi_row(positions, payload_shapes)
+    _l.warning("[ai-layout] positions after enforce: %s", {k: (round(v["x_emu"]/360000, 2), round(v["y_emu"]/360000, 2), round(v["cx_emu"]/360000, 2)) for k, v in positions.items()})
     _reposition_analyses(positions, payload_shapes)
 
     # Extras: only line (callouts handled via LayoutBox.callout flag).
