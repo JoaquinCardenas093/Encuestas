@@ -487,8 +487,13 @@ def build_slide_config(slide_def: Any, parsed_db: Any, db_path: str = "") -> Any
             try:
                 from .data_extractor import extract_all_breakdowns_data, extract_chart_data
                 primary_bd = chart.breakdown_ids[0] if chart.breakdown_ids else "general"
+                bd_obj_primary = next(
+                    (b for b in (getattr(parsed_db, "breakdowns", []) or []) if b.id == primary_bd),
+                    None,
+                )
                 chart_data = extract_chart_data(
                     db_path, question, primary_bd, data_blocks,
+                    allowed_categories=(bd_obj_primary.categories if bd_obj_primary else None),
                 )
                 bd_list = getattr(parsed_db, "breakdowns", []) or []
                 all_bds = extract_all_breakdowns_data(db_path, question, bd_list, data_blocks)

@@ -36,3 +36,13 @@ def test_resolve_breakdown_cols_generic(tmp_path):
     ws = _ws_custom(tmp_path)
     cols = _resolve_breakdown_cols(ws, "religión", block_start_col=3)
     assert cols == {"Católico": 6, "Evangélico": 7}
+
+
+def test_extract_chart_data_allowed_categories(valid_xlsx_path):
+    db = parse_xlsx(str(valid_xlsx_path))
+    q1 = db.questions[0]
+    data = extract_chart_data(
+        str(valid_xlsx_path), q1, "sexo", db.data_blocks,
+        allowed_categories=["Mujer"],
+    )
+    assert list(data.keys()) == ["Mujer"]  # Hombre filtered out

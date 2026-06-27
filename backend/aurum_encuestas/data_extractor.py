@@ -4,7 +4,8 @@ from .models import Breakdown, Question
 from .xlsx_parser import _slug, BREAKDOWN_ID_MAP
 
 
-def extract_chart_data(xlsx_path: str, question: Question, breakdown_id: str, data_blocks: dict) -> dict:
+def extract_chart_data(xlsx_path: str, question: Question, breakdown_id: str,
+                       data_blocks: dict, allowed_categories: list[str] | None = None) -> dict:
     """Returns {breakdown_category: {option: {count, pct}}} for the given question + breakdown."""
     wb = load_workbook(xlsx_path, data_only=True)
     ws = wb.worksheets[0]
@@ -17,6 +18,10 @@ def extract_chart_data(xlsx_path: str, question: Question, breakdown_id: str, da
 
     breakdown_cols = _resolve_breakdown_cols(ws, breakdown_id, counts_start)
     pct_breakdown_cols = _resolve_breakdown_cols(ws, breakdown_id, pct_start)
+
+    if allowed_categories is not None:
+        allowed = list(allowed_categories)
+        breakdown_cols = {c: breakdown_cols[c] for c in allowed if c in breakdown_cols}
 
     result: dict[str, dict[str, dict]] = {}
     for cat, col in breakdown_cols.items():

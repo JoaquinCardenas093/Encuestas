@@ -413,8 +413,12 @@ def _add_slide_content_legacy(slide, slide_def: Slide, state: ProjectState, free
 
 def _add_chart(slide, chart_def: Chart, state: ProjectState, el: dict, specific_style: dict | None = None) -> None:
     primary_bd = chart_def.breakdown_ids[0] if chart_def.breakdown_ids else "general"
+    _bd_list = getattr(state.parsed_db, "breakdowns", []) or [] if state.parsed_db else []
+    _bd_obj = next((b for b in _bd_list if b.id == primary_bd), None)
+    _allowed = _bd_obj.categories if (_bd_obj and primary_bd != "general") else None
     data = extract_chart_data(state.inputs.db_path, _find_question(state, chart_def.question_id),
-                              primary_bd, state.parsed_db.data_blocks if state.parsed_db else {})
+                              primary_bd, state.parsed_db.data_blocks if state.parsed_db else {},
+                              allowed_categories=_allowed)
     cd = CategoryChartData()
     # Categories = options, Series = breakdown categories (or single "Total" if general)
     options = _find_question(state, chart_def.question_id).options
