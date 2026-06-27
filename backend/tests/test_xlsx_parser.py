@@ -1,7 +1,8 @@
 import pytest
+from openpyxl import Workbook
 
 from aurum_encuestas.errors import XlsxParseError
-from aurum_encuestas.xlsx_parser import parse_xlsx
+from aurum_encuestas.xlsx_parser import parse_xlsx, _detect_breakdowns
 
 
 def test_parse_detects_sample_size(valid_xlsx_path):
@@ -58,3 +59,33 @@ def test_parse_detects_three_column_blocks(valid_xlsx_path):
     assert blocks["counts_cols"][0] == 3
     # second block detected
     assert blocks["pct_row_cols"][0] >= 19
+
+
+def _ws_with_custom_breakdown(tmp_path):
+    wb = Workbook()
+    ws = wb.active
+    # Row 1 headers: a known one (Sexo) + an unknown one (Religión)
+    ws.cell(1, 4, "Sexo")
+    ws.cell(1, 6, "Religión")
+    # Row 2 sub-categories; General anchors block 1 at col 3
+    ws.cell(2, 3, "General")
+    ws.cell(2, 4, "Hombre")
+    ws.cell(2, 5, "Mujer")
+    ws.cell(2, 6, "Católico")
+    ws.cell(2, 7, "Evangélico")
+    out = tmp_path / "custom_bd.xlsx"
+    wb.save(out)
+    from openpyxl import load_workbook
+    return load_workbook(out, data_only=True).worksheets[0]
+
+
+def test_detect_breakdowns_includes_unknown_header(tmp_path):
+    ws = _ws_with_custom_breakdown(tmp_path)
+    bds = _detect_breakdowns(ws)
+    by_label = {b.label: b for b in bds}
+    # Unknown header is no longer dropped
+    assert "Religión" in by_label
+    assert by_label["Religión"].id == "religión"
+    assert by_label["Religión"].categories == ["Católico", "Evangélico"]
+    # Known header keeps its canonical id via the alias map
+    assert by_label["Sexo"].id == "sexo"
