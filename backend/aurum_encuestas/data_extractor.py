@@ -101,24 +101,52 @@ def extract_all_breakdowns_data(
 
 
 def _find_question_rows(ws, question: Question) -> dict[str, int]:
-    """Find rows for this question's options by matching col A marker + col B options."""
+    """Find rows for this question's options.
+
+    Primary: anchor on the col-A marker (== question.text or a variable-code
+    prefix like '$p3.llamado' for the sheet's '$p3.llamado.acción'), then collect
+    col-B options under it. Fallback (multi-response questions whose col-A marker
+    doesn't match question.text at all): scan col B for the option texts directly.
+    """
+    q_text = (question.text or "").strip()
     rows: dict[str, int] = {}
     in_question = False
     options_left = list(question.options)
 
+    def _is_marker(a_s: str) -> bool:
+        # Exact, or one is a dotted-prefix of the other ($p3.llamado vs $p3.llamado.acción).
+        return bool(a_s) and (
+            a_s == q_text
+            or a_s.startswith(q_text + ".")
+            or q_text.startswith(a_s + ".")
+        )
+
     for r in range(3, ws.max_row + 1):
         a = ws.cell(r, 1).value
         b = ws.cell(r, 2).value
-        if a and str(a).strip() == question.text:
+        a_s = str(a).strip() if a is not None else ""
+        b_s = str(b).strip() if b is not None else ""
+        if _is_marker(a_s):
             in_question = True
-            if b and str(b).strip() in options_left:
-                rows[str(b).strip()] = r
-                options_left.remove(str(b).strip())
-        elif in_question and not a and b and str(b).strip() in options_left:
-            rows[str(b).strip()] = r
-            options_left.remove(str(b).strip())
-        elif in_question and a is not None and str(a).strip():
+            if b_s in options_left:
+                rows[b_s] = r
+                options_left.remove(b_s)
+        elif in_question and not a_s and b_s in options_left:
+            rows[b_s] = r
+            options_left.remove(b_s)
+        elif in_question and a_s:
             break  # next question started
+    if rows:
+        return rows
+
+    # Fallback: match purely by option text in col B (first occurrence). Option
+    # strings are long, unique sentences so cross-question collisions are unlikely.
+    opts = {str(o).strip() for o in question.options}
+    for r in range(3, ws.max_row + 1):
+        b = ws.cell(r, 2).value
+        b_s = str(b).strip() if b is not None else ""
+        if b_s in opts and b_s not in rows:
+            rows[b_s] = r
     return rows
 
 

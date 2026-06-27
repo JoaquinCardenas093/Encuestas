@@ -207,13 +207,25 @@ def render(slide, element: dict, ctx: RenderContext) -> None:
         log.warning("Unknown chart_type %r — falling back to BAR_CLUSTERED", chart_type_str)
         xl_chart_type = XL_CHART_TYPE.BAR_CLUSTERED
     is_pie = chart_type_str in ("PIE", "DONUT")
+    is_hbar = chart_type_str == "BAR_HORIZONTAL"
+    is_hbar_grouped = chart_type_str == "BAR_HORIZONTAL_GROUPED"
+    is_hbar_any = is_hbar or is_hbar_grouped
 
-    # Build CategoryChartData (sorted in-place if requested)
+    # Build CategoryChartData (sorted in-place if requested).
+    # Horizontal bar: ascending so the largest bar lands on TOP (LibreOffice
+    # plots the first category at the BOTTOM → last index renders at the top).
     sort_order = element.get("sort", "none")
+    if is_hbar_any and sort_order == "none":
+        sort_order = "asc_by_value"
     chart_data, sorted_values = _build_chart_data(source_chart, value_field, sort_order)
+    try:
+        n_cats = len(list(chart_data.categories))
+    except Exception:
+        n_cats = len(sorted_values)
 
     # Resolve position. AI layout overrides pattern position when set.
     x, y, cx, cy = _resolve_position(element.get("position", {}), ctx)
+    ai_pos = False
     layout = getattr(ctx.slide_config, "layout", None)
     if layout is not None:
         positions = getattr(layout, "positions", None) or {}
@@ -224,6 +236,16 @@ def render(slide, element: dict, ctx: RenderContext) -> None:
             y = getattr(box, "y_emu", y)
             cx = getattr(box, "cx_emu", cx)
             cy = getattr(box, "cy_emu", cy)
+            ai_pos = True
+
+    # Horizontal bar: grow height so bars are thick AND well separated. One row
+    # per option (~0.7cm); cap so the chart stays above the slide bottom.
+    # Skip when the AI layout already chose an explicit box.
+    if is_hbar_any and not ai_pos and n_cats:
+        EMU_CM = 360000
+        desired = n_cats * int(0.72 * EMU_CM)
+        bottom_limit = int(18.4 * EMU_CM)
+        cy = min(max(cy, desired), max(cy, bottom_limit - y))
 
     # Add chart shape
     try:
@@ -234,19 +256,36 @@ def render(slide, element: dict, ctx: RenderContext) -> None:
 
     chart = chart_shape.chart
 
-    # Compose per-slice colors: source_chart.colors[i] wins over ctx global cascade.
+    # Compose colors. Horizontal bar defaults to the Aurum monochrome scheme:
+    # every bar light gray, the largest (last index = top bar) dark gray.
+    # User-set colors still win when provided.
     per_chart_colors = list(getattr(source_chart, "colors", []) or [])
     n_pts = len(sorted_values)
-    effective_colors: list[str] = []
-    fallback = ctx.chart_colors or []
-    for i in range(max(n_pts, len(per_chart_colors), len(fallback))):
-        if i < len(per_chart_colors) and per_chart_colors[i]:
-            effective_colors.append(per_chart_colors[i])
-        elif fallback:
-            effective_colors.append(fallback[i % len(fallback)])
-        else:
-            effective_colors.append("#7F7F7F")
-    _apply_series_colors(chart, effective_colors)
+    if is_hbar and not any(per_chart_colors):
+        # Single-series monochrome; emphasize the highest-% bar.
+        effective_colors = ["#BFBFBF"] * max(n_pts, 1)
+        if sorted_values:
+            max_idx = max(range(len(sorted_values)), key=lambda i: sorted_values[i])
+            effective_colors[max_idx] = "#595959"
+        _apply_series_colors(chart, effective_colors)  # per-point on single series
+    elif is_hbar_grouped:
+        # One color PER breakdown series (Aurum gray / charcoal / gold palette).
+        # No per-point coloring — each series is a single solid color.
+        palette = [c for c in per_chart_colors if c] or [
+            "#808080", "#404040", "#EEC245", "#C00000", "#A6A6A6", "#7F7F7F",
+        ]
+        _apply_series_colors(chart, palette, per_point=False)
+    else:
+        effective_colors = []
+        fallback = ctx.chart_colors or []
+        for i in range(max(n_pts, len(per_chart_colors), len(fallback))):
+            if i < len(per_chart_colors) and per_chart_colors[i]:
+                effective_colors.append(per_chart_colors[i])
+            elif fallback:
+                effective_colors.append(fallback[i % len(fallback)])
+            else:
+                effective_colors.append("#7F7F7F")
+        _apply_series_colors(chart, effective_colors)
 
     # Apply labels — pie/donut force show_category_name + show_percentage, NO value.
     labels_cfg = dict(element.get("labels") or {})
@@ -255,7 +294,18 @@ def render(slide, element: dict, ctx: RenderContext) -> None:
         labels_cfg["show_percentage"] = True  # Always show percentage for pie
         labels_cfg["show_value"] = False  # never raw fraction
         labels_cfg.setdefault("format", "0.0%")
+    elif is_hbar_any:
+        # Values are stored as fractions (0.27) → show_value + "0.0%" prints 27.0%.
+        # (show_percentage would re-compute share-of-total, not the stored pct.)
+        labels_cfg["show_value"] = True
+        labels_cfg["show_percentage"] = False
+        labels_cfg["show_category_name"] = False
+        labels_cfg["format"] = "0.0%"  # force 1 decimal (override pattern's "0%")
+        labels_cfg.setdefault("position", "outside_end")
+        labels_cfg.setdefault("font_size", 10)
     _apply_labels(chart, labels_cfg, ctx)
+    if is_hbar_any:
+        _style_hbar_axes(chart)
 
     # Pie/donut rotation rules:
     #   ~50/50  (|dom-0.5|<0.05) → firstSliceAng=180  vertical split, first
@@ -381,6 +431,68 @@ def render_chart_at(
     chart.has_title = False
 
 
+def _style_hbar_axes(chart) -> None:
+    """Aurum horizontal-bar styling: hide the value axis and all gridlines,
+    keep category labels. Largest bar already on top via ascending sort.
+    """
+    # Bar thickness + spacing. gap_width = gap between category groups (% of bar
+    # width); overlap = within-group spacing (0 = adjacent/touching for grouped).
+    try:
+        plot = chart.plots[0]
+        plot.gap_width = 80
+        try:
+            plot.overlap = 0  # grouped: bars in a group touch; no-op for single series
+        except Exception:
+            pass
+    except Exception as exc:
+        log.debug("hbar gap_width set failed: %s", exc)
+    try:
+        va = chart.value_axis
+        va.has_major_gridlines = False
+        va.has_minor_gridlines = False
+        va.visible = False
+    except Exception as exc:
+        log.debug("hbar value axis style failed: %s", exc)
+    try:
+        ca = chart.category_axis
+        ca.has_major_gridlines = False
+        ca.has_minor_gridlines = False
+        ca.visible = True  # keep category names on the left
+        # Drop tick marks for a clean look (labels stay).
+        from pptx.enum.chart import XL_TICK_MARK
+        ca.major_tick_mark = XL_TICK_MARK.NONE
+        ca.minor_tick_mark = XL_TICK_MARK.NONE
+        # Smaller label font so long option names fit without the renderer
+        # auto-skipping them.
+        try:
+            ca.tick_labels.font.size = Pt(10)
+        except Exception:
+            pass
+        # Force EVERY category label to show (PowerPoint auto-skips labels when
+        # they don't fit; tickLblSkip=1 = no skipping).
+        _force_show_all_cat_labels(ca._element)
+    except Exception as exc:
+        log.debug("hbar category axis style failed: %s", exc)
+
+
+def _force_show_all_cat_labels(catAx) -> None:
+    """Set c:tickLblSkip=1 + c:tickMarkSkip=1 on a <c:catAx>, respecting the
+    CT_CatAx child order (…auto, lblAlgn, lblOffset, tickLblSkip, tickMarkSkip,
+    noMultiLvlLbl)."""
+    from pptx.oxml.ns import qn
+    for tag, val in (("c:tickLblSkip", "1"), ("c:tickMarkSkip", "1")):
+        existing = catAx.find(qn(tag))
+        if existing is not None:
+            existing.set("val", val)
+            continue
+        el = catAx.makeelement(qn(tag), {"val": val})
+        anchor = catAx.find(qn("c:noMultiLvlLbl"))
+        if anchor is not None:
+            anchor.addprevious(el)
+        else:
+            catAx.append(el)
+
+
 def _set_pie_first_slice_angle(chart, angle_deg: int) -> None:
     """Set <c:firstSliceAng val="..."/> on the pie/doughnut plot.
 
@@ -458,15 +570,22 @@ def _build_chart_data(source_chart, value_field: str, sort: str):
     return cd, all_values
 
 
-def _apply_series_colors(chart, colors: list[str]) -> None:
-    """Apply hex color list to chart series/points."""
+def _apply_series_colors(chart, colors: list[str], per_point: bool = True) -> None:
+    """Apply hex color list to chart series/points.
+
+    per_point=True colors each point by index (pie slices, single-series bars).
+    per_point=False colors each SERIES one solid color (grouped bars), so points
+    inherit the series fill instead of cycling the palette per category.
+    """
     try:
         for series_idx, series in enumerate(chart.series):
             if series_idx < len(colors):
                 fill = series.format.fill
                 fill.solid()
                 fill.fore_color.rgb = RGBColor.from_string(colors[series_idx].lstrip("#"))
-            # For pie/donut, color individual points
+            if not per_point:
+                continue
+            # For pie/donut + single-series bar, color individual points
             try:
                 for point_idx, point in enumerate(series.points):
                     color = colors[point_idx % len(colors)] if colors else "#7F7F7F"

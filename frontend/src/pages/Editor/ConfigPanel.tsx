@@ -229,7 +229,7 @@ export default function ConfigPanel({ slideId }: Props) {
                   )
                 })()}
 
-                {options.length > 0 && (
+                {options.length > 0 && c.chart_type !== "TABLE_WITH_MINIBARS" && c.chart_type !== "BAR_HORIZONTAL" && (
                   <div className="flex flex-wrap items-center gap-1.5 pl-1">
                     <span className="text-[10px] text-neutral-500 uppercase tracking-wide mr-1">Colores</span>
                     {options.map((opt, i) => (
