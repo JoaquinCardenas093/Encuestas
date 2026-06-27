@@ -230,11 +230,14 @@ def _build_analysis_context(scope: str, target_id: str | None, slide_id: str, st
             continue
         bd_ids = list(c.breakdown_ids or []) or ["general"]
         for bd_id in bd_ids:
+            bd_obj = bds_by_id.get(bd_id)
             try:
-                data = extract_chart_data(db_path, q, bd_id, data_blocks)
+                data = extract_chart_data(
+                    db_path, q, bd_id, data_blocks,
+                    allowed_categories=(bd_obj.categories if bd_obj and bd_id != "general" else None),
+                )
             except Exception:
                 data = {}
-            bd_obj = bds_by_id.get(bd_id)
             bd_label = bd_obj.label if bd_obj else bd_id
             key = f"{q.code} — {bd_label}"
             aggregated[key] = {
