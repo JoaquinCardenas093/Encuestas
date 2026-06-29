@@ -2,7 +2,7 @@ import type { ParsedDB, Question, Breakdown } from "../../types"
 
 export type Role =
   | "question" | "option" | "breakdown" | "category"
-  | "counts" | "pctRow" | "pctCol"
+  | "counts" | "total"
 export type PaintMap = Record<string, Role>   // key "r,c" (0-based) -> Role
 
 export const cellKey = (r: number, c: number) => `${r},${c}`
@@ -96,18 +96,22 @@ export function paintToParsedDb(
     if (!ownerOf(cat)) warnings.push(`Categoría "${text(cat.r, cat.c)}" sin breakdown a la izquierda — descartada`)
   })
 
-  // --- Data blocks ---
-  const colRange = (role: Role, fallback: number[]): number[] => {
-    const cols = entries.filter((e) => e.role === role).map((e) => e.c)
-    return cols.length === 0 ? fallback : [Math.min(...cols) + 1, Math.max(...cols) + 1]
-  }
+  // --- Data blocks (counts only; pct_* carried from prev, no longer read) ---
+  const countsCols = entries.filter((e) => e.role === "counts").map((e) => e.c)
+  const counts_cols = countsCols.length
+    ? [Math.min(...countsCols) + 1, Math.max(...countsCols) + 1]
+    : prev.data_blocks.counts_cols
   const data_blocks = {
-    counts_cols: colRange("counts", prev.data_blocks.counts_cols),
-    pct_row_cols: colRange("pctRow", prev.data_blocks.pct_row_cols),
-    pct_col_cols: colRange("pctCol", prev.data_blocks.pct_col_cols),
+    counts_cols,
+    pct_row_cols: prev.data_blocks.pct_row_cols,
+    pct_col_cols: prev.data_blocks.pct_col_cols,
   }
 
-  return { db: { ...prev, questions, breakdowns, data_blocks, sample_size: prev.sample_size }, warnings }
+  // --- Total row (1-based) ---
+  const totalRows = entries.filter((e) => e.role === "total").map((e) => e.r)
+  const total_row = totalRows.length ? Math.min(...totalRows) + 1 : (prev.total_row ?? null)
+
+  return { db: { ...prev, questions, breakdowns, data_blocks, sample_size: prev.sample_size, total_row }, warnings }
 }
 
 export function parsedDbToPaint(cells: string[][], db: ParsedDB): PaintMap {
@@ -145,18 +149,17 @@ export function parsedDbToPaint(cells: string[][], db: ParsedDB): PaintMap {
     })
   })
 
-  // Data blocks: paint an indicator row per block on DISTINCT rows so no block's
-  // cells can overwrite another's. Block columns are >= col C, so they never
-  // collide with the question/option cells in cols A/B.
+  // Counts block: paint an indicator row across the counts columns.
   const baseRow = Math.min(2, Math.max(0, cells.length - 1))
-  const paintCols = (range: number[] | undefined, role: Role, rowOffset: number) => {
-    if (!range || range.length < 2) return
-    const row = Math.min(baseRow + rowOffset, Math.max(0, cells.length - 1))
-    for (let c = range[0] - 1; c <= range[1] - 1; c++) paint[cellKey(row, c)] = role
+  const cc = db.data_blocks.counts_cols
+  if (cc && cc.length >= 2) {
+    for (let c = cc[0] - 1; c <= cc[1] - 1; c++) paint[cellKey(baseRow, c)] = "counts"
   }
-  paintCols(db.data_blocks.counts_cols, "counts", 0)
-  paintCols(db.data_blocks.pct_row_cols, "pctRow", 1)
-  paintCols(db.data_blocks.pct_col_cols, "pctCol", 2)
+  // Total row across the counts columns.
+  if (db.total_row && db.total_row >= 1) {
+    const r = db.total_row - 1
+    if (cc && cc.length >= 2) for (let c = cc[0] - 1; c <= cc[1] - 1; c++) paint[cellKey(r, c)] = "total"
+  }
 
   return paint
 }

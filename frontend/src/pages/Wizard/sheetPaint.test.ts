@@ -10,6 +10,7 @@ const prev: ParsedDB = {
   ],
   sample_size: 500,
   data_blocks: { counts_cols: [3, 5], pct_row_cols: [7, 9], pct_col_cols: [11, 13] },
+  total_row: 3,
 }
 
 // cells grid (row-major, 0-based). Row0=sheet row1.
@@ -42,16 +43,18 @@ it("paintToParsedDb rebuilds questions, breakdowns, data blocks", () => {
   p = paintRect(p, 0, 2, 0, 3, "breakdown")     // Sexo header (cols 2,3 same label)
   p = paintRect(p, 1, 2, 1, 3, "category")      // Hombre, Mujer
   p = paintRect(p, 2, 2, 2, 4, "counts")        // counts cols 2..4 -> [3,5]
+  p = paintRect(p, 1, 2, 1, 4, "total")         // total row = sheet row 2 (overwrites category cells)
   const { db, warnings } = paintToParsedDb(cells, p, prev)
   expect(warnings).toEqual([])
   expect(db.questions).toHaveLength(1)
   expect(db.questions[0].options).toEqual(["Sí", "No"])
   // general carried through + the painted Sexo breakdown
   expect(db.breakdowns.map((b) => b.id)).toEqual(["general", "sexo"])
-  expect(db.breakdowns[1].categories).toEqual(["Hombre", "Mujer"])
+  expect(db.breakdowns[1].categories).toEqual([])  // total paint overwrote category cells
   expect(db.data_blocks.counts_cols).toEqual([3, 5])
-  // untouched blocks keep prev
+  // pct cols carried from prev (no longer painted)
   expect(db.data_blocks.pct_row_cols).toEqual([7, 9])
+  expect(db.total_row).toBe(2)
 })
 
 it("category with no breakdown to its left is dropped with a warning", () => {
@@ -71,6 +74,7 @@ it("parsedDbToPaint round-trips through paintToParsedDb", () => {
   expect(db.data_blocks.counts_cols).toEqual([3, 5])
   expect(db.data_blocks.pct_row_cols).toEqual([7, 9])
   expect(db.data_blocks.pct_col_cols).toEqual([11, 13])
+  expect(db.total_row).toBe(prev.total_row)
 })
 
 it("parsedDbToPaint distinct marker rows — adjacent blocks do not bleed (I1)", () => {

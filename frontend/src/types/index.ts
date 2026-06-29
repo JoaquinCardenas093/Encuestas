@@ -27,6 +27,7 @@ export interface ParsedDB {
   breakdowns: Breakdown[]
   sample_size: number
   data_blocks: { counts_cols: number[]; pct_row_cols: number[]; pct_col_cols: number[] }
+  total_row?: number | null
 }
 
 export interface Chart {
