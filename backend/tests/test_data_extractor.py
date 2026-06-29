@@ -46,3 +46,19 @@ def test_extract_chart_data_allowed_categories(valid_xlsx_path):
         allowed_categories=["Mujer"],
     )
     assert list(data.keys()) == ["Mujer"]  # Hombre filtered out
+
+
+def test_extract_chart_data_computes_pct(valid_xlsx_path):
+    db = parse_xlsx(str(valid_xlsx_path))
+    q1 = db.questions[0]
+    data = extract_chart_data(str(valid_xlsx_path), q1, "general", db.data_blocks, total_row=db.total_row)
+    assert data["Total"]["Sí"]["count"] == 458
+    assert abs(data["Total"]["Sí"]["pct"] - 458 / 500) < 1e-9
+
+
+def test_extract_chart_data_no_total_row_pct_none(valid_xlsx_path):
+    db = parse_xlsx(str(valid_xlsx_path))
+    q1 = db.questions[0]
+    data = extract_chart_data(str(valid_xlsx_path), q1, "general", db.data_blocks, total_row=None)
+    assert data["Total"]["Sí"]["pct"] is None
+    assert data["Total"]["Sí"]["count"] == 458
