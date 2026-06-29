@@ -1,6 +1,8 @@
-import { Check, AlertTriangle } from "lucide-react"
+import { Check, AlertTriangle, Trash2, Plus } from "lucide-react"
 import { useState } from "react"
 import { useProjectStore } from "../../store/project"
+import type { ParsedDB } from "../../types"
+import * as D from "./mappingDraft"
 
 const FONTS = [
   "Default del template",
@@ -22,6 +24,7 @@ interface Props {
 
 export default function XlsxVerifyWizard({ onConfirm }: Props) {
   const parsedDb = useProjectStore((s) => s.parsedDb)
+  const setParsedDb = useProjectStore((s) => s.setParsedDb)
   const setState = useProjectStore((s) => s.state)
   const updateState = (mut: (prev: NonNullable<typeof setState>) => NonNullable<typeof setState>) => {
     const cur = useProjectStore.getState().state
@@ -29,8 +32,12 @@ export default function XlsxVerifyWizard({ onConfirm }: Props) {
   }
   const [font, setFont] = useState(FONTS[0])
   const [customFont, setCustomFont] = useState("")
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState<ParsedDB | null>(null)
 
   if (!parsedDb) return <div className="p-6">No hay datos detectados. Volvé a subir el xlsx.</div>
+
+  const view = editing && draft ? draft : parsedDb
 
   const handleConfirm = () => {
     const finalFont = font === "Default del template" ? null : font === "Custom" ? customFont : font
@@ -44,36 +51,185 @@ export default function XlsxVerifyWizard({ onConfirm }: Props) {
       <h2 className="text-lg font-semibold mb-1">Verificación de datos detectados</h2>
       <p className="text-sm text-neutral-400 mb-6">Revisá lo detectado por la heurística. 1 click para confirmar.</p>
 
+      {editing && (
+        <p className="text-xs text-neutral-500 mb-3">Si el texto editado no coincide con la hoja, ese ítem queda sin datos.</p>
+      )}
+
+      {/* Questions */}
       <section className="mb-6">
-        <h3 className="text-sm font-semibold text-neutral-300 mb-2">Preguntas detectadas ({parsedDb.questions.length})</h3>
-        <ul className="space-y-1 text-sm">
-          {parsedDb.questions.map((q) => (
-            <li key={q.id} className="flex items-center gap-2 bg-neutral-800 rounded px-3 py-2">
-              {q.confidence >= 0.9 ? <Check size={14} className="text-green-400" /> : <AlertTriangle size={14} className="text-amber-400" />}
-              <span className="font-semibold">{q.code}:</span> <span className="truncate">{q.text}</span>
-              <span className="ml-auto text-xs text-neutral-500">({q.options.length} opciones)</span>
+        <h3 className="text-sm font-semibold text-neutral-300 mb-2">Preguntas detectadas ({view.questions.length})</h3>
+        <ul className="space-y-2 text-sm">
+          {view.questions.map((q) => (
+            <li key={q.id} className="bg-neutral-800 rounded px-3 py-2">
+              <div className="flex items-center gap-2 mb-1">
+                {q.confidence >= 0.9 ? <Check size={14} className="text-green-400" /> : <AlertTriangle size={14} className="text-amber-400" />}
+                <span className="font-semibold">{q.code}:</span>
+                {editing ? (
+                  <input
+                    value={q.text}
+                    onChange={(e) => setDraft(D.setQuestionText(draft!, q.id, e.target.value))}
+                    className="flex-1 bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-sm"
+                  />
+                ) : (
+                  <span className="truncate">{q.text}</span>
+                )}
+                {editing && (
+                  <button
+                    onClick={() => setDraft(D.deleteQuestion(draft!, q.id))}
+                    className="ml-auto text-neutral-500 hover:text-red-400"
+                    title="Eliminar pregunta"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
+                {!editing && (
+                  <span className="ml-auto text-xs text-neutral-500">({q.options.length} opciones)</span>
+                )}
+              </div>
+              {editing && (
+                <div className="mt-1 space-y-1 pl-5">
+                  {q.options.map((opt, i) => (
+                    <div key={i} className="flex items-center gap-1">
+                      <input
+                        value={opt}
+                        onChange={(e) => setDraft(D.setQuestionOption(draft!, q.id, i, e.target.value))}
+                        className="flex-1 bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-sm"
+                      />
+                      <button
+                        onClick={() => setDraft(D.removeQuestionOption(draft!, q.id, i))}
+                        className="text-neutral-500 hover:text-red-400"
+                        title="Eliminar opción"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => setDraft(D.addQuestionOption(draft!, q.id))}
+                    className="flex items-center gap-1 text-xs text-neutral-400 hover:text-neutral-200 mt-1"
+                  >
+                    <Plus size={12} /> Agregar opción
+                  </button>
+                </div>
+              )}
+              {!editing && (
+                <div className="text-xs text-neutral-500 pl-5 mt-1">{q.options.join(", ")}</div>
+              )}
             </li>
           ))}
         </ul>
       </section>
 
+      {/* Breakdowns */}
       <section className="mb-6">
-        <h3 className="text-sm font-semibold text-neutral-300 mb-2">Breakdowns ({parsedDb.breakdowns.length})</h3>
-        <ul className="space-y-1 text-sm">
-          {parsedDb.breakdowns.map((b) => (
+        <h3 className="text-sm font-semibold text-neutral-300 mb-2">Breakdowns ({view.breakdowns.length})</h3>
+        <ul className="space-y-2 text-sm">
+          {view.breakdowns.map((b) => (
             <li key={b.id} className="bg-neutral-800 rounded px-3 py-2">
-              <span className="font-semibold">{b.label}:</span>{" "}
-              <span className="text-neutral-400">{b.categories.join(", ")}</span>
+              <div className="flex items-center gap-2 mb-1">
+                {editing && b.id !== "general" ? (
+                  <input
+                    value={b.label}
+                    onChange={(e) => setDraft(D.setBreakdownLabel(draft!, b.id, e.target.value))}
+                    className="flex-1 bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-sm font-semibold"
+                  />
+                ) : (
+                  <span className="font-semibold">{b.label}</span>
+                )}
+                {editing && b.id !== "general" && (
+                  <button
+                    onClick={() => setDraft(D.deleteBreakdown(draft!, b.id))}
+                    className="ml-auto text-neutral-500 hover:text-red-400"
+                    title="Eliminar breakdown"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
+              </div>
+              {editing && b.id !== "general" ? (
+                <div className="space-y-1 pl-2">
+                  {b.categories.map((cat, i) => (
+                    <div key={i} className="flex items-center gap-1">
+                      <input
+                        value={cat}
+                        onChange={(e) => setDraft(D.setBreakdownCategory(draft!, b.id, i, e.target.value))}
+                        className="flex-1 bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-sm"
+                      />
+                      <button
+                        onClick={() => setDraft(D.removeBreakdownCategory(draft!, b.id, i))}
+                        className="text-neutral-500 hover:text-red-400"
+                        title="Eliminar categoría"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => setDraft(D.addBreakdownCategory(draft!, b.id))}
+                    className="flex items-center gap-1 text-xs text-neutral-400 hover:text-neutral-200 mt-1"
+                  >
+                    <Plus size={12} /> Agregar categoría
+                  </button>
+                </div>
+              ) : (
+                <span className="text-neutral-400">{b.categories.join(", ")}</span>
+              )}
             </li>
           ))}
         </ul>
       </section>
 
+      {/* Sample size + Data blocks */}
       <section className="mb-6 text-sm">
-        <div>Sample size: <strong>{parsedDb.sample_size}</strong></div>
-        <div>Bloques cols — Counts: {parsedDb.data_blocks.counts_cols.join("–")} · %Row: {parsedDb.data_blocks.pct_row_cols.join("–")} · %Col: {parsedDb.data_blocks.pct_col_cols.join("–")}</div>
+        <div className="mb-2 flex items-center gap-2">
+          <span>Sample size:</span>
+          {editing ? (
+            <input
+              type="number"
+              value={view.sample_size}
+              onChange={(e) => setDraft(D.setSampleSize(draft!, parseInt(e.target.value, 10) || 0))}
+              className="w-24 bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-sm"
+            />
+          ) : (
+            <strong>{view.sample_size}</strong>
+          )}
+        </div>
+        {editing ? (
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="w-28 text-neutral-400">Counts cols:</span>
+              <input
+                value={view.data_blocks.counts_cols.join(", ")}
+                onChange={(e) => setDraft(D.setDataBlock(draft!, "counts_cols", D.parseColList(e.target.value)))}
+                className="flex-1 bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-sm"
+                placeholder="ej: 1, 2, 3"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-28 text-neutral-400">%Row cols:</span>
+              <input
+                value={view.data_blocks.pct_row_cols.join(", ")}
+                onChange={(e) => setDraft(D.setDataBlock(draft!, "pct_row_cols", D.parseColList(e.target.value)))}
+                className="flex-1 bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-sm"
+                placeholder="ej: 4, 5, 6"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-28 text-neutral-400">%Col cols:</span>
+              <input
+                value={view.data_blocks.pct_col_cols.join(", ")}
+                onChange={(e) => setDraft(D.setDataBlock(draft!, "pct_col_cols", D.parseColList(e.target.value)))}
+                className="flex-1 bg-neutral-900 border border-neutral-700 rounded px-2 py-1 text-sm"
+                placeholder="ej: 7, 8, 9"
+              />
+            </div>
+          </div>
+        ) : (
+          <div>Bloques cols — Counts: {view.data_blocks.counts_cols.join("–")} · %Row: {view.data_blocks.pct_row_cols.join("–")} · %Col: {view.data_blocks.pct_col_cols.join("–")}</div>
+        )}
       </section>
 
+      {/* Font selector (always visible) */}
       <section className="mb-6">
         <label htmlFor="font-select" className="block text-xs font-medium text-neutral-400 mb-1">Fuente (opcional)</label>
         <select
@@ -94,13 +250,31 @@ export default function XlsxVerifyWizard({ onConfirm }: Props) {
         )}
       </section>
 
+      {/* Footer buttons */}
       <div className="flex justify-end gap-2">
-        <button
-          disabled
-          title="Próximamente — usá el xlsx con la convención esperada"
-          className="px-4 py-2 text-sm rounded bg-neutral-800 text-neutral-500 cursor-not-allowed"
-        >Editar mapping manual (próximamente)</button>
-        <button onClick={handleConfirm} className="px-4 py-2 text-sm rounded bg-accent text-neutral-900 font-semibold">Confirmar</button>
+        {editing ? (
+          <>
+            <button
+              onClick={() => { setEditing(false); setDraft(null) }}
+              className="px-4 py-2 text-sm rounded bg-neutral-700 text-neutral-200"
+            >Cancelar</button>
+            <button
+              onClick={() => { if (draft) setParsedDb(draft); setEditing(false); setDraft(null) }}
+              className="px-4 py-2 text-sm rounded bg-accent text-neutral-900 font-semibold"
+            >Guardar</button>
+          </>
+        ) : (
+          <>
+            <button
+              onClick={() => { setDraft(parsedDb); setEditing(true) }}
+              className="px-4 py-2 text-sm rounded bg-neutral-700 text-neutral-200"
+            >Editar mapping manual</button>
+            <button
+              onClick={handleConfirm}
+              className="px-4 py-2 text-sm rounded bg-accent text-neutral-900 font-semibold"
+            >Confirmar</button>
+          </>
+        )}
       </div>
     </div>
     </div>

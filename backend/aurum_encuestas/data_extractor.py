@@ -1,9 +1,11 @@
 from openpyxl import load_workbook
 
 from .models import Breakdown, Question
+from .xlsx_parser import _slug, BREAKDOWN_ID_MAP
 
 
-def extract_chart_data(xlsx_path: str, question: Question, breakdown_id: str, data_blocks: dict) -> dict:
+def extract_chart_data(xlsx_path: str, question: Question, breakdown_id: str,
+                       data_blocks: dict, allowed_categories: list[str] | None = None) -> dict:
     """Returns {breakdown_category: {option: {count, pct}}} for the given question + breakdown."""
     wb = load_workbook(xlsx_path, data_only=True)
     ws = wb.worksheets[0]
@@ -16,6 +18,10 @@ def extract_chart_data(xlsx_path: str, question: Question, breakdown_id: str, da
 
     breakdown_cols = _resolve_breakdown_cols(ws, breakdown_id, counts_start)
     pct_breakdown_cols = _resolve_breakdown_cols(ws, breakdown_id, pct_start)
+
+    if allowed_categories is not None:
+        allowed = list(allowed_categories)
+        breakdown_cols = {c: breakdown_cols[c] for c in allowed if c in breakdown_cols}
 
     result: dict[str, dict[str, dict]] = {}
     for cat, col in breakdown_cols.items():
@@ -151,31 +157,24 @@ def _find_question_rows(ws, question: Question) -> dict[str, int]:
 
 
 def _resolve_breakdown_cols(ws, breakdown_id: str, block_start_col: int) -> dict[str, int]:
-    """Map category label → column index for the given breakdown within the column block."""
+    """Map category label → column for the given breakdown within the column block.
+
+    Generic: find the row-1 header at/after block_start_col whose slug equals
+    breakdown_id, or whose alias (BREAKDOWN_ID_MAP) equals breakdown_id.
+    """
     row2 = {c.column: (c.value or "") for c in ws[2]}
 
     if breakdown_id == "general":
-        # General column is the first column of the block
         return {"Total": block_start_col}
 
-    # Find which range of cols belong to this breakdown
     row1 = {c.column: (c.value or "") for c in ws[1]}
-    target_label_map = {"edad": "Rango de edad", "sexo": "Sexo", "nse": "NSE", "punto": "Punto"}
-    target_label = target_label_map.get(breakdown_id)
-    if not target_label:
-        return {}
-
-    # Find header for this breakdown WITHIN the block (col >= block_start_col)
-    sorted_cols = sorted([c for c in row1.keys() if c >= block_start_col])
-    group_starts = []
-    for c in sorted_cols:
-        v = str(row1[c]).strip()
-        if v:
-            group_starts.append((c, v))
+    sorted_cols = sorted(c for c in row1.keys() if c >= block_start_col)
+    group_starts = [(c, str(row1[c]).strip()) for c in sorted_cols if str(row1[c]).strip()]
 
     found = None
     for i, (c, label) in enumerate(group_starts):
-        if label == target_label:
+        slug = _slug(label)
+        if slug == breakdown_id or BREAKDOWN_ID_MAP.get(slug) == breakdown_id:
             end_col = group_starts[i + 1][0] if i + 1 < len(group_starts) else c + 7
             found = (c, end_col)
             break
@@ -184,7 +183,7 @@ def _resolve_breakdown_cols(ws, breakdown_id: str, block_start_col: int) -> dict
         return {}
 
     start, end = found
-    out = {}
+    out: dict[str, int] = {}
     for c in range(start, end):
         cat = str(row2.get(c) or "").strip()
         if cat:

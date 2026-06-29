@@ -62,15 +62,15 @@ def _detect_breakdowns(ws) -> list[Breakdown]:
     seen_labels = set()
     group_starts = []
     for col in sorted(row1.keys()):
-        if col <= general_col or col > block1_max:
+        if general_col and (col <= general_col or col > block1_max):
             continue
         label = str(row1[col]).strip()
         if not label or label in seen_labels:
             continue
+        seen_labels.add(label)
         slug_key = _slug(label)
-        if slug_key in BREAKDOWN_ID_MAP:
-            seen_labels.add(label)
-            group_starts.append((col, label, BREAKDOWN_ID_MAP[slug_key]))
+        gid = BREAKDOWN_ID_MAP.get(slug_key, slug_key)  # alias known ids, else slug
+        group_starts.append((col, label, gid))
 
     # For each group, categories are row2 cells from col to next group's col - 1
     sorted_groups = sorted(group_starts)
