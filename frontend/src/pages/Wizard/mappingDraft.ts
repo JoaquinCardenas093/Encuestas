@@ -34,6 +34,7 @@ export const deleteBreakdown = (db: ParsedDB, bid: string) =>
 export const setSampleSize = (db: ParsedDB, n: number) => ({ ...db, sample_size: n })
 export const setDataBlock = (db: ParsedDB, key: DataBlockKey, cols: number[]): ParsedDB =>
   ({ ...db, data_blocks: { ...db.data_blocks, [key]: cols } })
+export const setTotalRow = (db: ParsedDB, n: number): ParsedDB => ({ ...db, total_row: n })
 
 export function parseColList(s: string): number[] {
   return s
