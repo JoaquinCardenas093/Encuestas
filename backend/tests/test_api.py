@@ -475,3 +475,24 @@ def test_clear_cache_all(tmp_path, monkeypatch):
 def test_clear_cache_invalid_type_returns_422():
     r = client.post("/api/training/clear-cache", json={"cache_type": "unknown_type"})
     assert r.status_code == 422
+
+
+# ─── Task 1 (Fase AJ): /api/sheet-grid endpoint ──────────────────────────────
+
+
+def test_sheet_grid_endpoint(valid_xlsx_path):
+    r = client.post("/api/sheet-grid", json={"db_path": str(valid_xlsx_path)})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["n_rows"] > 0 and body["n_cols"] > 0
+    assert body["truncated"] is False
+    # Row 1 col D (index [0][3]) is the "Rango de edad" breakdown header
+    assert body["cells"][0][3] == "Rango de edad"
+    # Row 18 col A (index [17][0]) is the question marker
+    assert body["cells"][17][0] == "$p1.recordacion"
+
+
+def test_sheet_grid_bad_path():
+    r = client.post("/api/sheet-grid", json={"db_path": "/no/such/file.xlsx"})
+    assert r.status_code == 200
+    assert "error" in r.json()
