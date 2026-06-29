@@ -43,6 +43,7 @@ class ParsedDB(BaseModel):
     breakdowns: list[Breakdown]
     sample_size: int
     data_blocks: dict
+    total_row: int | None = None
 
 
 class Chart(BaseModel):
