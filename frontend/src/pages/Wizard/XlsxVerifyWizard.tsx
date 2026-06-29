@@ -315,7 +315,10 @@ export default function XlsxVerifyWizard({ onConfirm }: Props) {
               />
             </>
           ) : (
-            <div>Fila Total: <strong>{view.total_row ?? "—"}</strong></div>
+            <div>Fila Total: <strong>{view.total_row || "—"}</strong></div>
+          )}
+          {!view.total_row && (
+            <p className="text-xs text-amber-400 mt-1">No se detectó la fila Total — los porcentajes quedarán vacíos. Editá "Fila Total".</p>
           )}
         </section>
       )}
