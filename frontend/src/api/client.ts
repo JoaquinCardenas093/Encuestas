@@ -127,3 +127,19 @@ export async function suggestSlideLayout(
     body: JSON.stringify({ state, slide_id, user_hint: user_hint ?? null }),
   })
 }
+
+export interface SheetGridResponse {
+  n_rows: number
+  n_cols: number
+  cells: string[][]
+  truncated?: boolean
+  error?: string
+}
+
+export async function fetchSheetGrid(db_path: string): Promise<SheetGridResponse> {
+  return request("/sheet-grid", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ db_path }),
+  })
+}
