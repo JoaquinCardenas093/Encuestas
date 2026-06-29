@@ -1,5 +1,5 @@
 import { it, expect } from "vitest"
-import { cellKey, colLetter, paintRect, paintToParsedDb, type PaintMap } from "./sheetPaint"
+import { cellKey, colLetter, paintRect, paintToParsedDb, parsedDbToPaint, type PaintMap } from "./sheetPaint"
 import type { ParsedDB } from "../../types"
 
 const prev: ParsedDB = {
@@ -59,4 +59,16 @@ it("category with no breakdown to its left is dropped with a warning", () => {
   p = paintRect(p, 1, 0, 1, 0, "category")  // col 0, no header to the left
   const { warnings } = paintToParsedDb(cells, p, prev)
   expect(warnings.some((w) => w.includes("sin breakdown"))).toBe(true)
+})
+
+it("parsedDbToPaint round-trips through paintToParsedDb", () => {
+  const paint = parsedDbToPaint(cells, prev)
+  const { db, warnings } = paintToParsedDb(cells, paint, prev)
+  expect(warnings).toEqual([])
+  expect(db.questions[0].options).toEqual(["Sí", "No"])
+  expect(db.breakdowns.map((b) => b.id)).toEqual(["general", "sexo"])
+  expect(db.breakdowns[1].categories).toEqual(["Hombre", "Mujer"])
+  expect(db.data_blocks.counts_cols).toEqual([3, 5])
+  expect(db.data_blocks.pct_row_cols).toEqual([7, 9])
+  expect(db.data_blocks.pct_col_cols).toEqual([11, 13])
 })

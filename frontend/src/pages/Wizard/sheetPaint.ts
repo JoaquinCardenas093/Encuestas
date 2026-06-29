@@ -105,3 +105,53 @@ export function paintToParsedDb(
 
   return { db: { ...prev, questions, breakdowns, data_blocks, sample_size: prev.sample_size }, warnings }
 }
+
+export function parsedDbToPaint(cells: string[][], db: ParsedDB): PaintMap {
+  const paint: PaintMap = {}
+  const norm = (s: string | undefined) => (s ?? "").trim()
+  const COL_A = 0, COL_B = 1, HEADER_ROW = 0, CAT_ROW = 1
+
+  db.questions.forEach((q) => {
+    let anchorRow = -1
+    for (let r = 0; r < cells.length; r++) {
+      const a = norm(cells[r]?.[COL_A])
+      if (a && (a === q.text || a.startsWith(q.text + ".") || q.text.startsWith(a + "."))) {
+        anchorRow = r; break
+      }
+    }
+    if (anchorRow < 0) return
+    paint[cellKey(anchorRow, COL_A)] = "question"
+    q.options.forEach((opt) => {
+      for (let r = anchorRow; r < cells.length; r++) {
+        if (norm(cells[r]?.[COL_B]) === opt) { paint[cellKey(r, COL_B)] = "option"; break }
+      }
+    })
+  })
+
+  db.breakdowns.filter((b) => b.id !== "general").forEach((b) => {
+    const hrow = cells[HEADER_ROW] ?? []
+    for (let c = 0; c < hrow.length; c++) {
+      if (norm(hrow[c]) === b.label) { paint[cellKey(HEADER_ROW, c)] = "breakdown"; break }
+    }
+    const crow = cells[CAT_ROW] ?? []
+    b.categories.forEach((cat) => {
+      for (let c = 0; c < crow.length; c++) {
+        if (norm(crow[c]) === cat) { paint[cellKey(CAT_ROW, c)] = "category"; break }
+      }
+    })
+  })
+
+  // Data blocks: paint an indicator row (first data row that exists) across each
+  // column range. Block columns are >= col C, so they never collide with the
+  // question/option cells in cols A/B.
+  const markerRow = Math.min(2, Math.max(0, cells.length - 1))
+  const paintCols = (range: number[] | undefined, role: Role) => {
+    if (!range || range.length < 2) return
+    for (let c = range[0] - 1; c <= range[1] - 1; c++) paint[cellKey(markerRow, c)] = role
+  }
+  paintCols(db.data_blocks.counts_cols, "counts")
+  paintCols(db.data_blocks.pct_row_cols, "pctRow")
+  paintCols(db.data_blocks.pct_col_cols, "pctCol")
+
+  return paint
+}
