@@ -141,6 +141,37 @@ async def load_project_endpoint(req: LoadProjectRequest):
     return state.model_dump()
 
 
+class SheetGridRequest(BaseModel):
+    db_path: str | None = None
+
+
+@app.post("/api/sheet-grid")
+async def sheet_grid_endpoint(req: SheetGridRequest):
+    """Return the raw cells of the first worksheet (read-only) for the visual
+    mapping grid. Bounded to MAX_ROWS x MAX_COLS."""
+    from openpyxl import load_workbook
+    MAX_ROWS, MAX_COLS = 200, 120
+    path = (req.db_path or "").strip()
+    if not path:
+        return {"error": "db_path requerido", "n_rows": 0, "n_cols": 0, "cells": []}
+    try:
+        wb = load_workbook(path, data_only=True)
+    except Exception as e:  # noqa: BLE001 — surface any open error to the UI
+        return {"error": f"No se pudo abrir: {e}", "n_rows": 0, "n_cols": 0, "cells": []}
+    ws = wb.worksheets[0]
+    full_rows, full_cols = ws.max_row or 0, ws.max_column or 0
+    n_rows, n_cols = min(full_rows, MAX_ROWS), min(full_cols, MAX_COLS)
+    truncated = full_rows > MAX_ROWS or full_cols > MAX_COLS
+    cells = []
+    for r in range(1, n_rows + 1):
+        row = []
+        for c in range(1, n_cols + 1):
+            v = ws.cell(r, c).value
+            row.append("" if v is None else str(v))
+        cells.append(row)
+    return {"n_rows": n_rows, "n_cols": n_cols, "cells": cells, "truncated": truncated}
+
+
 class PreviewSlideRequest(BaseModel):
     state: dict
     slide_index: int = 0
