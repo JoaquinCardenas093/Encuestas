@@ -32,6 +32,10 @@ export function paintRect(
 
 const slug = (s: string) => s.trim().toLowerCase()
 
+const BREAKDOWN_ALIAS: Record<string, string> = {
+  "rango de edad": "edad", "sexo": "sexo", "nse": "nse", "punto": "punto",
+}
+
 type Cell = { r: number; c: number; role: Role }
 
 export function paintToParsedDb(
@@ -86,7 +90,7 @@ export function paintToParsedDb(
       .map((cat) => text(cat.r, cat.c))
       .filter((t) => t.length > 0)
     const prevBd = prevBdByLabel.get(label)
-    breakdowns.push({ id: prevBd?.id ?? slug(label), label, categories: cats })
+    breakdowns.push({ id: prevBd?.id ?? (BREAKDOWN_ALIAS[slug(label)] ?? slug(label)), label, categories: cats })
   })
   catCells.forEach((cat) => {
     if (!ownerOf(cat)) warnings.push(`Categoría "${text(cat.r, cat.c)}" sin breakdown a la izquierda — descartada`)
@@ -141,17 +145,18 @@ export function parsedDbToPaint(cells: string[][], db: ParsedDB): PaintMap {
     })
   })
 
-  // Data blocks: paint an indicator row (first data row that exists) across each
-  // column range. Block columns are >= col C, so they never collide with the
-  // question/option cells in cols A/B.
-  const markerRow = Math.min(2, Math.max(0, cells.length - 1))
-  const paintCols = (range: number[] | undefined, role: Role) => {
+  // Data blocks: paint an indicator row per block on DISTINCT rows so no block's
+  // cells can overwrite another's. Block columns are >= col C, so they never
+  // collide with the question/option cells in cols A/B.
+  const baseRow = Math.min(2, Math.max(0, cells.length - 1))
+  const paintCols = (range: number[] | undefined, role: Role, rowOffset: number) => {
     if (!range || range.length < 2) return
-    for (let c = range[0] - 1; c <= range[1] - 1; c++) paint[cellKey(markerRow, c)] = role
+    const row = Math.min(baseRow + rowOffset, Math.max(0, cells.length - 1))
+    for (let c = range[0] - 1; c <= range[1] - 1; c++) paint[cellKey(row, c)] = role
   }
-  paintCols(db.data_blocks.counts_cols, "counts")
-  paintCols(db.data_blocks.pct_row_cols, "pctRow")
-  paintCols(db.data_blocks.pct_col_cols, "pctCol")
+  paintCols(db.data_blocks.counts_cols, "counts", 0)
+  paintCols(db.data_blocks.pct_row_cols, "pctRow", 1)
+  paintCols(db.data_blocks.pct_col_cols, "pctCol", 2)
 
   return paint
 }

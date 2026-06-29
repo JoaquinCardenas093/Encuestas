@@ -72,3 +72,40 @@ it("parsedDbToPaint round-trips through paintToParsedDb", () => {
   expect(db.data_blocks.pct_row_cols).toEqual([7, 9])
   expect(db.data_blocks.pct_col_cols).toEqual([11, 13])
 })
+
+it("parsedDbToPaint distinct marker rows — adjacent blocks do not bleed (I1)", () => {
+  const adjPrev: ParsedDB = {
+    questions: [],
+    breakdowns: [{ id: "general", label: "General", categories: ["Total"] }],
+    sample_size: 100,
+    data_blocks: { counts_cols: [3, 4], pct_row_cols: [5, 6], pct_col_cols: [7, 8] },
+  }
+  // 6 rows × 8 cols so baseRow=2 and offsets 0/1/2 all land on distinct rows
+  const adjCells: string[][] = Array.from({ length: 6 }, () => Array(8).fill("x"))
+  const paint = parsedDbToPaint(adjCells, adjPrev)
+  const { db } = paintToParsedDb(adjCells, paint, adjPrev)
+  expect(db.data_blocks.counts_cols).toEqual([3, 4])
+  expect(db.data_blocks.pct_row_cols).toEqual([5, 6])
+  expect(db.data_blocks.pct_col_cols).toEqual([7, 8])
+})
+
+it("breakdown alias map resolves 'Rango de edad' to id 'edad' (I2)", () => {
+  // prev does NOT include a 'Rango de edad' breakdown → alias map must fire
+  const aliasPrev: ParsedDB = {
+    questions: [],
+    breakdowns: [{ id: "general", label: "General", categories: ["Total"] }],
+    sample_size: 100,
+    data_blocks: { counts_cols: [3, 4], pct_row_cols: [5, 6], pct_col_cols: [7, 8] },
+  }
+  const aliasCells: string[][] = [
+    ["", "Rango de edad", "", ""],
+    ["", "18-24", "", ""],
+    ["q1", "resp", "", ""],
+  ]
+  let p: PaintMap = {}
+  p = paintRect(p, 0, 1, 0, 1, "breakdown")
+  p = paintRect(p, 1, 1, 1, 1, "category")
+  const { db } = paintToParsedDb(aliasCells, p, aliasPrev)
+  const bd = db.breakdowns.find((b) => b.label === "Rango de edad")
+  expect(bd?.id).toBe("edad")
+})

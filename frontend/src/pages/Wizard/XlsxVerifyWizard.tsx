@@ -41,6 +41,7 @@ export default function XlsxVerifyWizard({ onConfirm }: Props) {
   const [gridCells, setGridCells] = useState<string[][] | null>(null)
   const [paint, setPaint] = useState<PaintMap>({})
   const [gridError, setGridError] = useState<string | null>(null)
+  const [gridTruncated, setGridTruncated] = useState(false)
 
   if (!parsedDb) return <div className="p-6">No hay datos detectados. Volvé a subir el xlsx.</div>
 
@@ -59,12 +60,15 @@ export default function XlsxVerifyWizard({ onConfirm }: Props) {
 
   const enterExcel = async () => {
     setGridError(null)
+    setGridTruncated(false)
     const res = await fetchSheetGrid(dbPath)
     if (res.error || !res.cells?.length) {
       setGridError(res.error ?? "No se pudieron leer las celdas")
+      setGridTruncated(false)
       return
     }
     setGridCells(res.cells)
+    setGridTruncated(!!res.truncated)
     setPaint(parsedDbToPaint(res.cells, parsedDb!))
     setMode("excel")
   }
@@ -100,6 +104,9 @@ export default function XlsxVerifyWizard({ onConfirm }: Props) {
       {/* Excel paint view */}
       {mode === "excel" && gridCells && (
         <div>
+          {gridTruncated && (
+            <p className="text-xs text-amber-400 mt-1">Hoja muy grande — se muestran las primeras 200 filas × 120 columnas.</p>
+          )}
           <SheetGrid cells={gridCells} paint={paint} onChange={setPaint} />
           <div className="flex justify-end gap-2 mt-3">
             <button
@@ -118,7 +125,7 @@ export default function XlsxVerifyWizard({ onConfirm }: Props) {
           </div>
         </div>
       )}
-      {gridError && <p className="text-xs text-red-400 mt-2">{gridError}</p>}
+      {mode === "excel" && gridError && <p className="text-xs text-red-400 mt-2">{gridError}</p>}
 
       {/* Lista + fields views: Questions */}
       {(mode === "list" || mode === "fields") && (
