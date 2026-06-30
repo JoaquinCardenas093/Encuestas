@@ -55,3 +55,16 @@ it("setTotalRow is pure and sets total_row", () => {
   expect(out.total_row).toBe(7)
   expect(base.total_row).toBeUndefined()
 })
+
+it("setValueOverride sets, merges, and clears purely", () => {
+  const k = "q1|sexo|Hombre|Sí"
+  let db = D.setValueOverride(base, k, { count: 5 })
+  expect(db.value_overrides![k]).toEqual({ count: 5 })
+  expect(base.value_overrides).toBeUndefined()              // pure
+  db = D.setValueOverride(db, k, { pct: 0.5 })              // merge
+  expect(db.value_overrides![k]).toEqual({ count: 5, pct: 0.5 })
+  db = D.setValueOverride(db, k, { count: null })           // clear one field
+  expect(db.value_overrides![k]).toEqual({ pct: 0.5 })
+  db = D.setValueOverride(db, k, { pct: null })             // clear last → key removed
+  expect(db.value_overrides![k]).toBeUndefined()
+})

@@ -42,3 +42,22 @@ export function parseColList(s: string): number[] {
     .map((p) => parseInt(p.trim(), 10))
     .filter((n) => Number.isFinite(n))
 }
+
+export function setValueOverride(
+  db: ParsedDB,
+  key: string,
+  patch: { count?: number | null; pct?: number | null },
+): ParsedDB {
+  const all = { ...(db.value_overrides ?? {}) }
+  const merged: Record<string, number> = { ...(all[key] ?? {}) }
+  for (const f of ["count", "pct"] as const) {
+    if (f in patch) {
+      const v = patch[f]
+      if (v == null) delete merged[f]
+      else merged[f] = v
+    }
+  }
+  if (Object.keys(merged).length === 0) delete all[key]
+  else all[key] = merged
+  return { ...db, value_overrides: all }
+}
