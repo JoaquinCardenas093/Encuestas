@@ -43,7 +43,6 @@ export default function XlsxVerifyWizard({ onConfirm }: Props) {
   const [paint, setPaint] = useState<PaintMap>({})
   const [gridError, setGridError] = useState<string | null>(null)
   const [gridTruncated, setGridTruncated] = useState(false)
-  const [counting, setCounting] = useState(false)
 
   if (!parsedDb) return <div className="p-6">No hay datos detectados. Volvé a subir el xlsx.</div>
 
@@ -60,26 +59,6 @@ export default function XlsxVerifyWizard({ onConfirm }: Props) {
     setMode("fields")
   }
 
-  const handleSelectCounts = async () => {
-    if (!gridCells || counting) return
-    setGridError(null)
-    setCounting(true)
-    try {
-      const res = await fetchCountCells(storeState)
-      if (res.error) { setGridError(res.error); return }
-      const nRows = gridCells.length
-      const nCols = gridCells.reduce((m, row) => Math.max(m, row.length), 0)
-      const { paint: next, dropped } = paintCountCells(paint, res.cells, nRows, nCols)
-      setPaint(next)
-      if (res.cells.length === 0) setGridError("No hay conteos para marcar.")
-      else if (dropped > 0) setGridError(`${dropped} celdas de conteo quedaron fuera de la vista (hoja truncada a 200×120).`)
-    } catch (e) {
-      setGridError(String(e))
-    } finally {
-      setCounting(false)
-    }
-  }
-
   const enterExcel = async () => {
     setGridError(null)
     setGridTruncated(false)
@@ -89,9 +68,22 @@ export default function XlsxVerifyWizard({ onConfirm }: Props) {
       setGridTruncated(false)
       return
     }
-    setGridCells(res.cells)
+    const cells = res.cells
+    setGridCells(cells)
     setGridTruncated(!!res.truncated)
-    setPaint(parsedDbToPaint(res.cells, parsedDb!))
+    let nextPaint = parsedDbToPaint(cells, parsedDb!)
+    // Auto-seleccionar las celdas de conteo detectadas al abrir el editor.
+    try {
+      const cc = await fetchCountCells(storeState)
+      if (!cc.error) {
+        const nRows = cells.length
+        const nCols = cells.reduce((m, row) => Math.max(m, row.length), 0)
+        const { paint: merged, dropped } = paintCountCells(nextPaint, cc.cells, nRows, nCols)
+        nextPaint = merged
+        if (dropped > 0) setGridError(`${dropped} celdas de conteo quedaron fuera de la vista (hoja truncada a 200×120).`)
+      }
+    } catch { /* si falla el auto-marcado, seguimos con el paint base */ }
+    setPaint(nextPaint)
     setMode("excel")
   }
 
@@ -129,13 +121,6 @@ export default function XlsxVerifyWizard({ onConfirm }: Props) {
           {gridTruncated && (
             <p className="text-xs text-amber-400 mt-1">Hoja muy grande — se muestran las primeras 200 filas × 120 columnas.</p>
           )}
-          <div className="flex justify-end mb-2">
-            <button
-              onClick={handleSelectCounts}
-              disabled={counting}
-              className="px-3 py-1 text-sm rounded bg-neutral-700 text-neutral-200 hover:bg-neutral-600"
-            >Seleccionar conteos</button>
-          </div>
           <SheetGrid cells={gridCells} paint={paint} onChange={setPaint} />
           <div className="flex justify-end gap-2 mt-3">
             <button
