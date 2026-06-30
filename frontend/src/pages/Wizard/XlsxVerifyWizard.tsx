@@ -4,8 +4,8 @@ import { useProjectStore } from "../../store/project"
 import type { ParsedDB } from "../../types"
 import * as D from "./mappingDraft"
 import SheetGrid from "./SheetGrid"
-import { paintToParsedDb, parsedDbToPaint, type PaintMap } from "./sheetPaint"
-import { fetchSheetGrid } from "../../api/client"
+import { paintToParsedDb, parsedDbToPaint, paintCountCells, type PaintMap } from "./sheetPaint"
+import { fetchSheetGrid, fetchCountCells } from "../../api/client"
 import CellValuesEditor from "./CellValuesEditor"
 
 const FONTS = [
@@ -59,6 +59,19 @@ export default function XlsxVerifyWizard({ onConfirm }: Props) {
     setMode("fields")
   }
 
+  const handleSelectCounts = async () => {
+    if (!gridCells) return
+    setGridError(null)
+    const res = await fetchCountCells(storeState)
+    if (res.error) { setGridError(res.error); return }
+    const nRows = gridCells.length
+    const nCols = gridCells.reduce((m, row) => Math.max(m, row.length), 0)
+    const { paint: next, dropped } = paintCountCells(paint, res.cells, nRows, nCols)
+    setPaint(next)
+    if (res.cells.length === 0) setGridError("No hay conteos para marcar.")
+    else if (dropped > 0) setGridError(`${dropped} celdas de conteo quedaron fuera de la vista (hoja truncada a 200×120).`)
+  }
+
   const enterExcel = async () => {
     setGridError(null)
     setGridTruncated(false)
@@ -108,6 +121,12 @@ export default function XlsxVerifyWizard({ onConfirm }: Props) {
           {gridTruncated && (
             <p className="text-xs text-amber-400 mt-1">Hoja muy grande — se muestran las primeras 200 filas × 120 columnas.</p>
           )}
+          <div className="flex justify-end mb-2">
+            <button
+              onClick={handleSelectCounts}
+              className="px-3 py-1 text-sm rounded bg-neutral-700 text-neutral-200 hover:bg-neutral-600"
+            >Seleccionar conteos</button>
+          </div>
           <SheetGrid cells={gridCells} paint={paint} onChange={setPaint} />
           <div className="flex justify-end gap-2 mt-3">
             <button
