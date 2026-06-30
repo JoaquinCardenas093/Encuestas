@@ -23,7 +23,7 @@ export default function CellValuesEditor({ state, draft, onChange }: Props) {
     fetchCellValues(state, qid, bid).then((r) => {
       if (!active) return
       if (r.error) { setErr(r.error); setData(null) } else { setErr(null); setData(r) }
-    })
+    }).catch((e) => { if (active) { setErr(String(e)); setData(null) } })
     return () => { active = false }
   }, [state, qid, bid])
 
@@ -68,10 +68,10 @@ export default function CellValuesEditor({ state, draft, onChange }: Props) {
                     <td key={cat} className="border border-neutral-700 px-1 py-1">
                       <div className="flex flex-col gap-0.5">
                         <input type="number" title="conteo" value={cellCount(cat, opt)}
-                          onChange={(e) => set(cat, opt, { count: e.target.value === "" ? null : parseInt(e.target.value, 10) })}
+                          onChange={(e) => { const n = parseInt(e.target.value, 10); set(cat, opt, { count: Number.isNaN(n) ? null : n }) }}
                           className="w-16 bg-neutral-900 border border-neutral-700 rounded px-1 text-[11px]" />
                         <input type="number" step="0.1" title="%" value={cellPct(cat, opt)}
-                          onChange={(e) => set(cat, opt, { pct: e.target.value === "" ? null : parseFloat(e.target.value) / 100 })}
+                          onChange={(e) => { const n = parseFloat(e.target.value); set(cat, opt, { pct: Number.isNaN(n) ? null : n / 100 }) }}
                           className="w-16 bg-neutral-900 border border-neutral-700 rounded px-1 text-[11px]" />
                       </div>
                     </td>
