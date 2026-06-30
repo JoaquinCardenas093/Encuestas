@@ -114,6 +114,23 @@ export function paintToParsedDb(
   return { db: { ...prev, questions, breakdowns, data_blocks, sample_size: prev.sample_size, total_row }, warnings }
 }
 
+export function paintCountCells(
+  paint: PaintMap,
+  coords: { row: number; col: number }[],
+  nRows: number,
+  nCols: number,
+): { paint: PaintMap; dropped: number } {
+  const next = { ...paint }
+  let dropped = 0
+  for (const { row, col } of coords) {
+    const r = row - 1
+    const c = col - 1
+    if (r < 0 || c < 0 || r >= nRows || c >= nCols) { dropped++; continue }
+    next[cellKey(r, c)] = "counts"
+  }
+  return { paint: next, dropped }
+}
+
 export function parsedDbToPaint(cells: string[][], db: ParsedDB): PaintMap {
   const paint: PaintMap = {}
   const norm = (s: string | undefined) => (s ?? "").trim()

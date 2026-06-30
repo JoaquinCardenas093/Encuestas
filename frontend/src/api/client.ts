@@ -158,3 +158,16 @@ export async function fetchCellValues(state: any, question_id: string, breakdown
     body: JSON.stringify({ state, question_id, breakdown_id }),
   })
 }
+
+export interface CountCellsResponse {
+  cells: { row: number; col: number }[]
+  error?: string
+}
+
+export async function fetchCountCells(state: any): Promise<CountCellsResponse> {
+  return request<CountCellsResponse>("/count-cells", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ state }),
+  })
+}

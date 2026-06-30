@@ -1,5 +1,5 @@
-import { it, expect } from "vitest"
-import { cellKey, colLetter, paintRect, paintToParsedDb, parsedDbToPaint, type PaintMap } from "./sheetPaint"
+import { it, expect, describe } from "vitest"
+import { cellKey, colLetter, paintRect, paintToParsedDb, parsedDbToPaint, paintCountCells, type PaintMap } from "./sheetPaint"
 import type { ParsedDB } from "../../types"
 
 const prev: ParsedDB = {
@@ -91,6 +91,26 @@ it("parsedDbToPaint distinct marker rows — adjacent blocks do not bleed (I1)",
   expect(db.data_blocks.counts_cols).toEqual([3, 4])
   expect(db.data_blocks.pct_row_cols).toEqual([5, 6])
   expect(db.data_blocks.pct_col_cols).toEqual([7, 8])
+})
+
+describe("paintCountCells", () => {
+  it("paints counts role at 0-based coords and counts out-of-window drops", () => {
+    const { paint, dropped } = paintCountCells({}, [
+      { row: 5, col: 3 },     // → "4,2"
+      { row: 1, col: 200 },   // col 200 > nCols 120 → dropped
+      { row: 250, col: 2 },   // row 250 > nRows 200 → dropped
+    ], 200, 120)
+    expect(paint["4,2"]).toBe("counts")
+    expect(dropped).toBe(2)
+  })
+
+  it("merges over existing paint without mutating the input", () => {
+    const base = { "0,0": "question" } as Record<string, string>
+    const { paint } = paintCountCells(base as any, [{ row: 2, col: 2 }], 200, 120)
+    expect(paint["0,0"]).toBe("question")   // preserved
+    expect(paint["1,1"]).toBe("counts")     // added
+    expect(base["1,1"]).toBeUndefined()     // pure
+  })
 })
 
 it("breakdown alias map resolves 'Rango de edad' to id 'edad' (I2)", () => {
