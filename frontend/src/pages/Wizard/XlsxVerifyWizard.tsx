@@ -6,6 +6,7 @@ import * as D from "./mappingDraft"
 import SheetGrid from "./SheetGrid"
 import { paintToParsedDb, parsedDbToPaint, type PaintMap } from "./sheetPaint"
 import { fetchSheetGrid } from "../../api/client"
+import CellValuesEditor from "./CellValuesEditor"
 
 const FONTS = [
   "Default del template",
@@ -354,6 +355,14 @@ export default function XlsxVerifyWizard({ onConfirm }: Props) {
             className="px-4 py-2 text-sm rounded bg-accent text-neutral-900 font-semibold"
           >Confirmar</button>
         </div>
+      )}
+
+      {mode === "fields" && draft && (
+        <CellValuesEditor
+          state={storeState}
+          draft={draft}
+          onChange={(db) => setDraft(db)}
+        />
       )}
 
       {mode === "fields" && (

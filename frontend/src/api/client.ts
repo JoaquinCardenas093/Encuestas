@@ -143,3 +143,18 @@ export async function fetchSheetGrid(db_path: string): Promise<SheetGridResponse
     body: JSON.stringify({ db_path }),
   })
 }
+
+export interface CellValuesResponse {
+  options: string[]
+  categories: string[]
+  cells: Record<string, Record<string, { count: number; pct: number | null }>>
+  error?: string
+}
+
+export async function fetchCellValues(state: any, question_id: string, breakdown_id: string): Promise<CellValuesResponse> {
+  return request<CellValuesResponse>("/cell-values", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ state, question_id, breakdown_id }),
+  })
+}
