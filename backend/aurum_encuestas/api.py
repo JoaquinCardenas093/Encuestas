@@ -205,6 +205,42 @@ async def cell_values_endpoint(req: CellValuesRequest):
     return {"options": options, "categories": categories, "cells": cells}
 
 
+class CountCellsRequest(BaseModel):
+    state: dict
+
+
+@app.post("/api/count-cells")
+async def count_cells_endpoint(req: CountCellsRequest):
+    """Coordinates (1-based) of every count cell (option×category across all
+    questions and breakdowns), so the Excel editor can highlight them for the
+    user to corroborate. Reuses the extractor's row/column resolution."""
+    from openpyxl import load_workbook
+    from .data_extractor import _find_question_rows, _resolve_breakdown_cols
+    try:
+        state = ProjectState.model_validate(req.state)
+    except Exception as e:  # noqa: BLE001
+        return {"error": str(e), "cells": []}
+    if not state.parsed_db or not state.inputs:
+        return {"error": "Sin datos", "cells": []}
+    try:
+        cc = state.parsed_db.data_blocks.get("counts_cols")
+        counts_start = cc[0]
+        wb = load_workbook(state.inputs.db_path, data_only=True)
+        ws = wb.worksheets[0]
+        seen: set[tuple[int, int]] = set()
+        for q in state.parsed_db.questions:
+            q_rows = _find_question_rows(ws, q)
+            for bd in state.parsed_db.breakdowns:
+                bd_cols = _resolve_breakdown_cols(ws, bd.id, counts_start)
+                for col in bd_cols.values():
+                    for row in q_rows.values():
+                        seen.add((row, col))
+    except Exception as e:  # noqa: BLE001
+        return {"error": str(e), "cells": []}
+    cells = [{"row": r, "col": c} for (r, c) in sorted(seen)]
+    return {"cells": cells}
+
+
 class PreviewSlideRequest(BaseModel):
     state: dict
     slide_index: int = 0

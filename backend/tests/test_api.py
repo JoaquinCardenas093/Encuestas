@@ -525,3 +525,36 @@ def test_cell_values_endpoint(valid_xlsx_path):
     assert body["options"] == db.questions[0].options
     assert body["categories"] == ["Total"]
     assert body["cells"]["Sí"]["Total"]["count"] == 458
+
+
+def test_count_cells_endpoint(valid_xlsx_path):
+    from aurum_encuestas.xlsx_parser import parse_xlsx
+    from aurum_encuestas.data_extractor import _find_question_rows, _resolve_breakdown_cols
+    from openpyxl import load_workbook
+    db = parse_xlsx(str(valid_xlsx_path))
+    state = _minimal_state(db, str(valid_xlsx_path))
+    r = client.post("/api/count-cells", json={"state": state})
+    assert r.status_code == 200
+    body = r.json()
+    assert body.get("error") is None
+    cells = body["cells"]
+    assert len(cells) > 0
+    # No duplicate coordinates
+    pairs = [(c["row"], c["col"]) for c in cells]
+    assert len(pairs) == len(set(pairs))
+    # A known count cell (P1 "Sí" / general / Total) is present and holds 458
+    ws = load_workbook(str(valid_xlsx_path), data_only=True).worksheets[0]
+    q1 = db.questions[0]
+    rows = _find_question_rows(ws, q1)
+    cols = _resolve_breakdown_cols(ws, "general", db.data_blocks["counts_cols"][0])
+    expected = {"row": rows["Sí"], "col": cols["Total"]}
+    assert expected in cells
+    assert ws.cell(expected["row"], expected["col"]).value == 458
+
+
+def test_count_cells_endpoint_bad_state():
+    r = client.post("/api/count-cells", json={"state": {"not": "valid"}})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["cells"] == []
+    assert body["error"]
