@@ -8,10 +8,18 @@ def _override_key(question_id: str, breakdown_id: str, category: str, option: st
     return f"{question_id}|{breakdown_id}|{category}|{option}"
 
 
+def _count_cell_set(count_cells: list | None) -> set[tuple[int, int]] | None:
+    """list[[row,col]] → set of (row,col); None/empty → None (no filter)."""
+    if not count_cells:
+        return None
+    return {(int(r), int(c)) for r, c in count_cells}
+
+
 def extract_chart_data(xlsx_path: str, question: Question, breakdown_id: str,
                        data_blocks: dict, allowed_categories: list[str] | None = None,
                        total_row: int | None = None,
-                       overrides: dict | None = None) -> dict:
+                       overrides: dict | None = None,
+                       count_cells: list | None = None) -> dict:
     """Returns {breakdown_category: {option: {count, pct}}}.
     pct = count / column_total, where column_total = cell(total_row, col)."""
     wb = load_workbook(xlsx_path, data_only=True)
@@ -22,6 +30,7 @@ def extract_chart_data(xlsx_path: str, question: Question, breakdown_id: str,
     if allowed_categories is not None:
         breakdown_cols = {c: breakdown_cols[c] for c in allowed_categories if c in breakdown_cols}
 
+    cset = _count_cell_set(count_cells)
     result: dict[str, dict[str, dict]] = {}
     for cat, col in breakdown_cols.items():
         result[cat] = {}
@@ -35,6 +44,8 @@ def extract_chart_data(xlsx_path: str, question: Question, breakdown_id: str,
             try:
                 count_v = int(count)
             except (TypeError, ValueError):
+                count_v = 0
+            if cset is not None and (row, col) not in cset:
                 count_v = 0
             pct_v = (count_v / total_v) if (total_v and total_v != 0) else None
             if overrides:
@@ -55,6 +66,7 @@ def extract_all_breakdowns_data(
     data_blocks: dict,
     total_row: int | None = None,
     overrides: dict | None = None,
+    count_cells: list | None = None,
 ) -> dict:
     """Returns nested structure with every breakdown group for the question.
 
@@ -78,6 +90,7 @@ def extract_all_breakdowns_data(
     ws = wb.worksheets[0]
     q_rows = _find_question_rows(ws, question)
     counts_start = data_blocks["counts_cols"][0]
+    cset = _count_cell_set(count_cells)
 
     result: dict[str, dict] = {}
     for bd in breakdowns:
@@ -98,6 +111,8 @@ def extract_all_breakdowns_data(
                 try:
                     count_v = int(count)
                 except (TypeError, ValueError):
+                    count_v = 0
+                if cset is not None and (row, col) not in cset:
                     count_v = 0
                 pct_v = (count_v / total_v) if (total_v and total_v != 0) else None
                 if overrides:

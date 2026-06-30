@@ -45,6 +45,7 @@ class ParsedDB(BaseModel):
     data_blocks: dict
     total_row: int | None = None
     value_overrides: dict = Field(default_factory=dict)
+    count_cells: list = Field(default_factory=list)
 
 
 class Chart(BaseModel):

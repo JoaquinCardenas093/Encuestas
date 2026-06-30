@@ -82,3 +82,41 @@ def test_extract_chart_data_override_pct(valid_xlsx_path):
                               total_row=db.total_row, overrides={key: {"pct": 0.5}})
     assert data["Total"]["Sí"]["pct"] == 0.5
     assert data["Total"]["Sí"]["count"] == 458  # count untouched
+
+
+def test_count_cells_filter_excludes_unmarked(valid_xlsx_path):
+    from aurum_encuestas.data_extractor import _find_question_rows, _resolve_breakdown_cols
+    from openpyxl import load_workbook
+    db = parse_xlsx(str(valid_xlsx_path))
+    q1 = db.questions[0]
+    ws = load_workbook(str(valid_xlsx_path), data_only=True).worksheets[0]
+    rows = _find_question_rows(ws, q1)
+    cols = _resolve_breakdown_cols(ws, "general", db.data_blocks["counts_cols"][0])
+    si_cell = [rows["Sí"], cols["Total"]]          # mark ONLY "Sí"
+    data = extract_chart_data(str(valid_xlsx_path), q1, "general", db.data_blocks,
+                              total_row=db.total_row, count_cells=[si_cell])
+    assert data["Total"]["Sí"]["count"] == 458     # marked → read
+    assert data["Total"]["No"]["count"] == 0       # unmarked → 0
+    assert data["Total"]["No"]["pct"] == 0.0
+
+
+def test_count_cells_empty_reads_all(valid_xlsx_path):
+    db = parse_xlsx(str(valid_xlsx_path))
+    q1 = db.questions[0]
+    full = extract_chart_data(str(valid_xlsx_path), q1, "general", db.data_blocks,
+                              total_row=db.total_row, count_cells=None)
+    none = extract_chart_data(str(valid_xlsx_path), q1, "general", db.data_blocks,
+                              total_row=db.total_row)
+    assert full == none                            # None ⇒ no filter
+    assert full["Total"]["No"]["count"] != 0       # "No" still read
+
+
+def test_count_cells_override_wins(valid_xlsx_path):
+    db = parse_xlsx(str(valid_xlsx_path))
+    q1 = db.questions[0]
+    key = f"{q1.id}|general|Total|No"
+    # "No" is excluded by count_cells (empty marked set for it) but overridden to 5
+    data = extract_chart_data(str(valid_xlsx_path), q1, "general", db.data_blocks,
+                              total_row=db.total_row, count_cells=[[1, 1]],
+                              overrides={key: {"count": 5}})
+    assert data["Total"]["No"]["count"] == 5       # override applies after the 0-forcing

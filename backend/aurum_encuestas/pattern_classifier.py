@@ -496,11 +496,13 @@ def build_slide_config(slide_def: Any, parsed_db: Any, db_path: str = "") -> Any
                     allowed_categories=(bd_obj_primary.categories if bd_obj_primary else None),
                     total_row=getattr(parsed_db, "total_row", None),
                     overrides=getattr(parsed_db, "value_overrides", None),
+                    count_cells=getattr(parsed_db, "count_cells", None),
                 )
                 bd_list = getattr(parsed_db, "breakdowns", []) or []
                 all_bds = extract_all_breakdowns_data(db_path, question, bd_list, data_blocks,
                                                       total_row=getattr(parsed_db, "total_row", None),
-                                                      overrides=getattr(parsed_db, "value_overrides", None))
+                                                      overrides=getattr(parsed_db, "value_overrides", None),
+                                                      count_cells=getattr(parsed_db, "count_cells", None))
             except Exception as exc:
                 log.debug("build_slide_config: could not extract chart data for %r: %s", chart.id, exc)
         enriched_charts.append(
