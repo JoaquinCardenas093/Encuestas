@@ -172,6 +172,39 @@ async def sheet_grid_endpoint(req: SheetGridRequest):
     return {"n_rows": n_rows, "n_cols": n_cols, "cells": cells, "truncated": truncated}
 
 
+class CellValuesRequest(BaseModel):
+    state: dict
+    question_id: str
+    breakdown_id: str
+
+
+@app.post("/api/cell-values")
+async def cell_values_endpoint(req: CellValuesRequest):
+    """Crosstab of {count, pct} for a (question, breakdown), overrides applied,
+    so the field editor can display + override current values."""
+    from .data_extractor import extract_chart_data
+    try:
+        state = ProjectState.model_validate(req.state)
+    except Exception as e:  # noqa: BLE001
+        return {"error": str(e), "options": [], "categories": [], "cells": {}}
+    if not state.parsed_db or not state.inputs:
+        return {"error": "Sin datos", "options": [], "categories": [], "cells": {}}
+    q = next((qq for qq in state.parsed_db.questions if qq.id == req.question_id), None)
+    if q is None:
+        return {"error": "pregunta no encontrada", "options": [], "categories": [], "cells": {}}
+    try:
+        data = extract_chart_data(
+            state.inputs.db_path, q, req.breakdown_id, state.parsed_db.data_blocks or {},
+            total_row=state.parsed_db.total_row, overrides=state.parsed_db.value_overrides,
+        )
+    except Exception as e:  # noqa: BLE001
+        return {"error": str(e), "options": [], "categories": [], "cells": {}}
+    categories = list(data.keys())
+    options = list(q.options)
+    cells = {opt: {cat: data[cat].get(opt, {"count": 0, "pct": None}) for cat in categories} for opt in options}
+    return {"options": options, "categories": categories, "cells": cells}
+
+
 class PreviewSlideRequest(BaseModel):
     state: dict
     slide_index: int = 0

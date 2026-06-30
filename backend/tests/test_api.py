@@ -496,3 +496,32 @@ def test_sheet_grid_bad_path():
     r = client.post("/api/sheet-grid", json={"db_path": "/no/such/file.xlsx"})
     assert r.status_code == 200
     assert "error" in r.json()
+
+
+# ─── Fase AK T2: /api/cell-values endpoint ───────────────────────────────────
+
+
+def _minimal_state(db, path: str) -> dict:
+    """Return a ProjectState-compatible dict with parsed_db + inputs.db_path set."""
+    from aurum_encuestas.models import ProjectState, ProjectInputs
+    state = ProjectState(
+        project_name="Test",
+        inputs=ProjectInputs(db_path=path, template_path="/dev/null"),
+        parsed_db=db,
+    )
+    return state.model_dump()
+
+
+def test_cell_values_endpoint(valid_xlsx_path):
+    from aurum_encuestas.xlsx_parser import parse_xlsx
+    db = parse_xlsx(str(valid_xlsx_path))
+    # Construct a valid ProjectState dict with parsed_db + inputs.db_path set to the fixture.
+    state = _minimal_state(db, str(valid_xlsx_path))   # build per the ProjectState model
+    r = client.post("/api/cell-values", json={
+        "state": state, "question_id": db.questions[0].id, "breakdown_id": "general",
+    })
+    assert r.status_code == 200
+    body = r.json()
+    assert body["options"] == db.questions[0].options
+    assert body["categories"] == ["Total"]
+    assert body["cells"]["Sí"]["Total"]["count"] == 458
