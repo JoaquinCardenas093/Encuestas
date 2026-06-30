@@ -49,7 +49,7 @@ export function setValueOverride(
   patch: { count?: number | null; pct?: number | null },
 ): ParsedDB {
   const all = { ...(db.value_overrides ?? {}) }
-  const merged: Record<string, number> = { ...(all[key] ?? {}) }
+  const merged: { count?: number; pct?: number } = { ...(all[key] ?? {}) } as { count?: number; pct?: number }
   for (const f of ["count", "pct"] as const) {
     if (f in patch) {
       const v = patch[f]
