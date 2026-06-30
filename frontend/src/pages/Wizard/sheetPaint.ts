@@ -98,6 +98,7 @@ export function paintToParsedDb(
 
   // --- Data blocks (counts only; pct_* carried from prev, no longer read) ---
   const countsCols = entries.filter((e) => e.role === "counts").map((e) => e.c)
+  // Only counts_cols[0] drives extraction; counts_cols[1] widening after "Seleccionar conteos" is benign.
   const counts_cols = countsCols.length
     ? [Math.min(...countsCols) + 1, Math.max(...countsCols) + 1]
     : prev.data_blocks.counts_cols

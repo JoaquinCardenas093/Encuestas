@@ -43,6 +43,7 @@ export default function XlsxVerifyWizard({ onConfirm }: Props) {
   const [paint, setPaint] = useState<PaintMap>({})
   const [gridError, setGridError] = useState<string | null>(null)
   const [gridTruncated, setGridTruncated] = useState(false)
+  const [counting, setCounting] = useState(false)
 
   if (!parsedDb) return <div className="p-6">No hay datos detectados. Volvé a subir el xlsx.</div>
 
@@ -60,16 +61,23 @@ export default function XlsxVerifyWizard({ onConfirm }: Props) {
   }
 
   const handleSelectCounts = async () => {
-    if (!gridCells) return
+    if (!gridCells || counting) return
     setGridError(null)
-    const res = await fetchCountCells(storeState)
-    if (res.error) { setGridError(res.error); return }
-    const nRows = gridCells.length
-    const nCols = gridCells.reduce((m, row) => Math.max(m, row.length), 0)
-    const { paint: next, dropped } = paintCountCells(paint, res.cells, nRows, nCols)
-    setPaint(next)
-    if (res.cells.length === 0) setGridError("No hay conteos para marcar.")
-    else if (dropped > 0) setGridError(`${dropped} celdas de conteo quedaron fuera de la vista (hoja truncada a 200×120).`)
+    setCounting(true)
+    try {
+      const res = await fetchCountCells(storeState)
+      if (res.error) { setGridError(res.error); return }
+      const nRows = gridCells.length
+      const nCols = gridCells.reduce((m, row) => Math.max(m, row.length), 0)
+      const { paint: next, dropped } = paintCountCells(paint, res.cells, nRows, nCols)
+      setPaint(next)
+      if (res.cells.length === 0) setGridError("No hay conteos para marcar.")
+      else if (dropped > 0) setGridError(`${dropped} celdas de conteo quedaron fuera de la vista (hoja truncada a 200×120).`)
+    } catch (e) {
+      setGridError(String(e))
+    } finally {
+      setCounting(false)
+    }
   }
 
   const enterExcel = async () => {
@@ -124,6 +132,7 @@ export default function XlsxVerifyWizard({ onConfirm }: Props) {
           <div className="flex justify-end mb-2">
             <button
               onClick={handleSelectCounts}
+              disabled={counting}
               className="px-3 py-1 text-sm rounded bg-neutral-700 text-neutral-200 hover:bg-neutral-600"
             >Seleccionar conteos</button>
           </div>
