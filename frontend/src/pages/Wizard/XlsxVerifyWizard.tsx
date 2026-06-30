@@ -304,6 +304,22 @@ export default function XlsxVerifyWizard({ onConfirm }: Props) {
           ) : (
             <div>Bloques cols — Counts: {view.data_blocks.counts_cols.join("–")} · %Row: {view.data_blocks.pct_row_cols.join("–")} · %Col: {view.data_blocks.pct_col_cols.join("–")}</div>
           )}
+          {mode === "fields" ? (
+            <>
+              <label className="block text-xs text-neutral-400 mb-1 mt-3">Fila Total (denominadores)</label>
+              <input
+                type="number"
+                value={view.total_row ?? ""}
+                onChange={(e) => setDraft(D.setTotalRow(draft!, parseInt(e.target.value, 10) || 0))}
+                className="w-32 bg-neutral-900 border border-neutral-700 rounded px-3 py-2 text-sm"
+              />
+            </>
+          ) : (
+            <div>Fila Total: <strong>{view.total_row || "—"}</strong></div>
+          )}
+          {!view.total_row && (
+            <p className="text-xs text-amber-400 mt-1">No se detectó la fila Total — los porcentajes quedarán vacíos. Editá "Fila Total".</p>
+          )}
         </section>
       )}
 

@@ -33,12 +33,14 @@ def parse_xlsx(path: str) -> ParsedDB:
     sample_size = _detect_sample_size(ws)
     questions = _detect_questions(ws)
     data_blocks = _detect_data_blocks(ws)
+    total_row = _detect_total_row(ws)
 
     return ParsedDB(
         questions=questions,
         breakdowns=breakdowns,
         sample_size=sample_size,
         data_blocks=data_blocks,
+        total_row=total_row,
     )
 
 
@@ -96,6 +98,15 @@ def _detect_sample_size(ws) -> int:
         return int(val)
     except (ValueError, TypeError):
         return 0
+
+
+def _detect_total_row(ws) -> int | None:
+    """Row whose column B is 'Total' — holds the per-column totals (denominators)."""
+    for r in range(1, ws.max_row + 1):
+        v = ws.cell(r, 2).value
+        if v is not None and str(v).strip() == "Total":
+            return r
+    return None
 
 
 def _detect_questions(ws) -> list[Question]:

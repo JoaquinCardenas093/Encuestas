@@ -7,8 +7,7 @@ const ROLES: { role: Role; label: string; color: string }[] = [
   { role: "breakdown", label: "Breakdown", color: "#e07b00" },
   { role: "category", label: "Categoría", color: "#7b3fb5" },
   { role: "counts", label: "Counts", color: "#616161" },
-  { role: "pctRow", label: "%Row", color: "#00838f" },
-  { role: "pctCol", label: "%Col", color: "#5d4037" },
+  { role: "total", label: "Total", color: "#00838f" },
 ]
 const COLOR: Record<Role, string> = Object.fromEntries(ROLES.map((r) => [r.role, r.color])) as Record<Role, string>
 

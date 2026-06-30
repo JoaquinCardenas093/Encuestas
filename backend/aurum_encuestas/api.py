@@ -266,6 +266,7 @@ def _build_analysis_context(scope: str, target_id: str | None, slide_id: str, st
                 data = extract_chart_data(
                     db_path, q, bd_id, data_blocks,
                     allowed_categories=(bd_obj.categories if bd_obj and bd_id != "general" else None),
+                    total_row=state.parsed_db.total_row,
                 )
             except Exception:
                 data = {}
@@ -557,7 +558,7 @@ async def suggest_slide_layout_endpoint(req: SuggestSlideLayoutRequest):
                 bds_real = [b for b in c.breakdown_ids if b and b.lower() != "general"]
                 q = next((qq for qq in state.parsed_db.questions if qq.id == c.question_id), None) if state.parsed_db else None
                 if q and state.parsed_db and state.inputs:
-                    all_bds_data = extract_all_breakdowns_data(state.inputs.db_path, q, state.parsed_db.breakdowns, state.parsed_db.data_blocks or {})
+                    all_bds_data = extract_all_breakdowns_data(state.inputs.db_path, q, state.parsed_db.breakdowns, state.parsed_db.data_blocks or {}, total_row=state.parsed_db.total_row)
                     bd_labels = [(all_bds_data.get(b, {}) or {}).get("label") or b for b in bds_real]
                     from types import SimpleNamespace
                     src = SimpleNamespace(question=q, all_breakdowns_data=all_bds_data, breakdown_ids=c.breakdown_ids, show_legend=c.show_legend)

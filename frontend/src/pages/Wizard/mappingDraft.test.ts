@@ -49,3 +49,9 @@ it("sample size + data block + parseColList", () => {
   const db = D.setDataBlock(base, "counts_cols", [3, 4])
   expect(db.data_blocks.counts_cols).toEqual([3, 4])
 })
+
+it("setTotalRow is pure and sets total_row", () => {
+  const out = D.setTotalRow(base, 7)
+  expect(out.total_row).toBe(7)
+  expect(base.total_row).toBeUndefined()
+})

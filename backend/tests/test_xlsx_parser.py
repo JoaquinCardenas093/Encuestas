@@ -89,3 +89,10 @@ def test_detect_breakdowns_includes_unknown_header(tmp_path):
     assert by_label["Religión"].categories == ["Católico", "Evangélico"]
     # Known header keeps its canonical id via the alias map
     assert by_label["Sexo"].id == "sexo"
+
+
+def test_parse_detects_total_row(valid_xlsx_path):
+    from aurum_encuestas.xlsx_parser import parse_xlsx
+    db = parse_xlsx(str(valid_xlsx_path))
+    # Fixture writes "Total" at row 3, col B
+    assert db.total_row == 3
