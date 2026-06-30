@@ -39,7 +39,7 @@ const BREAKDOWN_ALIAS: Record<string, string> = {
 type Cell = { r: number; c: number; role: Role }
 
 export function paintToParsedDb(
-  cells: string[][], paint: PaintMap, prev: ParsedDB,
+  cells: string[][], paint: PaintMap, prev: ParsedDB, truncated = false,
 ): { db: ParsedDB; warnings: string[] } {
   const warnings: string[] = []
   const text = (r: number, c: number) => (cells[r]?.[c] ?? "").trim()
@@ -112,7 +112,14 @@ export function paintToParsedDb(
   const totalRows = entries.filter((e) => e.role === "total").map((e) => e.r)
   const total_row = totalRows.length ? Math.min(...totalRows) + 1 : (prev.total_row ?? null)
 
-  return { db: { ...prev, questions, breakdowns, data_blocks, sample_size: prev.sample_size, total_row }, warnings }
+  const count_cells = truncated
+    ? (prev.count_cells ?? [])
+    : entries
+        .filter((e) => e.role === "counts")
+        .map((e) => [e.r + 1, e.c + 1] as number[])
+        .sort((a, b) => a[0] - b[0] || a[1] - b[1])
+
+  return { db: { ...prev, questions, breakdowns, data_blocks, sample_size: prev.sample_size, total_row, count_cells }, warnings }
 }
 
 export function paintCountCells(

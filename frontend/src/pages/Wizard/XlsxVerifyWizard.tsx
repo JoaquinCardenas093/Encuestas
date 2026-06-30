@@ -129,7 +129,8 @@ export default function XlsxVerifyWizard({ onConfirm }: Props) {
             >Cancelar</button>
             <button
               onClick={() => {
-                const { db, warnings } = paintToParsedDb(gridCells, paint, parsedDb!)
+                const { db, warnings } = paintToParsedDb(gridCells, paint, parsedDb!, gridTruncated)
+                if (gridTruncated) warnings.unshift("Hoja truncada — la exclusión por celda queda deshabilitada (se leen todos los conteos).")
                 if (warnings.length && !confirm(`Avisos:\n${warnings.join("\n")}\n\n¿Guardar igual?`)) return
                 setParsedDb(db)
                 setMode("list")

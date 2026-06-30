@@ -29,6 +29,7 @@ export interface ParsedDB {
   data_blocks: { counts_cols: number[]; pct_row_cols: number[]; pct_col_cols: number[] }
   total_row?: number | null
   value_overrides?: Record<string, { count?: number | null; pct?: number | null }>
+  count_cells?: number[][]
 }
 
 export interface Chart {

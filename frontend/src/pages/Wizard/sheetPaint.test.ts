@@ -133,3 +133,22 @@ it("breakdown alias map resolves 'Rango de edad' to id 'edad' (I2)", () => {
   const bd = db.breakdowns.find((b) => b.label === "Rango de edad")
   expect(bd?.id).toBe("edad")
 })
+
+it("paintToParsedDb emits count_cells (1-based) for painted counts cells", () => {
+  const cells = [["P1", "", ""], ["", "Sí", ""], ["", "No", ""]]
+  const p: PaintMap = {
+    "0,0": "question", "1,1": "option", "2,1": "option",
+    "1,2": "counts", "2,2": "counts",
+  }
+  const prev = { questions: [], breakdowns: [], data_blocks: { counts_cols: [3, 3], pct_row_cols: [], pct_col_cols: [] }, sample_size: 0, total_row: null } as any
+  const { db } = paintToParsedDb(cells, p, prev)
+  expect(db.count_cells).toEqual([[2, 3], [3, 3]])   // (r+1,c+1), sorted
+})
+
+it("paintToParsedDb keeps prev.count_cells when truncated", () => {
+  const cells = [["P1"]]
+  const p: PaintMap = { "0,0": "counts" }
+  const prev = { questions: [], breakdowns: [], data_blocks: { counts_cols: [1, 1], pct_row_cols: [], pct_col_cols: [] }, sample_size: 0, total_row: null, count_cells: [[9, 9]] } as any
+  const { db } = paintToParsedDb(cells, p, prev, true)
+  expect(db.count_cells).toEqual([[9, 9]])           // not re-derived
+})
