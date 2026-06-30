@@ -419,7 +419,8 @@ def _add_chart(slide, chart_def: Chart, state: ProjectState, el: dict, specific_
     data = extract_chart_data(state.inputs.db_path, _find_question(state, chart_def.question_id),
                               primary_bd, state.parsed_db.data_blocks if state.parsed_db else {},
                               allowed_categories=_allowed,
-                              total_row=state.parsed_db.total_row if state.parsed_db else None)
+                              total_row=state.parsed_db.total_row if state.parsed_db else None,
+                              overrides=state.parsed_db.value_overrides if state.parsed_db else None)
     cd = CategoryChartData()
     # Categories = options, Series = breakdown categories (or single "Total" if general)
     options = _find_question(state, chart_def.question_id).options

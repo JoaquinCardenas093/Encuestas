@@ -44,6 +44,7 @@ class ParsedDB(BaseModel):
     sample_size: int
     data_blocks: dict
     total_row: int | None = None
+    value_overrides: dict = {}
 
 
 class Chart(BaseModel):

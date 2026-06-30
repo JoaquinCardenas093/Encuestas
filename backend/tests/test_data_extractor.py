@@ -62,3 +62,23 @@ def test_extract_chart_data_no_total_row_pct_none(valid_xlsx_path):
     data = extract_chart_data(str(valid_xlsx_path), q1, "general", db.data_blocks, total_row=None)
     assert data["Total"]["Sí"]["pct"] is None
     assert data["Total"]["Sí"]["count"] == 458
+
+
+def test_extract_chart_data_override_count(valid_xlsx_path):
+    db = parse_xlsx(str(valid_xlsx_path))
+    q1 = db.questions[0]
+    key = f"{q1.id}|general|Total|Sí"
+    data = extract_chart_data(str(valid_xlsx_path), q1, "general", db.data_blocks,
+                              total_row=db.total_row, overrides={key: {"count": 999}})
+    assert data["Total"]["Sí"]["count"] == 999
+    assert abs(data["Total"]["Sí"]["pct"] - 458 / 500) < 1e-9  # pct untouched
+
+
+def test_extract_chart_data_override_pct(valid_xlsx_path):
+    db = parse_xlsx(str(valid_xlsx_path))
+    q1 = db.questions[0]
+    key = f"{q1.id}|general|Total|Sí"
+    data = extract_chart_data(str(valid_xlsx_path), q1, "general", db.data_blocks,
+                              total_row=db.total_row, overrides={key: {"pct": 0.5}})
+    assert data["Total"]["Sí"]["pct"] == 0.5
+    assert data["Total"]["Sí"]["count"] == 458  # count untouched

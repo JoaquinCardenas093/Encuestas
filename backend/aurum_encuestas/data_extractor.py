@@ -4,9 +4,14 @@ from .models import Breakdown, Question
 from .xlsx_parser import _slug, BREAKDOWN_ID_MAP
 
 
+def _override_key(question_id: str, breakdown_id: str, category: str, option: str) -> str:
+    return f"{question_id}|{breakdown_id}|{category}|{option}"
+
+
 def extract_chart_data(xlsx_path: str, question: Question, breakdown_id: str,
                        data_blocks: dict, allowed_categories: list[str] | None = None,
-                       total_row: int | None = None) -> dict:
+                       total_row: int | None = None,
+                       overrides: dict | None = None) -> dict:
     """Returns {breakdown_category: {option: {count, pct}}}.
     pct = count / column_total, where column_total = cell(total_row, col)."""
     wb = load_workbook(xlsx_path, data_only=True)
@@ -32,6 +37,13 @@ def extract_chart_data(xlsx_path: str, question: Question, breakdown_id: str,
             except (TypeError, ValueError):
                 count_v = 0
             pct_v = (count_v / total_v) if (total_v and total_v != 0) else None
+            if overrides:
+                ov = overrides.get(_override_key(getattr(question, "id", ""), breakdown_id, cat, opt))
+                if ov:
+                    if ov.get("count") is not None:
+                        count_v = ov["count"]
+                    if ov.get("pct") is not None:
+                        pct_v = ov["pct"]
             result[cat][opt] = {"count": count_v, "pct": pct_v}
     return result
 
@@ -42,6 +54,7 @@ def extract_all_breakdowns_data(
     breakdowns: list[Breakdown],
     data_blocks: dict,
     total_row: int | None = None,
+    overrides: dict | None = None,
 ) -> dict:
     """Returns nested structure with every breakdown group for the question.
 
@@ -87,6 +100,13 @@ def extract_all_breakdowns_data(
                 except (TypeError, ValueError):
                     count_v = 0
                 pct_v = (count_v / total_v) if (total_v and total_v != 0) else None
+                if overrides:
+                    ov = overrides.get(_override_key(getattr(question, "id", ""), bd.id, cat, opt))
+                    if ov:
+                        if ov.get("count") is not None:
+                            count_v = ov["count"]
+                        if ov.get("pct") is not None:
+                            pct_v = ov["pct"]
                 cell_map[opt] = {"count": count_v, "pct": pct_v}
             cats[cat] = cell_map
         result[bd.id] = {"label": bd.label, "categories": cats}
