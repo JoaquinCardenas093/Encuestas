@@ -113,7 +113,7 @@ export function paintToParsedDb(
   const total_row = totalRows.length ? Math.min(...totalRows) + 1 : (prev.total_row ?? null)
 
   const count_cells = truncated
-    ? (prev.count_cells ?? [])
+    ? [...(prev.count_cells ?? [])]
     : entries
         .filter((e) => e.role === "counts")
         .map((e) => [e.r + 1, e.c + 1] as number[])
