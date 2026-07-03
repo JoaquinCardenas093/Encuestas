@@ -77,7 +77,7 @@ export interface GenerateAnalysisContext {
 export async function generateAnalysis(
   scope: "slide" | "chart",
   context: GenerateAnalysisContext,
-  opts?: { state?: any; slide_id?: string; target_id?: string | null },
+  opts?: { state?: any; slide_id?: string; target_id?: string | null; user_hint?: string },
 ): Promise<{ text: string; fallback: boolean }> {
   return request("/generate-analysis", {
     method: "POST",
@@ -88,6 +88,7 @@ export async function generateAnalysis(
       state: opts?.state ?? null,
       slide_id: opts?.slide_id ?? null,
       target_id: opts?.target_id ?? null,
+      user_hint: opts?.user_hint ?? null,
     }),
   })
 }

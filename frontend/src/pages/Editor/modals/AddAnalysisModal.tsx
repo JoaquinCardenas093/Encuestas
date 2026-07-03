@@ -15,6 +15,7 @@ interface Props {
 export default function AddAnalysisModal({ open, slide, db, onClose, onAdd }: Props) {
   const [scope, setScope] = useState<AnalysisScope>("slide")
   const [targetId, setTargetId] = useState<string>("")
+  const [userHint, setUserHint] = useState("")
   const [text, setText] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -30,6 +31,7 @@ export default function AddAnalysisModal({ open, slide, db, onClose, onAdd }: Pr
         state,
         slide_id: slide.id,
         target_id: scope === "slide" ? null : targetId,
+        user_hint: userHint,
       })
       setText(r.text)
     } catch (e) {
@@ -46,7 +48,7 @@ export default function AddAnalysisModal({ open, slide, db, onClose, onAdd }: Pr
       scope, target_id: scope === "slide" ? null : targetId,
       text, ai_generated: true, edited: false,
     })
-    setText(""); setScope("slide"); setTargetId("")
+    setText(""); setScope("slide"); setTargetId(""); setUserHint("")
     onClose()
   }
 
@@ -80,6 +82,15 @@ export default function AddAnalysisModal({ open, slide, db, onClose, onAdd }: Pr
           </select>
         </>
       )}
+
+      <label className="block text-xs text-neutral-400 mb-1">Contexto / guía (opcional)</label>
+      <textarea
+        value={userHint}
+        onChange={(e) => setUserHint(e.target.value)}
+        placeholder="Ej: enfocate en las diferencias por edad; tono ejecutivo"
+        rows={2}
+        className="w-full mb-3 bg-neutral-900 border border-neutral-700 rounded px-3 py-2 text-sm resize-none"
+      />
 
       <button
         onClick={handleGenerate}
