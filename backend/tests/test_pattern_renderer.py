@@ -414,3 +414,42 @@ def test_kind_ole_table_routes_to_ole_table_renderer():
     """_KIND_RENDERERS maps ole_table → ole_table_renderer module path."""
     from aurum_encuestas.pattern_renderer import _KIND_RENDERERS
     assert _KIND_RENDERERS["ole_table"] == "aurum_encuestas.element_renderers.ole_table_renderer"
+
+
+def _make_chart_source(cid: str):
+    """Minimal source-chart mock with data for render_pattern chart rendering."""
+    return MagicMock(
+        id=cid,
+        question=MagicMock(options=["Sí", "No"]),
+        chart_type="PIE",
+        breakdown_ids=["general"],
+        colors=[],
+        title=None,
+        show_legend=False,
+        data={"General": {"Sí": {"count": 80, "pct": 0.8}, "No": {"count": 20, "pct": 0.2}}},
+    )
+
+
+def test_render_pattern_renders_all_charts_even_when_pattern_has_fewer_elements():
+    """A 1-chart-element pattern + a 2-chart slide must still render BOTH charts.
+    Extra charts are never silently dropped (overlap OK — AI layout repositions)."""
+    slide = _make_slide()
+    ctx = _make_ctx()
+    ctx.slide_config.charts = [_make_chart_source("ch0"), _make_chart_source("ch1")]
+
+    pattern = MagicMock()
+    pattern.extends = None
+    pattern.implementation = MagicMock()
+    pattern.implementation.elements = [
+        {
+            "kind": "chart", "id": "pie",
+            "position": {"x_rel": 0.05, "y_rel": 0.1, "w_rel": 0.4, "h_rel": 0.7},
+            "chart_type": "PIE",
+            "data_source": {"chart_ref_index": 0, "value_field": "pct"},
+            "labels": {"show_percentage": True}, "legend": "none", "sort": "none",
+        },
+    ]
+
+    render_pattern(pattern, slide, ctx, MagicMock(patterns=[]), [])
+    chart_shapes = [s for s in slide.shapes if getattr(s, "has_chart", False)]
+    assert len(chart_shapes) == 2, f"expected 2 charts rendered, got {len(chart_shapes)}"

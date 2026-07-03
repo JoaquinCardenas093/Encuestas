@@ -93,6 +93,43 @@ def render_pattern(
                 expanded.append(new_el)
         else:
             expanded.append(el)
+
+    # Guarantee every chart renders. Fixed-element patterns (e.g. a 1-chart
+    # demographic pattern matched on a 2-chart slide) reference only some
+    # chart_ref_index values, so extra charts would be silently dropped.
+    # Synthesize a fallback chart element for each uncovered chart. Overlap /
+    # overflow is acceptable — "AI sugiere layout" repositions afterward.
+    if charts_list:
+        covered = {
+            (e.get("data_source") or {}).get("chart_ref_index")
+            for e in expanded
+            if e.get("kind") == "chart"
+        }
+        missing = [i for i in range(len(charts_list)) if i not in covered]
+        if missing:
+            template = next((e for e in expanded if e.get("kind") == "chart"), None)
+            cols = min(len(missing), 3)
+            for k, i in enumerate(missing):
+                if template is not None:
+                    new_el = copy.deepcopy(template)
+                    new_el.pop("_repeat", None)
+                else:
+                    new_el = {"kind": "chart", "labels": {}, "legend": "none", "sort": "none"}
+                new_el["id"] = f"fallback_chart_{i}"
+                r, c = divmod(k, cols)
+                cell_w = (1.0 - 0.06 - 0.02 * (cols - 1)) / cols
+                new_el["position"] = {
+                    "x_rel": 0.03 + c * (cell_w + 0.02),
+                    "y_rel": 0.14 + r * 0.42,
+                    "w_rel": cell_w,
+                    "h_rel": 0.38,
+                }
+                ds = dict(new_el.get("data_source") or {})
+                ds["chart_ref_index"] = i
+                ds.setdefault("value_field", "pct")
+                new_el["data_source"] = ds
+                expanded.append(new_el)
+
     # Re-run topological sort after fan-out so per-clone IDs (e.g. grid_chart_0)
     # are correctly ordered if future patterns anchor against them.
     ordered_elements = _topological_sort(expanded)
