@@ -283,6 +283,7 @@ class GenerateAnalysisRequest(BaseModel):
     state: dict | None = None  # ProjectState for backend data extraction
     slide_id: str | None = None
     target_id: str | None = None
+    user_hint: str | None = None
 
 
 @app.post("/api/generate-analysis")
@@ -295,7 +296,7 @@ async def generate_analysis_endpoint(req: GenerateAnalysisRequest):
         except Exception:
             pass  # keep frontend-provided ctx as fallback
     try:
-        text = generate_analysis(req.scope, ctx)
+        text = generate_analysis(req.scope, ctx, req.user_hint)
         return {"text": text, "fallback": False}
     except Exception:
         return {"text": "[Análisis no disponible — editar manualmente]", "fallback": True}

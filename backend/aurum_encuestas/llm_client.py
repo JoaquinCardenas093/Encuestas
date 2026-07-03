@@ -35,9 +35,11 @@ def _build_client() -> Anthropic | None:
 _client: Anthropic | None = _build_client()
 
 
-def generate_analysis(scope: str, context: dict) -> str:
+def generate_analysis(scope: str, context: dict, user_hint: str | None = None) -> str:
     if _client is None:
         raise LLMError("ANTHROPIC_API_KEY no configurada. Agregá a .env y reiniciá el backend.")
+
+    hint = (user_hint or "").strip()[:500]
 
     charts_block = context.get("charts")
     if charts_block:
@@ -65,6 +67,13 @@ Breakdown: {context.get('breakdown_label', '')}
 Datos: {json.dumps(context.get('data', {}), ensure_ascii=False)}
 Scope: {scope}
 """
+
+    if hint:
+        user_msg += (
+            f"\nGuía del usuario (prioridad alta): {hint}\n"
+            f"Enfocá y encuadrá el análisis según esta guía, sin inventar datos "
+            f"ni contradecir las cifras.\n"
+        )
 
     try:
         msg = _client.messages.create(

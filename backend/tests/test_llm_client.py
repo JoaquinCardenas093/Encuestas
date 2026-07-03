@@ -162,6 +162,53 @@ def test_suggest_layout_invalid_json_falls_back(mock_client):
     assert res["source"] in ("heuristic", "ai_fallback")
 
 
+def _fake_msg(text="ok"):
+    m = MagicMock()
+    m.content = [MagicMock(text=text)]
+    m.usage = MagicMock(input_tokens=10, output_tokens=5, cache_read_input_tokens=0)
+    return m
+
+
+_BASE_CTX = {"section_title": "S", "question_text": "Q", "options": ["Sí", "No"],
+             "breakdown_label": "General",
+             "data": {"Total": {"Sí": {"count": 50, "pct": 0.5}, "No": {"count": 50, "pct": 0.5}}}}
+
+
+@patch("aurum_encuestas.llm_client._client")
+def test_generate_analysis_includes_user_hint(mock_client):
+    mock_client.messages.create.return_value = _fake_msg()
+    generate_analysis(scope="chart", context=dict(_BASE_CTX), user_hint="enfocate en jóvenes")
+    _, kwargs = mock_client.messages.create.call_args
+    user_msg = kwargs["messages"][0]["content"]
+    assert "Guía del usuario" in user_msg
+    assert "enfocate en jóvenes" in user_msg
+
+
+@patch("aurum_encuestas.llm_client._client")
+def test_generate_analysis_blank_hint_unchanged(mock_client):
+    mock_client.messages.create.return_value = _fake_msg()
+    generate_analysis(scope="chart", context=dict(_BASE_CTX), user_hint="   ")
+    _, k1 = mock_client.messages.create.call_args
+    msg_hinted = k1["messages"][0]["content"]
+    mock_client.messages.create.reset_mock()
+    mock_client.messages.create.return_value = _fake_msg()
+    generate_analysis(scope="chart", context=dict(_BASE_CTX))  # no hint arg
+    _, k2 = mock_client.messages.create.call_args
+    msg_plain = k2["messages"][0]["content"]
+    assert "Guía del usuario" not in msg_hinted
+    assert msg_hinted == msg_plain
+
+
+@patch("aurum_encuestas.llm_client._client")
+def test_generate_analysis_hint_capped_500(mock_client):
+    mock_client.messages.create.return_value = _fake_msg()
+    generate_analysis(scope="chart", context=dict(_BASE_CTX), user_hint="Z" * 900)
+    _, kwargs = mock_client.messages.create.call_args
+    user_msg = kwargs["messages"][0]["content"]
+    assert "Z" * 500 in user_msg
+    assert "Z" * 501 not in user_msg
+
+
 def test_layout_system_includes_aurora_few_shot():
     from aurum_encuestas.llm_client import LAYOUT_SYSTEM
     # Must mention three reference cases
