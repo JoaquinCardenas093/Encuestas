@@ -100,11 +100,14 @@ def render_pattern(
     # Synthesize a fallback chart element for each uncovered chart. Overlap /
     # overflow is acceptable — "AI sugiere layout" repositions afterward.
     if charts_list:
-        covered = {
-            (e.get("data_source") or {}).get("chart_ref_index")
-            for e in expanded
-            if e.get("kind") == "chart"
-        }
+        # A chart element without an explicit chart_ref_index defaults to index 0
+        # at render time — count it as covering 0 so we don't double-render chart 0.
+        covered = set()
+        for e in expanded:
+            if e.get("kind") != "chart":
+                continue
+            idx = (e.get("data_source") or {}).get("chart_ref_index")
+            covered.add(idx if idx is not None else 0)
         missing = [i for i in range(len(charts_list)) if i not in covered]
         if missing:
             template = next((e for e in expanded if e.get("kind") == "chart"), None)
