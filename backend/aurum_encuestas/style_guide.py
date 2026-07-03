@@ -484,7 +484,7 @@ BUILTIN_STYLE_GUIDE = StyleGuide.model_validate({
             "id": "comparison_two_charts",
             "priority": 4,
             "trigger": {"field": "n_charts_in_slide", "$eq": 2},
-            "why_picked": "2 charts — side-by-side 50/50 layout con separador central.",
+            "why_picked": "2 charts — side-by-side 50/50 layout.",
             "implementation": {
                 "elements": [
                     {
@@ -499,13 +499,6 @@ BUILTIN_STYLE_GUIDE = StyleGuide.model_validate({
                         },
                         "legend": "bottom",
                         "sort": "desc_by_value",
-                    },
-                    {
-                        "kind": "shape",
-                        "id": "center_divider",
-                        "position": {"x_rel": 0.495, "y_rel": 0.10, "w_rel": 0.002, "h_rel": 0.78},
-                        "shape_type": "line",
-                        "style": {"color": "secondary", "width_pt": 0.5},
                     },
                     {
                         "kind": "chart",
