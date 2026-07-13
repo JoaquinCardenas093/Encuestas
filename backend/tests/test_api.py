@@ -564,8 +564,12 @@ def test_suggest_slide_layout_propagates_box_style(monkeypatch, valid_xlsx_path)
     """box_style='dashed' from AI element reaches the response positions dict."""
     import aurum_encuestas.api as api
     monkeypatch.setattr(api, "correct_slide_layout", lambda *a, **k: {
-        "elements": [{"id": "analysis_a1", "x_cm": 1.3, "y_cm": 4.0, "w_cm": 20.0, "h_cm": 3.0,
-                      "font_pt": 10.0, "box_style": "dashed"}],
+        "elements": [
+            {"id": "analysis_a1", "x_cm": 1.3, "y_cm": 4.0, "w_cm": 20.0, "h_cm": 3.0,
+             "font_pt": 10.0, "box_style": "dashed"},
+            {"id": "analysis_a2", "x_cm": 1.3, "y_cm": 8.0, "w_cm": 20.0, "h_cm": 3.0,
+             "font_pt": 10.0, "box_style": "solid"},  # invalid → must collapse to None
+        ],
         "extras": [], "changes": [],
     })
     from aurum_encuestas.models import ProjectState, ProjectInputs, Slide, Analysis
@@ -575,7 +579,10 @@ def test_suggest_slide_layout_propagates_box_style(monkeypatch, valid_xlsx_path)
         slides=[Slide(
             id="slide1",
             type="shell",
-            analyses=[Analysis(id="a1", scope="slide", text="Texto de análisis")],
+            analyses=[
+                Analysis(id="a1", scope="slide", text="Texto de análisis"),
+                Analysis(id="a2", scope="slide", text="Otro análisis"),
+            ],
         )],
     )
     r = client.post("/api/suggest-slide-layout", json={
@@ -587,3 +594,5 @@ def test_suggest_slide_layout_propagates_box_style(monkeypatch, valid_xlsx_path)
     assert "positions" in body
     assert "a1" in body["positions"], f"a1 not in positions: {list(body['positions'].keys())}"
     assert body["positions"]["a1"]["box_style"] == "dashed"
+    # Invalid box_style value collapses to None (no arbitrary strings pass through).
+    assert body["positions"]["a2"]["box_style"] is None

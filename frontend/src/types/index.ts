@@ -60,6 +60,7 @@ export interface LayoutBox {
   cy_emu: number
   font_pt?: number | null
   callout?: boolean
+  box_style?: "dashed" | null
 }
 
 export interface LayoutExtra {
