@@ -96,6 +96,7 @@ class LayoutBox(BaseModel):
     cy_emu: int
     font_pt: float | None = None
     callout: bool = False  # Render analysis as styled callout box (fill + rounded)
+    box_style: Literal["dashed"] | None = None  # dashed-border box wrapping analysis (AI-only)
 
 
 class LayoutExtra(BaseModel):

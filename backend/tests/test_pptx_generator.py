@@ -140,6 +140,50 @@ def test_build_pptx_empty_shell_no_crash(tmp_path, valid_xlsx_path, valid_templa
     assert len(prs.slides) == 1
 
 
+def test_add_dashed_box_has_dashed_border_and_no_fill():
+    from pptx import Presentation
+    from aurum_encuestas.pptx_generator import _add_dashed_box
+    from pptx.oxml.ns import qn
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    n0 = len(slide.shapes)
+    el = {"x": 500000, "y": 1200000, "cx": 8000000, "cy": 3000000}
+    _add_dashed_box(slide, "Texto de análisis", el)
+    assert len(slide.shapes) == n0 + 1
+    shape = slide.shapes[-1]
+    # dashed border present
+    ln = shape.line._get_or_add_ln()
+    dashes = ln.findall(qn("a:prstDash"))
+    assert dashes and dashes[0].get("val") == "dash"
+    # no solid fill (noFill / BACKGROUND)
+    assert shape.fill.type is None or "BACKGROUND" in str(shape.fill.type)
+    # text made it in
+    assert "Texto de análisis" in shape.text_frame.text
+
+
+def test_analyses_textboxes_uses_dashed_box_when_box_style_dashed(valid_template_path, valid_xlsx_path, monkeypatch):
+    # Build a slide_def with one slide-analysis and an AI layout whose LayoutBox
+    # has box_style="dashed"; assert _add_dashed_box is chosen (a shape with prstDash exists).
+    # Reuse whatever ProjectState/Slide construction the existing pptx_generator tests use;
+    # if none, spy on the dispatch by monkeypatching _add_dashed_box to record the call.
+    from aurum_encuestas import pptx_generator
+    called = {}
+    monkeypatch.setattr(pptx_generator, "_add_dashed_box",
+                        lambda *a, **k: called.setdefault("dashed", True))
+    monkeypatch.setattr(pptx_generator, "_add_callout",
+                        lambda *a, **k: called.setdefault("callout", True))
+    # Minimal: construct a slide with one analysis + an ai layout box_style=dashed and
+    # invoke _add_analyses_textboxes directly. See models.Slide/Analysis/SlideLayout/LayoutBox.
+    from pptx import Presentation
+    from aurum_encuestas.models import Slide, Analysis, SlideLayout, LayoutBox
+    prs = Presentation(); slide = prs.slides.add_slide(prs.slide_layouts[6])
+    an = Analysis(id="a1", scope="slide", target_id=None, text="X", ai_generated=True, edited=False)
+    layout = SlideLayout(positions={"a1": LayoutBox(x_emu=1, y_emu=1, cx_emu=100, cy_emu=100, box_style="dashed")})
+    slide_def = Slide(id="s1", type="shell", title="T", charts=[], analyses=[an], layout=layout)
+    pptx_generator._add_analyses_textboxes(slide, slide_def, {"x":0,"y":0,"cx":100,"cy":100}, None)
+    assert called.get("dashed") and not called.get("callout")
+
+
 def test_add_chart_handles_empty_breakdown_ids_as_general():
     """Chart with breakdown_ids=[] plots the General row as single series."""
     from pptx import Presentation

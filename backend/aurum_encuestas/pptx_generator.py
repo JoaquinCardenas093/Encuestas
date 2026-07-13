@@ -327,16 +327,20 @@ def _add_analyses_textboxes(slide, slide_def: Slide, free_area: dict, font_overr
     for a in slide_def.analyses:
         font_pt = None
         callout = False
+        box_style = None
         if a.id in ai_positions:
             box = ai_positions[a.id]
             el = {"x": box.x_emu, "y": box.y_emu, "cx": box.cx_emu, "cy": box.cy_emu}
             font_pt = box.font_pt
             callout = box.callout
+            box_style = getattr(box, "box_style", None)
         else:
             el = {"x": band_x, "y": band_y + no_ai_index * per_cy, "cx": band_cx, "cy": per_cy}
             no_ai_index += 1
         try:
-            if callout:
+            if box_style == "dashed":
+                _add_dashed_box(slide, a.text, el, font_override, font_pt=font_pt)
+            elif callout:
                 _add_callout(slide, a.text, el, font_override, font_pt=font_pt)
             else:
                 _add_textbox(slide, a.text, el, font_override, font_pt=font_pt)
@@ -354,6 +358,40 @@ def _add_callout(slide, text: str, el: dict, font_name: str | None = None, font_
     shape.fill.solid()
     shape.fill.fore_color.rgb = RGBColor(0xD9, 0xD9, 0xD9)
     shape.line.fill.background()
+    tf = shape.text_frame
+    tf.word_wrap = True
+    try:
+        tf.auto_size = MSO_AUTO_SIZE.NONE
+    except Exception:
+        pass
+    p = tf.paragraphs[0]
+    for run in list(p.runs):
+        run.text = ""
+    run = p.add_run()
+    run.text = text or ""
+    if font_name:
+        run.font.name = font_name
+    if font_pt:
+        run.font.size = Pt(font_pt)
+    run.font.color.rgb = RGBColor(0x40, 0x40, 0x40)
+
+
+def _add_dashed_box(slide, text: str, el: dict, font_name: str | None = None, font_pt: float | None = None) -> None:
+    """Render analysis inside a dashed-border rectangle with NO fill (AI box_style='dashed')."""
+    from pptx.enum.shapes import MSO_SHAPE
+    from pptx.enum.text import MSO_AUTO_SIZE
+    from pptx.dml.color import RGBColor
+    from pptx.oxml.ns import qn
+    shape = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE,
+                                   Emu(el["x"]), Emu(el["y"]), Emu(el["cx"]), Emu(el["cy"]))
+    shape.fill.background()
+    shape.line.color.rgb = RGBColor(0x40, 0x40, 0x40)
+    shape.line.width = Pt(1)
+    ln = shape.line._get_or_add_ln()
+    prst = ln.makeelement(qn("a:prstDash"), {"val": "dash"})
+    for old in ln.findall(qn("a:prstDash")):
+        ln.remove(old)
+    ln.append(prst)
     tf = shape.text_frame
     tf.word_wrap = True
     try:
