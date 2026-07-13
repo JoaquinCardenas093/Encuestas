@@ -354,6 +354,7 @@ Devolvé JSON estricto con la lista de elementos corregidos + extras opcionales.
 REGLAS:
 - SOLO mové/redimensioná elementos EXISTENTES (chart_<id>, analysis_<id>). NO inventes datos ni texto nuevo.
 - Podés agregar `callout: true` a un analysis_<id> para que se renderice como caja destacada (fill gris claro + borde redondeado). Es decisión propia si visualmente lo amerita.
+- Podés agregar `box_style: "dashed"` a un analysis_<id> para envolverlo en una caja con borde punteado y SIN relleno (útil para "ficha técnica" o bloques de contexto destacado). Es mutuamente excluyente con `callout`: no combines ambos en el mismo elemento.
 - Podés agregar shapes `line` (separadores visuales sin texto). NO callouts standalone — solo flag sobre analyses.
 
 Formato exacto:
@@ -437,7 +438,7 @@ CHART TYPES (en available_chart_types, sólo los que VES):
 PIE, DONUT, BAR, COLUMN, BAR_HORIZONTAL, BAR_CLUSTERED, BAR_STACKED, COLUMN_CLUSTERED, COLUMN_STACKED, LINE, AREA, RADAR, TABLE_WITH_MINIBARS, TABLE_SIMPLE.
 
 ENUMS ESTRICTOS:
-- shape.shape_type: "line" o "rectangle" SOLAMENTE (no "line_dashed", no "rectangle_dashed_border").
+- shape.shape_type: "line" o "rectangle" SOLAMENTE (no "line_dashed", no "rectangle_dashed_border"). Para borde punteado en un análisis usá `box_style: "dashed"` sobre el analysis_<id>, NO un shape_type nuevo.
 - chart.sort: "none", "desc_by_value", "asc_by_value", "category_order" SOLAMENTE (no "descending"/"ascending").
 - legend: "none", "right", "left", "top", "bottom".
 

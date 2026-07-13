@@ -725,6 +725,7 @@ async def suggest_slide_layout_endpoint(req: SuggestSlideLayoutRequest):
             "cy_emu": int(float(el.get("h_cm", 0)) * EMU),
             "font_pt": font_pt,
             "callout": bool(el.get("callout", False)) if is_analysis else False,
+            "box_style": (el.get("box_style") if el.get("box_style") == "dashed" else None) if is_analysis else None,
         }
     # Backend safety net (multi-row pack + analysis band) ONLY when the user did
     # NOT provide a hint. With an explicit hint, trust Sonnet's positions fully —
