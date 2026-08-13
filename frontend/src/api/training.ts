@@ -1,4 +1,5 @@
 // Types matching M6 backend schema
+import { sessionHeader } from "./session"
 
 export interface CorpusPPT {
   filename: string
@@ -90,7 +91,7 @@ export interface ClearCacheResponse {
 // -- Fetch helpers --
 
 async function _get<T>(path: string): Promise<T> {
-  const r = await fetch(path)
+  const r = await fetch(path, { headers: { ...sessionHeader() } })
   if (!r.ok) throw await r.json()
   return r.json()
 }
@@ -99,8 +100,9 @@ async function _post<T>(path: string, body: unknown, isFormData = false): Promis
   const opts: RequestInit = { method: "POST" }
   if (isFormData) {
     opts.body = body as FormData
+    opts.headers = { ...sessionHeader() }
   } else {
-    opts.headers = { "Content-Type": "application/json" }
+    opts.headers = { "Content-Type": "application/json", ...sessionHeader() }
     opts.body = JSON.stringify(body)
   }
   const r = await fetch(path, opts)
@@ -111,7 +113,7 @@ async function _post<T>(path: string, body: unknown, isFormData = false): Promis
 async function _put<T>(path: string, body: unknown): Promise<T> {
   const r = await fetch(path, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...sessionHeader() },
     body: JSON.stringify(body),
   })
   if (!r.ok) throw await r.json()

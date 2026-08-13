@@ -1,3 +1,5 @@
+import { sessionHeader } from "./session"
+
 export interface RecentItem {
   path: string
   name: string
@@ -5,7 +7,7 @@ export interface RecentItem {
 }
 
 export async function getRecents(): Promise<RecentItem[]> {
-  const r = await fetch("/api/recents")
+  const r = await fetch("/api/recents", { headers: { ...sessionHeader() } })
   if (!r.ok) throw await r.json()
   return (await r.json()).recents
 }

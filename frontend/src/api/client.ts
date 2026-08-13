@@ -1,11 +1,16 @@
 import type { ParsedDB, ProjectState, TemplateInfo } from "../types"
+import { sessionHeader } from "./session"
 
 // Relative so requests go through the Vite dev-server proxy (see vite.config.ts).
 // Keeps remote access working: only port 5173 needs forwarding, backend stays host-local.
 const BASE = "/api"
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const r = await fetch(`${BASE}${path}`, init || { method: "GET" })
+  const r = await fetch(`${BASE}${path}`, {
+    method: init?.method ?? "GET",
+    ...init,
+    headers: { ...(init?.headers || {}), ...sessionHeader() },
+  })
   if (!r.ok) {
     let payload: any
     try {

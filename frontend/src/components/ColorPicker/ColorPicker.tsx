@@ -3,6 +3,7 @@ import { createPortal } from "react-dom"
 import PaletteRow from "./PaletteRow"
 import HexInput from "./HexInput"
 import { useStyleGuideStore } from "../../store/styleGuide"
+import { sessionHeader } from "../../api/session"
 
 // Built-in default 11 neutral greys + accent colors (spec Q15-A)
 const DEFAULT_COLORS = [
@@ -32,7 +33,7 @@ export default function ColorPicker({ open, value, onChange, onClose, anchorRef 
 
   useEffect(() => {
     if (!open) return
-    fetch(RECENT_COLORS_ENDPOINT)
+    fetch(RECENT_COLORS_ENDPOINT, { headers: { ...sessionHeader() } })
       .then((r) => r.ok ? r.json() : { recent_colors: [] })
       .then((data) => setRecentColors(data.recent_colors ?? []))
       .catch(() => setRecentColors([]))
