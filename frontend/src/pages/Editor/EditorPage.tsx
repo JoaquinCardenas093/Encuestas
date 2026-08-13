@@ -9,6 +9,18 @@ import Preview from "./Preview"
 import ConfigPanel from "./ConfigPanel"
 import EditorFooter from "./EditorFooter"
 
+export function nextSelectionAfterDelete(
+  slides: { id: string }[],
+  deletedId: string,
+  selectedId: string | null,
+): string | null {
+  if (deletedId !== selectedId) return selectedId
+  const idx = slides.findIndex((s) => s.id === deletedId)
+  const remaining = slides.filter((s) => s.id !== deletedId)
+  const next = remaining[idx - 1] ?? remaining[0] ?? null
+  return next ? next.id : null
+}
+
 export default function EditorPage() {
   const [params, setParams] = useSearchParams()
   const showWizard = params.get("wizard") === "1"
