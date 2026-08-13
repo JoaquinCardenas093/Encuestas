@@ -5,7 +5,7 @@ describe("client session header", () => {
   afterEach(() => vi.restoreAllMocks())
 
   it("recents fetch carries X-Session-Id", async () => {
-    const spy = vi.spyOn(global, "fetch").mockResolvedValue(
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ recents: [] }), { status: 200 }),
     )
     await getRecents()

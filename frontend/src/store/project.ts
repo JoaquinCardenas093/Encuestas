@@ -50,12 +50,12 @@ interface NewProjectArgs {
 
 interface Store {
   state: ProjectState | null
-  projectPath: string | null
+  projectName: string | null
   parsedDb: ParsedDB | null
   templateInfo: TemplateInfo | null
 
   setNewProject(args: NewProjectArgs): void
-  setProjectPath(path: string | null): void
+  setProjectName(name: string | null): void
   setParsedDb(db: ParsedDB | null): void
   setTemplateInfo(info: TemplateInfo | null): void
   loadProjectState(state: ProjectState): void
@@ -117,7 +117,7 @@ export const useProjectStore = create<Store>()(
   temporal(
     (set, get) => ({
       state: null,
-      projectPath: null,
+      projectName: null,
       parsedDb: null,
       templateInfo: null,
 
@@ -138,7 +138,7 @@ export const useProjectStore = create<Store>()(
         })
       },
 
-      setProjectPath(path) { set({ projectPath: path }) },
+      setProjectName(name) { set({ projectName: name }) },
       setParsedDb(db) { set({ parsedDb: db }); const s = get().state; if (s) set({ state: { ...s, parsed_db: db } }) },
       setTemplateInfo(info) { set({ templateInfo: info }) },
       loadProjectState(raw) { set({ state: _migrateProjectState(raw) }) },

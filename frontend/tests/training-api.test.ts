@@ -33,7 +33,10 @@ describe("listCorpus", () => {
     const res = await listCorpus()
     expect(res.pptxs).toHaveLength(1)
     expect(res.pptxs[0].filename).toBe("a.pptx")
-    expect(mockFetch).toHaveBeenCalledWith("/api/training/corpus/list")
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/api/training/corpus/list",
+      expect.objectContaining({ headers: expect.objectContaining({ "X-Session-Id": expect.any(String) }) }),
+    )
   })
 
   it("throws on non-ok response", async () => {
@@ -80,7 +83,10 @@ describe("getAnalysisStatus", () => {
     const res = await getAnalysisStatus("job-123")
     expect(res.progress).toBe(50)
     expect(res.status).toBe("running")
-    expect(mockFetch).toHaveBeenCalledWith("/api/training/analysis-status/job-123")
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/api/training/analysis-status/job-123",
+      expect.objectContaining({ headers: expect.objectContaining({ "X-Session-Id": expect.any(String) }) }),
+    )
   })
 })
 

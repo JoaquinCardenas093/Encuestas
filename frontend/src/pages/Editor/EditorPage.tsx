@@ -43,10 +43,10 @@ export default function EditorPage() {
   useKeyboardShortcuts({
     "Cmd+s": async () => {
       const cur = useProjectStore.getState().state
-      const path = useProjectStore.getState().projectPath
-      if (cur && path) {
+      const name = useProjectStore.getState().projectName
+      if (cur && name) {
         const api = await import("../../api/client")
-        await api.saveProject(path, cur)
+        await api.saveProject(name, cur)
       }
     },
     "Cmd+n": () => { if (hasSeparator) addShell() },

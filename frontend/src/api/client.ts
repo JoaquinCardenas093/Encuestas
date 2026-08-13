@@ -41,19 +41,19 @@ export async function parseTemplate(file: File): Promise<TemplateInfo> {
   return uploadFile("/parse-template", file)
 }
 
-export async function saveProject(path: string, state: ProjectState): Promise<{ saved: boolean; path: string }> {
+export async function saveProject(name: string, state: ProjectState): Promise<{ saved: boolean; name: string }> {
   return request("/save-project", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ path, state }),
+    body: JSON.stringify({ name, state }),
   })
 }
 
-export async function loadProject(path: string): Promise<ProjectState> {
+export async function loadProject(name: string): Promise<ProjectState> {
   return request("/load-project", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ path }),
+    body: JSON.stringify({ name }),
   })
 }
 

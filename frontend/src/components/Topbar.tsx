@@ -9,8 +9,8 @@ import RelocateModal from "./RelocateModal"
 
 export default function Topbar() {
   const state = useProjectStore((s) => s.state)
-  const projectPath = useProjectStore((s) => s.projectPath)
-  const setProjectPath = useProjectStore((s) => s.setProjectPath)
+  const projectName = useProjectStore((s) => s.projectName)
+  const setProjectName = useProjectStore((s) => s.setProjectName)
   const loadProjectState = useProjectStore((s) => s.loadProjectState)
   const dbName = state ? state.inputs.db_path.split("/").pop() : null
   const tplName = state ? state.inputs.template_path.split("/").pop() : null
@@ -25,19 +25,19 @@ export default function Topbar() {
 
   const handleSave = async () => {
     if (!state) return
-    let path = projectPath
-    if (!path) {
-      path = window.prompt("Ruta para guardar (ej: /Users/me/Documents/p.aurum.json)") || ""
-      if (!path) return
+    let name = projectName
+    if (!name) {
+      name = window.prompt("Nombre del proyecto") || ""
+      if (!name) return
     }
-    await api.saveProject(path, state)
-    setProjectPath(path)
+    await api.saveProject(name, state)
+    setProjectName(name)
   }
 
-  const handleOpenRecent = async (path: string) => {
-    const loadedState = await api.loadProject(path)
+  const handleOpenRecent = async (name: string) => {
+    const loadedState = await api.loadProject(name)
     loadProjectState(loadedState)
-    setProjectPath(path)
+    setProjectName(name)
     setShowRecents(false)
   }
 

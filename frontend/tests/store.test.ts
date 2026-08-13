@@ -5,8 +5,13 @@ describe("project store", () => {
   beforeEach(() => {
     useProjectStore.setState({
       state: null,
-      projectPath: null,
+      projectName: null,
     })
+  })
+
+  it("setProjectName updates projectName", () => {
+    useProjectStore.getState().setProjectName("mi-proyecto")
+    expect(useProjectStore.getState().projectName).toBe("mi-proyecto")
   })
 
   it("initial state is null", () => {

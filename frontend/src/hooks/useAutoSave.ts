@@ -4,19 +4,19 @@ import { useProjectStore } from "../store/project"
 
 export function useAutoSave(intervalMs: number = 5000) {
   const state = useProjectStore((s) => s.state)
-  const path = useProjectStore((s) => s.projectPath)
+  const name = useProjectStore((s) => s.projectName)
   const lastSavedRef = useRef<string>("")
 
   useEffect(() => {
-    if (!state || !path) return
+    if (!state || !name) return
     const handle = setInterval(async () => {
       const cur = useProjectStore.getState().state
-      const curPath = useProjectStore.getState().projectPath
-      if (!cur || !curPath) return
+      const curName = useProjectStore.getState().projectName
+      if (!cur || !curName) return
       const snapshot = JSON.stringify(cur)
       if (snapshot === lastSavedRef.current) return
       try {
-        await api.saveProject(curPath, cur)
+        await api.saveProject(curName, cur)
         lastSavedRef.current = snapshot
         useProjectStore.setState({ state: { ...cur, updated_at: new Date().toISOString() } })
       } catch {
@@ -24,5 +24,5 @@ export function useAutoSave(intervalMs: number = 5000) {
       }
     }, intervalMs)
     return () => clearInterval(handle)
-  }, [state, path, intervalMs])
+  }, [state, name, intervalMs])
 }
