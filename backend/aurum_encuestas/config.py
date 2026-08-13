@@ -15,6 +15,14 @@ def get_aurum_dir() -> Path:
     return Path(os.environ.get("HOME", os.path.expanduser("~"))) / ".aurum"
 
 
+def get_session_dir() -> Path:
+    """Per-session dir (uploads/config/projects). Falls back to the global aurum dir."""
+    from .session import get_session
+    sid = get_session()
+    base = get_aurum_dir()
+    return base / "sessions" / sid if sid else base
+
+
 def get_training_dir() -> Path:
     d = get_aurum_dir() / "training"
     d.mkdir(parents=True, exist_ok=True)
@@ -22,7 +30,7 @@ def get_training_dir() -> Path:
 
 
 def get_config_path() -> Path:
-    return get_aurum_dir() / "config.json"
+    return get_session_dir() / "config.json"
 
 
 def get_layout_bank_path() -> Path:

@@ -96,9 +96,9 @@ async def _save_upload_tmp(file: UploadFile, suffix: str) -> str:
 
 
 def _persist_upload(file_bytes: bytes, original_name: str) -> str:
-    """Save uploaded file to ~/.aurum/uploads/ keyed by filename. Returns absolute path."""
-    from .config import get_aurum_dir
-    uploads_dir = get_aurum_dir() / "uploads"
+    """Save uploaded file to <session>/uploads/ keyed by filename. Returns absolute path."""
+    from .config import get_session_dir
+    uploads_dir = get_session_dir() / "uploads"
     uploads_dir.mkdir(parents=True, exist_ok=True)
     safe_name = Path(original_name).name  # strip any path component
     dest = uploads_dir / safe_name

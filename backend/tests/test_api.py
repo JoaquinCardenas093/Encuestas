@@ -218,6 +218,18 @@ def test_analyze_with_ai_returns_job_id():
     assert "job_id" in r.json()
 
 
+def test_uploads_are_session_isolated(valid_xlsx_path, tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    with open(valid_xlsx_path, "rb") as f:
+        data = f.read()
+    files = {"file": ("data.xlsx", data, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}
+    r1 = client.post("/api/parse-xlsx", files=files, headers={"X-Session-Id": "s1"})
+    r2 = client.post("/api/parse-xlsx", files=files, headers={"X-Session-Id": "s2"})
+    assert r1.status_code == 200 and r2.status_code == 200
+    assert (tmp_path / ".aurum" / "sessions" / "s1" / "uploads" / "data.xlsx").exists()
+    assert (tmp_path / ".aurum" / "sessions" / "s2" / "uploads" / "data.xlsx").exists()
+
+
 def test_analysis_status_unknown_job():
     r = client.get("/api/training/analysis-status/nonexistent-job-id")
     assert r.status_code == 404

@@ -6,10 +6,28 @@ from aurum_encuestas.config import (
     get_corpus_dir,
     get_layout_bank_path,
     get_render_cache_dir,
+    get_session_dir,
     get_style_guide_path,
     get_training_dir,
     load_recents,
 )
+
+
+def test_session_dir_falls_back_without_session(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    from aurum_encuestas.session import set_session
+    set_session(None)
+    assert get_session_dir() == get_aurum_dir()
+
+
+def test_session_dir_namespaced(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    from aurum_encuestas.session import set_session
+    set_session("s1")
+    try:
+        assert get_session_dir() == tmp_path / ".aurum" / "sessions" / "s1"
+    finally:
+        set_session(None)
 
 
 def test_aurum_dir_default(tmp_path, monkeypatch):
