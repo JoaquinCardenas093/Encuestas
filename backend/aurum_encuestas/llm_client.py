@@ -26,7 +26,7 @@ Idioma: español neutral. Longitud máxima ESTRICTA: 3 oraciones.
 
 
 def _build_client() -> Anthropic | None:
-    key = os.environ.get("ANTHROPIC_API_KEY")
+    key = os.environ.get("REACT_APP_ANTHROPIC_API_KEY")
     if not key:
         return None
     return Anthropic(api_key=key)
