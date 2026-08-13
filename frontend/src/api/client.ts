@@ -65,12 +65,22 @@ export async function previewSlide(state: ProjectState, slideIndex: number): Pro
   })
 }
 
-export async function exportPptx(state: ProjectState, path: string): Promise<{ exported: boolean; path: string; size: number }> {
-  return request("/export-pptx", {
+export async function exportPptx(state: ProjectState, filename: string): Promise<void> {
+  const r = await fetch(`${BASE}/export-pptx`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ state, path }),
+    headers: { "Content-Type": "application/json", ...sessionHeader() },
+    body: JSON.stringify({ state, filename }),
   })
+  if (!r.ok) throw await r.json().catch(() => ({ message: "Error al exportar" }))
+  const blob = await r.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = filename.endsWith(".pptx") ? filename : `${filename}.pptx`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
 }
 
 export interface GenerateAnalysisContext {
