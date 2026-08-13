@@ -2,16 +2,17 @@ import { useState } from "react"
 import { DndContext, closestCenter, DragEndEvent, PointerSensor, useSensor, useSensors } from "@dnd-kit/core"
 import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { Plus } from "lucide-react"
+import { Plus, X } from "lucide-react"
 import { useProjectStore } from "../../store/project"
 import AddSeparatorModal from "./modals/AddSeparatorModal"
 
 interface Props {
   selectedId: string | null
   onSelect(id: string): void
+  onDelete(id: string): void
 }
 
-export default function SlideRail({ selectedId, onSelect }: Props) {
+export default function SlideRail({ selectedId, onSelect, onDelete }: Props) {
   const slides = useProjectStore((s) => s.state?.slides ?? [])
   const addSeparator = useProjectStore((s) => s.addSeparator)
   const addShell = useProjectStore((s) => s.addShell)
@@ -41,6 +42,7 @@ export default function SlideRail({ selectedId, onSelect }: Props) {
               index={idx}
               selected={selectedId === slide.id}
               onClick={() => onSelect(slide.id)}
+              onDelete={() => onDelete(slide.id)}
             />
           ))}
         </SortableContext>
@@ -77,11 +79,13 @@ function SortableThumb({
   index,
   selected,
   onClick,
+  onDelete,
 }: {
   slide: any
   index: number
   selected: boolean
   onClick(): void
+  onDelete(): void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: slide.id })
   const style = { transform: CSS.Transform.toString(transform), transition }
@@ -94,8 +98,20 @@ function SortableThumb({
       {...attributes}
       {...listeners}
       onClick={onClick}
-      className={`relative aspect-[16/9] bg-white rounded cursor-pointer border-2 ${selected ? "border-amber-400" : isSep ? "border-accent" : "border-transparent"} ${isSep ? "bg-neutral-200" : ""}`}
+      className={`group relative aspect-[16/9] bg-white rounded cursor-pointer border-2 ${selected ? "border-amber-400" : isSep ? "border-accent" : "border-transparent"} ${isSep ? "bg-neutral-200" : ""}`}
     >
+      <button
+        data-testid={`delete-slide-${slide.id}`}
+        aria-label="eliminar slide"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation()
+          if (window.confirm("¿Eliminar esta slide?")) onDelete()
+        }}
+        className="absolute -top-2 -right-2 z-10 bg-neutral-800 hover:bg-red-700 text-neutral-300 hover:text-white rounded-full w-4 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+      >
+        <X size={10} />
+      </button>
       <span className="absolute -top-2 -left-2 bg-neutral-800 text-accent text-[10px] px-1.5 rounded">
         {index + 1}
       </span>
