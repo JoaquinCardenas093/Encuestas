@@ -23,6 +23,7 @@ from .pptx_generator import build_pptx
 from .pptx_template import load_template
 from .project_store import load_project, save_project
 from .render_service import render_slide_to_png
+from .session import safe_session_id, set_session
 from .style_guide import (
     BUILTIN_STYLE_GUIDE,
     Pattern,
@@ -55,6 +56,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def _session_ctx(request: Request, call_next):
+    set_session(safe_session_id(request.headers.get("X-Session-Id")))
+    return await call_next(request)
 
 
 @app.exception_handler(AurumError)
