@@ -29,7 +29,14 @@ export default function EditorPage() {
 
   const state = useProjectStore((s) => s.state)
   const addShell = useProjectStore((s) => s.addShell)
+  const removeSlide = useProjectStore((s) => s.removeSlide)
   const hasSeparator = state?.slides.some((sl) => sl.type === "separator")
+
+  function handleDeleteSlide(id: string) {
+    const next = nextSelectionAfterDelete(slides, id, selectedId)
+    removeSlide(id)
+    setSelectedId(next)
+  }
 
   useAutoSave(5000)
 
@@ -57,11 +64,11 @@ export default function EditorPage() {
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 grid grid-cols-[130px_1fr_320px] overflow-hidden">
-        <SlideRail selectedId={selectedId} onSelect={setSelectedId} />
+        <SlideRail selectedId={selectedId} onSelect={setSelectedId} onDelete={handleDeleteSlide} />
         <Preview slideId={selectedId} />
         <ConfigPanel slideId={selectedId} />
       </div>
-      <EditorFooter />
+      <EditorFooter selectedId={selectedId} onDeleteSlide={handleDeleteSlide} />
     </div>
   )
 }
