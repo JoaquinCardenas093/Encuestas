@@ -22,4 +22,21 @@ describe("EditorFooter", () => {
     await userEvent.click(screen.getByRole("button", { name: /reset todo/i }))
     expect(useProjectStore.getState().state!.slides).toEqual([])
   })
+
+  it("Eliminar slide is disabled when nothing selected", () => {
+    useProjectStore.setState({ state: null })
+    useProjectStore.getState().setNewProject({ name: "T", db_path: "./x", template_path: "./y" })
+    render(<EditorFooter selectedId={null} onDeleteSlide={() => {}} />)
+    expect(screen.getByRole("button", { name: /eliminar slide/i })).toBeDisabled()
+  })
+
+  it("Eliminar slide calls onDeleteSlide with selected id after confirm", async () => {
+    useProjectStore.setState({ state: null })
+    useProjectStore.getState().setNewProject({ name: "T", db_path: "./x", template_path: "./y" })
+    vi.spyOn(window, "confirm").mockReturnValue(true)
+    const onDelete = vi.fn()
+    render(<EditorFooter selectedId={"sl-1"} onDeleteSlide={onDelete} />)
+    await userEvent.click(screen.getByRole("button", { name: /eliminar slide/i }))
+    expect(onDelete).toHaveBeenCalledWith("sl-1")
+  })
 })
