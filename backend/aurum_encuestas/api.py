@@ -126,27 +126,38 @@ async def parse_template_endpoint(file: UploadFile = File(...)):
     return result
 
 
+def _project_path(name: str) -> Path:
+    from .config import get_session_dir
+    safe = Path(name).name
+    if not safe.endswith(".aurum.json"):
+        safe += ".aurum.json"
+    d = get_session_dir() / "projects"
+    d.mkdir(parents=True, exist_ok=True)
+    return d / safe
+
+
 class SaveProjectRequest(BaseModel):
-    path: str
+    name: str
     state: dict
 
 
 @app.post("/api/save-project")
 async def save_project_endpoint(req: SaveProjectRequest):
     state = ProjectState.model_validate(req.state)
-    save_project(state, req.path)
-    add_recent(req.path, state.project_name)
-    return {"saved": True, "path": req.path}
+    p = _project_path(req.name)
+    save_project(state, str(p))
+    add_recent(req.name, state.project_name)
+    return {"saved": True, "name": req.name}
 
 
 class LoadProjectRequest(BaseModel):
-    path: str
+    name: str
 
 
 @app.post("/api/load-project")
 async def load_project_endpoint(req: LoadProjectRequest):
-    state = load_project(req.path)
-    return state.model_dump()
+    p = _project_path(req.name)
+    return load_project(str(p)).model_dump()
 
 
 class SheetGridRequest(BaseModel):

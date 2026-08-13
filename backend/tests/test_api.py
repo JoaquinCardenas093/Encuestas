@@ -55,12 +55,32 @@ def test_save_load_project_endpoints(tmp_path):
         "inputs": {"db_path": "./x.xlsx", "template_path": "./t.pptx", "font_override": None},
         "slides": [],
     }
-    out = str(tmp_path / "p.aurum.json")
-    r = client.post("/api/save-project", json={"path": out, "state": proj})
+    r = client.post("/api/save-project", json={"name": "p", "state": proj}, headers={"X-Session-Id": "sess-a"})
     assert r.status_code == 200
-    r2 = client.post("/api/load-project", json={"path": out})
+    r2 = client.post("/api/load-project", json={"name": "p"}, headers={"X-Session-Id": "sess-a"})
     assert r2.status_code == 200
     assert r2.json()["project_name"] == "Test"
+
+
+def test_save_load_project_by_name_isolated(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    state = {"project_name": "P1", "inputs": {"db_path": "x", "template_path": "y"}}
+    s = client.post("/api/save-project", json={"name": "p1", "state": state}, headers={"X-Session-Id": "s1"})
+    assert s.status_code == 200 and s.json()["name"] == "p1"
+    l1 = client.post("/api/load-project", json={"name": "p1"}, headers={"X-Session-Id": "s1"})
+    assert l1.status_code == 200 and l1.json()["project_name"] == "P1"
+    l2 = client.post("/api/load-project", json={"name": "p1"}, headers={"X-Session-Id": "s2"})
+    assert l2.status_code >= 400
+
+
+def test_save_project_name_traversal_is_contained(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    state = {"project_name": "Evil", "inputs": {"db_path": "x", "template_path": "y"}}
+    client.post("/api/save-project", json={"name": "../../evil", "state": state}, headers={"X-Session-Id": "s3"})
+    projects_dir = tmp_path / ".aurum" / "sessions" / "s3" / "projects"
+    written = list(projects_dir.glob("*.aurum.json"))
+    assert len(written) == 1
+    assert written[0].name == "evil.aurum.json"
 
 
 class TestPreviewSlide:
@@ -239,13 +259,12 @@ def test_recents_add_and_list(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     # save a project (should auto-add to recents)
     proj = {"version": 1, "project_name": "P1", "inputs": {"db_path": "./x", "template_path": "./y", "font_override": None}, "slides": []}
-    save_path = str(tmp_path / "p1.aurum.json")
-    client.post("/api/save-project", json={"path": save_path, "state": proj})
+    client.post("/api/save-project", json={"name": "p1", "state": proj}, headers={"X-Session-Id": "rec1"})
 
-    r = client.get("/api/recents")
+    r = client.get("/api/recents", headers={"X-Session-Id": "rec1"})
     assert r.status_code == 200
     recs = r.json()["recents"]
-    assert any(rec["path"] == save_path for rec in recs)
+    assert any(rec["path"] == "p1" for rec in recs)
 
 
 # ─── M6.8 T2: Corpus CRUD endpoints ─────────────────────────────────────────
