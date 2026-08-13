@@ -141,21 +141,31 @@ class TestExportPptx:
             ],
         }
 
-        out_path = str(tmp_path / "exported.pptx")
         req = {
             "state": state_dict,
-            "path": out_path,
+            "filename": "exported",
         }
         r = client.post("/api/export-pptx", json=req)
         assert r.status_code == 200
-        body = r.json()
-        assert body["exported"] is True
-        assert body["path"] == out_path
+        assert r.headers["content-disposition"].startswith("attachment")
+        assert "exported.pptx" in r.headers["content-disposition"]
+        assert len(r.content) > 0
 
-        # Verify file was written
+
+def test_export_pptx_is_download():
+    state = {"project_name": "T", "inputs": {"db_path": "x", "template_path": "y"}}
+
+    def fake_build(_state, path):
         from pathlib import Path
-        assert Path(out_path).exists()
-        assert Path(out_path).stat().st_size > 0
+        Path(path).write_bytes(b"PPTXDATA")
+
+    with patch("aurum_encuestas.api.build_pptx", side_effect=fake_build):
+        r = client.post("/api/export-pptx", json={"state": state, "filename": "reporte"})
+    assert r.status_code == 200
+    cd = r.headers["content-disposition"]
+    assert cd.startswith("attachment")
+    assert "reporte.pptx" in cd
+    assert r.content == b"PPTXDATA"
 
 
 @patch("aurum_encuestas.api.generate_analysis")

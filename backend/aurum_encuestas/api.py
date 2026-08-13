@@ -11,7 +11,8 @@ from typing import Literal
 from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from starlette.background import BackgroundTask
 from pydantic import BaseModel
 
 from .config import add_recent, get_corpus_dir, get_render_cache_dir, load_recents
@@ -263,18 +264,25 @@ async def preview_slide_endpoint(req: PreviewSlideRequest):
 
 class ExportPptxRequest(BaseModel):
     state: dict
-    path: str
+    filename: str = "presentacion.pptx"
 
 
 @app.post("/api/export-pptx")
 async def export_pptx_endpoint(req: ExportPptxRequest):
-    """Build and export a PPTX file from ProjectState to the given path."""
+    """Build a PPTX from ProjectState and return it as a browser download."""
     state = ProjectState.model_validate(req.state)
-    expanded = str(Path(req.path).expanduser())
-    Path(expanded).parent.mkdir(parents=True, exist_ok=True)
-    build_pptx(state, expanded)
-    size = Path(expanded).stat().st_size if Path(expanded).exists() else 0
-    return {"exported": True, "path": expanded, "size": size}
+    safe_name = Path(req.filename).name or "presentacion.pptx"
+    if not safe_name.endswith(".pptx"):
+        safe_name += ".pptx"
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pptx")
+    tmp.close()
+    build_pptx(state, tmp.name)
+    return FileResponse(
+        tmp.name,
+        media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        filename=safe_name,
+        background=BackgroundTask(lambda: Path(tmp.name).unlink(missing_ok=True)),
+    )
 
 
 class GenerateAnalysisRequest(BaseModel):
