@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from "react"
 import { createPortal } from "react-dom"
 import PaletteRow from "./PaletteRow"
 import HexInput from "./HexInput"
-import { useStyleGuideStore } from "../../store/styleGuide"
 import { sessionHeader } from "../../api/session"
 
 // Built-in default 11 neutral greys + accent colors (spec Q15-A)
@@ -28,8 +27,7 @@ export default function ColorPicker({ open, value, onChange, onClose, anchorRef 
   const popoverRef = useRef<HTMLDivElement>(null)
   const [coords, setCoords] = useState<{ top: number; left: number } | null>(null)
 
-  const styleGuide = useStyleGuideStore((s: { styleGuide: { global: { suggested_palette: string[] } } | null }) => s.styleGuide)
-  const suggestedPalette = styleGuide?.global.suggested_palette ?? []
+  const suggestedPalette: string[] = []
 
   useEffect(() => {
     if (!open) return

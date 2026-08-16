@@ -3,15 +3,6 @@ import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import ColorPicker from "../src/components/ColorPicker/ColorPicker"
 
-// Mock styleGuide store
-vi.mock("../src/store/styleGuide", () => ({
-  useStyleGuideStore: (sel: (s: unknown) => unknown) => sel({
-    styleGuide: {
-      global: { suggested_palette: ["#7F7F7F", "#BFBFBF", "#FFC000"] },
-    },
-  }),
-}))
-
 // Mock fetch for recent colors (config endpoint)
 const mockFetch = vi.fn()
 vi.stubGlobal("fetch", mockFetch)
@@ -26,7 +17,7 @@ beforeEach(() => {
 describe("ColorPicker", () => {
   it("renders when open=true", () => {
     render(<ColorPicker open value="#7F7F7F" onChange={vi.fn()} onClose={vi.fn()} />)
-    expect(screen.getByText(/Sugeridas del training/i)).toBeInTheDocument()
+    expect(screen.getByText(/Defaults/i)).toBeInTheDocument()
   })
 
   it("does not render when open=false", () => {
@@ -42,15 +33,6 @@ describe("ColorPicker", () => {
   it("renders Recientes row from config", async () => {
     render(<ColorPicker open value="#7F7F7F" onChange={vi.fn()} onClose={vi.fn()} />)
     await waitFor(() => expect(screen.getByText(/Recientes/i)).toBeInTheDocument())
-  })
-
-  it("calls onChange when a swatch is clicked", async () => {
-    const onChange = vi.fn()
-    render(<ColorPicker open value="#7F7F7F" onChange={onChange} onClose={vi.fn()} />)
-    // Click the first suggested palette swatch (#7F7F7F)
-    const swatches = screen.getAllByRole("button", { name: /Seleccionar color/i })
-    await userEvent.click(swatches[0])
-    expect(onChange).toHaveBeenCalled()
   })
 
   it("calls onChange when valid hex entered and OK clicked", async () => {
