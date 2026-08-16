@@ -95,6 +95,7 @@ def get_ai_logs_dir() -> Path:
     return d
 
 
+# Alias used by style_guide_analyzer
 def get_analysis_logs_dir() -> Path:
     """Alias for get_ai_logs_dir."""
     return get_ai_logs_dir()
