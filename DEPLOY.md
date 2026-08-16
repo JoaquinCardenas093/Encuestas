@@ -99,7 +99,80 @@ docker compose down               # frenar (el volumen aurum_data queda)
 docker compose up -d --build      # redeploy tras cambios de código
 ```
 
-Actualizar código (con git): `git pull && docker compose up -d --build`.
+Actualizar código a mano (con git): `git pull && docker compose up -d --build`.
+Para que esto pase solo en cada push, ver la sección siguiente.
+
+---
+
+## 7. Auto-deploy en cada push a `main` (opcional)
+
+Un webhook en el VPS recibe el push de GitHub, valida la firma HMAC y corre el
+deploy. Archivos ya en el repo: `deploy/deploy.sh`, `deploy/hooks.json`,
+`deploy/webhook.service`.
+
+```
+git push main → GitHub webhook → VPS:9000/hooks/deploy-aurum
+  → valida firma → git reset --hard origin/main → docker compose up -d --build
+```
+
+### 7.1 Instalar el webhook y preparar los archivos (en el VPS)
+
+```bash
+apt-get update && apt-get install -y webhook
+chmod +x /opt/aurum/deploy/deploy.sh
+```
+
+### 7.2 Crear el secret (elegí una cadena larga y aleatoria)
+
+Generá un secret y guardalo en un archivo **fuera del repo**:
+
+```bash
+SECRET=$(openssl rand -hex 32)
+echo "GITHUB_WEBHOOK_SECRET=$SECRET" > /etc/aurum-webhook.env
+chmod 600 /etc/aurum-webhook.env
+echo "Tu secret (copialo para GitHub): $SECRET"
+```
+
+Anotá el secret impreso — lo pegás en GitHub en el paso 7.4.
+
+### 7.3 Activar el servicio systemd
+
+```bash
+cp /opt/aurum/deploy/webhook.service /etc/systemd/system/aurum-webhook.service
+systemctl daemon-reload
+systemctl enable --now aurum-webhook
+systemctl status aurum-webhook --no-pager     # debe decir "active (running)"
+```
+
+Abrí el **puerto 9000** en el firewall de Vultr (panel → Firewall), o con ufw:
+`ufw allow 9000/tcp`.
+
+### 7.4 Configurar el webhook en GitHub
+
+En el repo → **Settings → Webhooks → Add webhook**:
+
+- **Payload URL:** `http://TU_IP:9000/hooks/deploy-aurum`
+- **Content type:** `application/json`
+- **Secret:** el que imprimió el paso 7.2
+- **Which events:** "Just the push event"
+- **Active:** ✓
+
+Guardá. GitHub manda un ping; en "Recent Deliveries" tenés que ver respuesta
+`200`.
+
+### 7.5 Probar
+
+Hacé un cambio, `git push`. En el VPS:
+
+```bash
+tail -f /var/log/aurum-deploy.log      # ves el deploy corriendo
+```
+
+En ~1-2 min la nueva versión queda arriba. Si algo falla, revisá también
+`journalctl -u aurum-webhook -f`.
+
+Nota: el deploy hace `git reset --hard origin/main` (descarta cambios locales del
+server). `.env` y `/etc/aurum-webhook.env` no se tocan porque están fuera del repo.
 
 ---
 
@@ -110,11 +183,10 @@ Actualizar código (con git): `git pull && docker compose up -d --build`.
 - **HTTPS (recomendado antes de uso real):** poné un dominio apuntando a la IP y
   agregá TLS. Lo más simple: Caddy como reverse proxy, o `certbot` + nginx. No
   incluido acá para mantenerlo mínimo; se puede sumar después.
-- **Export de PPTX:** el endpoint `/api/export-pptx` hoy escribe el archivo en una
-  ruta **del servidor** (`~/.aurum` vía volumen), no lo devuelve como descarga al
-  navegador. Para uso remoto real conviene cambiarlo a devolver el archivo como
-  download. Es cambio de código aparte, no bloquea el deploy.
-- **Un solo usuario a la vez:** el modelo de proyecto no está pensado para
-  concurrencia multiusuario con aislamiento. Para varios usuarios en paralelo hay
-  que revisar el store de proyectos. OK para uso personal / pocos usuarios.
+- **Export de PPTX:** ✅ resuelto — se descarga en el navegador (`FileResponse`).
+- **Aislamiento multiusuario:** ✅ por sesión de navegador (header `X-Session-Id`).
+  Uploads/recents/proyectos quedan aislados por navegador; sin login. Para cuentas
+  reales con contraseña haría falta auth (proyecto aparte).
+- **crypto.randomUUID:** en `http://IP` (sin HTTPS) el navegador no expone
+  `crypto.randomUUID`; el frontend ya tiene fallback. Con HTTPS anda nativo.
 - **RAM:** si LibreOffice falla al renderizar, subí el plan a 4 GB.
