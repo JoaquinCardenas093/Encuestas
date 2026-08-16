@@ -49,7 +49,6 @@ export default function Topbar() {
       <Link to="/" className="font-semibold text-accent">AurumEncuestas</Link>
       <nav className="flex gap-1">
         <NavLink to="/editor" className={tabClass}>Editor</NavLink>
-        <NavLink to="/training" className={tabClass}>Entrenamiento</NavLink>
       </nav>
       <div className="flex-1" />
       <div className="flex items-center gap-2">

@@ -1,7 +1,6 @@
 import { Route, Routes } from "react-router-dom"
 import Topbar from "./components/Topbar"
 import EditorPage from "./pages/Editor/EditorPage"
-import TrainingPage from "./pages/Training/TrainingPage"
 import Welcome from "./pages/Welcome"
 
 export default function App() {
@@ -12,7 +11,6 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Welcome />} />
           <Route path="/editor" element={<EditorPage />} />
-          <Route path="/training" element={<TrainingPage />} />
         </Routes>
       </main>
     </div>

@@ -6,7 +6,6 @@ import AddChartModal from "./modals/AddChartModal"
 import AddAnalysisModal from "./modals/AddAnalysisModal"
 import { ColorPicker } from "../../components/ColorPicker"
 import type { ChartType } from "../../types"
-import { useStyleGuideStore } from "../../store/styleGuide"
 
 const BUILTIN_CHART_TYPES: ChartType[] = [
   "PIE", "PIE_GROUPED",
@@ -64,10 +63,7 @@ export default function ConfigPanel({ slideId }: Props) {
   const addChart = useProjectStore((s) => s.addChart)
   const removeChart = useProjectStore((s) => s.removeChart)
   const updateChartField = useProjectStore((s) => s.updateChartField)
-  const styleGuide = useStyleGuideStore((s) => s.styleGuide)
-  const CHART_TYPES = (styleGuide?.available_chart_types?.length
-    ? styleGuide.available_chart_types
-    : BUILTIN_CHART_TYPES) as ChartType[]
+  const CHART_TYPES = BUILTIN_CHART_TYPES
   const updateSeparatorTitle = useProjectStore((s) => s.updateSeparatorTitle)
   const addAnalysis = useProjectStore((s) => s.addAnalysis)
   const removeAnalysis = useProjectStore((s) => s.removeAnalysis)

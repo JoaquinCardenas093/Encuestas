@@ -1,10 +1,9 @@
 import { useNavigate } from "react-router-dom"
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Upload, FileSpreadsheet, Presentation } from "lucide-react"
 import * as api from "../api/client"
 import { useFileUpload } from "../hooks/useUpload"
 import { useProjectStore } from "../store/project"
-import { useStyleGuideStore } from "../store/styleGuide"
 
 export default function Welcome() {
   const navigate = useNavigate()
@@ -18,14 +17,6 @@ export default function Welcome() {
   const setParsedDb = useProjectStore((s) => s.setParsedDb)
   const setTemplateInfo = useProjectStore((s) => s.setTemplateInfo)
   const setNewProject = useProjectStore((s) => s.setNewProject)
-
-  const { loadStyleGuide, loadCorpus } = useStyleGuideStore((s) => s)
-
-  useEffect(() => {
-    loadStyleGuide()
-    loadCorpus()
-  }, [])
-
 
   async function handleContinue() {
     if (!dbFile || !tplFile) return

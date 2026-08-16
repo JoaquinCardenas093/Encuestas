@@ -1,13 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
+import { describe, it, expect, beforeEach } from "vitest"
 import { render, screen } from "@testing-library/react"
 import ConfigPanel from "../src/pages/Editor/ConfigPanel"
 import { useProjectStore } from "../src/store/project"
 import type { Slide } from "../src/types"
 
-// Mock styleGuide store
-vi.mock("../src/store/styleGuide", () => ({
-  useStyleGuideStore: (sel: (s: unknown) => unknown) => sel({ styleGuide: null }),
-}))
 
 const makeSlide = (matched_pattern: string | null | undefined): Slide => ({
   id: "sl1",

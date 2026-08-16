@@ -1,23 +1,9 @@
-import { describe, expect, it, vi } from "vitest"
+import { describe, expect, it } from "vitest"
 import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import AddChartModal from "../src/pages/Editor/modals/AddChartModal"
 import type { ParsedDB } from "../src/types"
 
-// Mock the styleGuide store so available_chart_types is the Fase B 5-type builtin list
-vi.mock("../src/store/styleGuide", () => ({
-  useStyleGuideStore: (selector: (s: any) => any) =>
-    selector({
-      styleGuide: {
-        available_chart_types: [
-          "PIE", "PIE_GROUPED",
-          "BAR_HORIZONTAL", "BAR_HORIZONTAL_GROUPED",
-          "TABLE_WITH_MINIBARS",
-        ],
-        global: { suggested_palette: [] },
-      },
-    }),
-}))
 
 const DB: ParsedDB = {
   questions: [

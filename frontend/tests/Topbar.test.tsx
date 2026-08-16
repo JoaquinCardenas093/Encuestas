@@ -13,7 +13,7 @@ describe("Topbar", () => {
     )
     expect(screen.getByText(/AurumEncuestas/i)).toBeInTheDocument()
     expect(screen.getByRole("link", { name: /Editor/i })).toBeInTheDocument()
-    expect(screen.getByRole("link", { name: /Entrenamiento/i })).toBeInTheDocument()
+    expect(screen.queryByRole("link", { name: /Entrenamiento/i })).toBeNull()
   })
 
   it("shows pill with DB filename when project loaded", () => {
