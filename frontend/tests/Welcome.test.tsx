@@ -56,7 +56,7 @@ describe("WelcomePage", () => {
     expect(screen.queryByText(/Seleccionar set/i)).toBeNull()
   })
 
-  it("shows empty-corpus banner when corpus is empty and no style guide", () => {
+  it("does not show the training-corpus banner", () => {
     mockStyleGuide.styleGuide = null
     mockStyleGuide.corpus = []
     render(
@@ -64,30 +64,8 @@ describe("WelcomePage", () => {
         <Welcome />
       </MemoryRouter>,
     )
-    expect(screen.getByText(/Cargá training PPTs/i)).toBeInTheDocument()
-    expect(screen.getByRole("link", { name: /Configurar/i })).toBeInTheDocument()
-  })
-
-  it("shows builtin banner when style guide is_builtin = true", () => {
-    mockStyleGuide.styleGuide = { is_builtin: true }
-    mockStyleGuide.corpus = [{ filename: "a.pptx" }]
-    render(
-      <MemoryRouter>
-        <Welcome />
-      </MemoryRouter>,
-    )
-    expect(screen.getByText(/Cargá training PPTs/i)).toBeInTheDocument()
-  })
-
-  it("does NOT show banner when style guide is AI-generated and corpus has PPTs", () => {
-    mockStyleGuide.styleGuide = { is_builtin: false }
-    mockStyleGuide.corpus = [{ filename: "a.pptx" }]
-    render(
-      <MemoryRouter>
-        <Welcome />
-      </MemoryRouter>,
-    )
     expect(screen.queryByText(/Cargá training PPTs/i)).toBeNull()
+    expect(screen.queryByRole("link", { name: /Configurar/i })).toBeNull()
   })
 
   it("calls loadStyleGuide and loadCorpus on mount", () => {
