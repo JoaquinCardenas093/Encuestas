@@ -1,21 +1,18 @@
 import base64
 import logging
 import tempfile
-import uuid
 from contextlib import asynccontextmanager
 from datetime import UTC
 from datetime import datetime as dt
 from pathlib import Path
-from typing import Literal
-
-from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.background import BackgroundTask
 from pydantic import BaseModel
 
-from .config import add_recent, get_corpus_dir, get_render_cache_dir, load_recents
+from .config import add_recent, load_recents
 from .errors import AurumError
 from .llm_client import correct_slide_layout, generate_analysis, suggest_layout
 from .models import ProjectState
@@ -24,13 +21,7 @@ from .pptx_template import load_template
 from .project_store import load_project, save_project
 from .render_service import render_slide_to_png
 from .session import safe_session_id, set_session
-from .style_guide import (
-    BUILTIN_STYLE_GUIDE,
-    Pattern,
-    load_active_style_guide,
-    migrate_legacy_files,
-    save_style_guide,
-)
+from .style_guide import migrate_legacy_files
 from .xlsx_parser import parse_xlsx
 
 log = logging.getLogger(__name__)
@@ -399,84 +390,6 @@ def _build_analysis_context(scope: str, target_id: str | None, slide_id: str, st
     return base_ctx
 
 
-# M4 training endpoints (add/list/delete/reprocess/bank) removed in M6.2.
-# New corpus/style-guide/cache endpoints added below in M6.8.
-
-
-# ────────────────────────────────────────────────────────────────────────────
-# M6.8 T2: Corpus CRUD endpoints
-# ────────────────────────────────────────────────────────────────────────────
-
-def _count_slides_with_charts(pptx_path: Path) -> int:
-    """Count slides in PPTX that have at least one chart shape."""
-    try:
-        from pptx import Presentation
-        prs = Presentation(str(pptx_path))
-        return sum(
-            1 for slide in prs.slides
-            if any(getattr(sh, "has_chart", False) for sh in slide.shapes)
-        )
-    except Exception:
-        return 0
-
-
-@app.post("/api/training/corpus/add")
-async def corpus_add(file: UploadFile = File(...)):
-    """Save an uploaded PPT to the corpus directory."""
-    filename = file.filename or "upload.pptx"
-    if not filename.lower().endswith(".pptx"):
-        raise HTTPException(status_code=400, detail="Only .pptx files are accepted for the training corpus.")
-
-    corpus_dir = get_corpus_dir()
-    dest = corpus_dir / Path(filename).name  # strip any path component
-    contents = await file.read()
-    dest.write_bytes(contents)
-
-    slides_with_charts = _count_slides_with_charts(dest)
-    return {
-        "filename": dest.name,
-        "slides_with_charts": slides_with_charts,
-        "added_at": dt.now(UTC).isoformat(),
-    }
-
-
-@app.get("/api/training/corpus/list")
-async def corpus_list():
-    """List all PPTs in the corpus directory with metadata."""
-    corpus_dir = get_corpus_dir()
-    pptxs = []
-    for p in sorted(corpus_dir.glob("*.pptx")):
-        pptxs.append({
-            "filename": p.name,
-            "slides_with_charts": _count_slides_with_charts(p),
-            "added_at": dt.fromtimestamp(p.stat().st_mtime, UTC).isoformat(),
-            "size_bytes": p.stat().st_size,
-        })
-    return {"pptxs": pptxs}
-
-
-class CorpusDeleteRequest(BaseModel):
-    filename: str
-
-
-@app.post("/api/training/corpus/delete")
-async def corpus_delete(req: CorpusDeleteRequest):
-    """Delete a PPT from the corpus by filename."""
-    corpus_dir = get_corpus_dir()
-    # Safety: strip path components; only allow simple filename
-    safe_name = Path(req.filename).name
-    target = corpus_dir / safe_name
-    # Extra guard: resolved path must be inside corpus_dir
-    try:
-        target.resolve().relative_to(corpus_dir.resolve())
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid filename — path traversal not allowed.")
-    if not target.exists():
-        return {"deleted": False, "message": f"{safe_name} not found in corpus"}
-    target.unlink()
-    return {"deleted": True}
-
-
 class SuggestLayoutRequest(BaseModel):
     n_charts: int
     chart_types: list[str]
@@ -813,146 +726,3 @@ async def update_recent_color_endpoint(req: UpdateRecentColorRequest):
     return {"recent_colors": get_recent_colors()}
 
 
-# ────────────────────────────────────────────────────────────────────────────
-# M6.7: Async AI analysis job endpoints
-# ────────────────────────────────────────────────────────────────────────────
-
-_analysis_jobs: dict[str, dict] = {}
-
-
-@app.post("/api/training/analyze-with-ai")
-async def analyze_with_ai(background_tasks: BackgroundTasks):
-    """Start async AI analysis job. Returns job_id immediately."""
-    job_id = str(uuid.uuid4())
-    _analysis_jobs[job_id] = {"progress": 0, "status": "running", "message": "Iniciando..."}
-
-    def _run():
-        from .style_guide import load_active_style_guide
-        from .style_guide_analyzer import run_full_analysis_pipeline
-        try:
-            existing_manual = load_active_style_guide().manual_edits or {}
-        except Exception:
-            existing_manual = {}
-        result = run_full_analysis_pipeline(
-            progress_dict=_analysis_jobs[job_id],
-            existing_manual_edits=existing_manual,
-        )
-        _analysis_jobs[job_id].update(result)
-
-    background_tasks.add_task(_run)
-    return {"job_id": job_id}
-
-
-@app.get("/api/training/analysis-status/{job_id}")
-async def analysis_status(job_id: str):
-    """Get progress of an async analysis job."""
-    job = _analysis_jobs.get(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail=f"Job {job_id!r} not found")
-    return job
-
-
-# ────────────────────────────────────────────────────────────────────────────
-# M6.8 T4: Style guide read + manual pattern edit endpoints
-# ────────────────────────────────────────────────────────────────────────────
-
-@app.get("/api/training/style-guide")
-async def get_style_guide():
-    """Return the active style guide (AI-generated or built-in fallback)."""
-    try:
-        sg = load_active_style_guide()
-    except Exception:
-        sg = BUILTIN_STYLE_GUIDE
-    return sg.model_dump(by_alias=True)
-
-
-class PatternUpdateRequest(BaseModel):
-    id: str
-    priority: int = 0
-    trigger: dict = {}
-    extends: str | None = None
-    best_example: str | None = None
-    why_picked: str | None = None
-    implementation: dict = {}
-
-
-@app.put("/api/training/style-guide/pattern/{pattern_id}")
-async def update_style_guide_pattern(pattern_id: str, req: PatternUpdateRequest):
-    """Manually edit a single pattern in the active style guide.
-
-    Marks manual_edits[pattern_id] = current timestamp so future AI re-analysis
-    can detect which patterns have been user-modified.
-    """
-    try:
-        sg = load_active_style_guide()
-    except Exception:
-        sg = BUILTIN_STYLE_GUIDE
-
-    # Find the pattern to update
-    pattern_idx = next(
-        (i for i, p in enumerate(sg.patterns) if p.id == pattern_id),
-        None,
-    )
-    if pattern_idx is None:
-        raise HTTPException(status_code=404, detail=f"Pattern {pattern_id!r} not found in active style guide.")
-
-    # Update the pattern fields from request
-    existing = sg.patterns[pattern_idx]
-    updated_data = existing.model_dump(by_alias=True)
-    req_dict = req.model_dump()
-    # Only override fields that were explicitly provided (non-None)
-    updated_data.update({k: v for k, v in req_dict.items() if v is not None})
-
-    try:
-        sg.patterns[pattern_idx] = Pattern.model_validate(updated_data)
-    except Exception as exc:
-        raise HTTPException(status_code=422, detail=f"Invalid pattern data: {exc}")
-
-    # Mark as manually edited
-    if sg.manual_edits is None:
-        sg.manual_edits = {}
-    sg.manual_edits[pattern_id] = dt.now(UTC).isoformat()
-
-    save_style_guide(sg)
-    return {"ok": True, "pattern_id": pattern_id, "edited_at": sg.manual_edits[pattern_id]}
-
-
-# ────────────────────────────────────────────────────────────────────────────
-# M6.8 T5: Cache clear endpoint
-# ────────────────────────────────────────────────────────────────────────────
-
-class ClearCacheRequest(BaseModel):
-    cache_type: Literal["render", "classifier", "all"]
-
-
-@app.post("/api/training/clear-cache")
-async def clear_cache(req: ClearCacheRequest):
-    """Clear one or all backend caches.
-
-    cache_type options:
-      - "render": deletes all PNG files in ~/.aurum/training/render_cache/
-      - "classifier": clears in-memory pattern classifier LRU dict
-      - "all": both of the above
-    """
-    cleared: dict[str, int] = {}
-
-    if req.cache_type in ("render", "all"):
-        cache_dir = get_render_cache_dir()
-        png_files = list(cache_dir.glob("*.png"))
-        for f in png_files:
-            try:
-                f.unlink()
-            except Exception:
-                pass
-        cleared["render"] = len(png_files)
-
-    if req.cache_type in ("classifier", "all"):
-        try:
-            from .pattern_classifier import _classifier_cache
-            count = len(_classifier_cache)
-            _classifier_cache.clear()
-            cleared["classifier"] = count
-        except (ImportError, AttributeError):
-            cleared["classifier"] = 0
-
-    return {"cleared": cleared, "cache_type": req.cache_type}
