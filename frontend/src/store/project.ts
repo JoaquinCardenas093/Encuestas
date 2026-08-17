@@ -17,14 +17,18 @@ function _migrateProjectState(raw: unknown): ProjectState {
     rest.palette = null
   }
 
-  // Ensure each chart has colors: []
+  // Ensure each chart has colors: [] and each slide has subtitles: []
   if (Array.isArray(rest.slides)) {
     rest.slides = (rest.slides as unknown[]).map((sl) => {
       const slide = sl as Record<string, unknown>
-      if (!Array.isArray(slide.charts)) return slide
-      return {
+      const migratedSlide: Record<string, unknown> = {
         ...slide,
-        charts: (slide.charts as unknown[]).map((ch) => {
+        subtitles: slide.subtitles ?? [],
+      }
+      if (!Array.isArray(migratedSlide.charts)) return migratedSlide
+      return {
+        ...migratedSlide,
+        charts: (migratedSlide.charts as unknown[]).map((ch) => {
           const chart = ch as Record<string, unknown>
           return {
             ...chart,
@@ -95,6 +99,10 @@ interface Store {
   removeAnalysis(slideId: string, analysisId: string): void
   updateAnalysisText(slideId: string, analysisId: string, text: string): void
   setSlideLayout(slideId: string, layout: import("../types").SlideLayout | null): void
+
+  addSubtitle(slideId: string, text: string): void
+  updateSubtitle(slideId: string, subId: string, text: string): void
+  removeSubtitle(slideId: string, subId: string): void
 }
 
 function applyTitleInheritance(slides: Slide[]): Slide[] {
@@ -146,7 +154,7 @@ export const useProjectStore = create<Store>()(
       addSeparator(title: string) {
         const s = get().state
         if (!s) return
-        const sep: Slide = { id: uid("sl"), type: "separator", title, charts: [], analyses: [], auto_notes: null }
+        const sep: Slide = { id: uid("sl"), type: "separator", title, charts: [], analyses: [], subtitles: [], auto_notes: null }
         set({ state: { ...s, slides: applyTitleInheritance([...s.slides, sep]) } })
       },
 
@@ -155,7 +163,7 @@ export const useProjectStore = create<Store>()(
         if (!s) return
         const hasSeparator = s.slides.some((sl) => sl.type === "separator")
         if (!hasSeparator) throw new Error("Necesitás crear un separador antes de agregar una shell.")
-        const shell: Slide = { id: uid("sl"), type: "shell", title: null, charts: [], analyses: [], auto_notes: null }
+        const shell: Slide = { id: uid("sl"), type: "shell", title: null, charts: [], analyses: [], subtitles: [], auto_notes: null }
         set({ state: { ...s, slides: applyTitleInheritance([...s.slides, shell]) } })
       },
 
@@ -311,6 +319,27 @@ export const useProjectStore = create<Store>()(
         if (!s) return
         const slides = s.slides.map((sl) => (sl.id === slideId ? { ...sl, layout } : sl))
         set({ state: { ...s, slides } })
+      },
+
+      addSubtitle(slideId, text) {
+        const s = get().state
+        if (!s) return
+        set({ state: { ...s, slides: s.slides.map((sl) =>
+          sl.id !== slideId ? sl : { ...sl, subtitles: [...(sl.subtitles ?? []), { id: uid("sub"), text }] }) } })
+      },
+
+      updateSubtitle(slideId, subId, text) {
+        const s = get().state
+        if (!s) return
+        set({ state: { ...s, slides: s.slides.map((sl) =>
+          sl.id !== slideId ? sl : { ...sl, subtitles: (sl.subtitles ?? []).map((su) => su.id === subId ? { ...su, text } : su) }) } })
+      },
+
+      removeSubtitle(slideId, subId) {
+        const s = get().state
+        if (!s) return
+        set({ state: { ...s, slides: s.slides.map((sl) =>
+          sl.id !== slideId ? sl : { ...sl, subtitles: (sl.subtitles ?? []).filter((su) => su.id !== subId) }) } })
       },
     }),
     {

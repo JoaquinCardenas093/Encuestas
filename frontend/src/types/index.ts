@@ -83,12 +83,18 @@ export interface SlideLayout {
   changes: string[]
 }
 
+export interface Subtitle {
+  id: string
+  text: string
+}
+
 export interface Slide {
   id: string
   type: SlideType
   title: string | null
   charts: Chart[]
   analyses: Analysis[]
+  subtitles: Subtitle[]
   auto_notes: string | null
   layout?: SlideLayout | null
   matched_pattern?: string | null   // set by backend on preview; null = fallback heurístico

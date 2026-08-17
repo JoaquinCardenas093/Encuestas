@@ -236,6 +236,27 @@ describe("M6 migration — .aurum.json backward compat", () => {
   })
 })
 
+describe("subtitles", () => {
+  it("add/update/remove subtitle on a slide", () => {
+    useProjectStore.setState({ state: null, projectName: null })
+    useProjectStore.getState().setNewProject({ name: "T", db_path: "./x", template_path: "./y" })
+    useProjectStore.getState().addSeparator("Sec")
+    useProjectStore.getState().addShell()
+    const slideId = useProjectStore.getState().state!.slides.find((s) => s.type === "shell")!.id
+
+    useProjectStore.getState().addSubtitle(slideId, "P1. Pregunta")
+    let sub = useProjectStore.getState().state!.slides.find((s) => s.id === slideId)!.subtitles[0]
+    expect(sub.text).toBe("P1. Pregunta")
+
+    useProjectStore.getState().updateSubtitle(slideId, sub.id, "Editado")
+    sub = useProjectStore.getState().state!.slides.find((s) => s.id === slideId)!.subtitles[0]
+    expect(sub.text).toBe("Editado")
+
+    useProjectStore.getState().removeSubtitle(slideId, sub.id)
+    expect(useProjectStore.getState().state!.slides.find((s) => s.id === slideId)!.subtitles).toEqual([])
+  })
+})
+
 describe("T7 — addChart single-record action", () => {
   it("addChart creates ONE chart with breakdown_ids list", () => {
     const { setState, getState } = useProjectStore  // adapt to actual hook

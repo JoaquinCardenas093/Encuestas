@@ -13,7 +13,7 @@ const DB: ParsedDB = {
 const SLIDE: Slide = {
   id: "sl1", type: "shell", title: "Sec",
   charts: [{ id: "c1", question_id: "q1", breakdown_ids: [], chart_type: "PIE", show_legend: false, grid_cols: null, title: null, cat_titles: null, colors: [] }],
-  analyses: [], auto_notes: null,
+  analyses: [], subtitles: [], auto_notes: null,
 }
 
 describe("AddAnalysisModal", () => {

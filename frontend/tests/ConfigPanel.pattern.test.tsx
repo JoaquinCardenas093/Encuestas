@@ -11,6 +11,7 @@ const makeSlide = (matched_pattern: string | null | undefined): Slide => ({
   title: "Recordación",
   charts: [],
   analyses: [],
+  subtitles: [],
   auto_notes: null,
   matched_pattern,
 })
