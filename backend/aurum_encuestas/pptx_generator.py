@@ -176,6 +176,17 @@ def _add_slide_content(slide, slide_def: Slide, state: ProjectState, free_area: 
     from .pattern_renderer import render_pattern
     from .style_guide import BUILTIN_STYLE_GUIDE, load_active
 
+    # Filter out charts whose LayoutBox is marked hidden — compute before pipeline.
+    _pos = slide_def.layout.positions if (slide_def.layout and slide_def.layout.positions) else {}
+    _visible_charts = [c for c in slide_def.charts if not (c.id in _pos and getattr(_pos[c.id], "hidden", False))]
+
+    # Build a view of slide_def with only visible charts for the classify+render pipeline.
+    # When all charts are visible the lengths match and behavior is identical.
+    if len(_visible_charts) < len(slide_def.charts):
+        slide_def_for_pipeline = slide_def.model_copy(update={"charts": _visible_charts})
+    else:
+        slide_def_for_pipeline = slide_def
+
     # 1. Load style guide
     try:
         style_guide = load_active()
@@ -184,72 +195,81 @@ def _add_slide_content(slide, slide_def: Slide, state: ProjectState, free_area: 
 
     # 2. Build slide_config (enriches charts with .question and .data)
     db_path = state.inputs.db_path if state.inputs else ""
-    slide_config = build_slide_config(slide_def, state.parsed_db, db_path=db_path)
+    slide_config = build_slide_config(slide_def_for_pipeline, state.parsed_db, db_path=db_path)
 
     # 3. Classify — pass real parsed_db dict so extract_context can resolve
     # question_type / n_options. Empty dict here caused everything to be typed
     # as "open", breaking every AI binary/multi pattern trigger.
     matched_pattern = None
-    try:
-        _sc_dict = {
-            "charts": [c.model_dump() for c in slide_def.charts],
-            "analyses": [a.model_dump() for a in slide_def.analyses],
-        }
-        _parsed_db_dict = state.parsed_db.model_dump() if state.parsed_db else {}
-        matched_pattern = classify(_sc_dict, _parsed_db_dict, style_guide, require_chart=bool(slide_def.charts))
-    except Exception as exc:
-        _log.warning("_add_slide_content: classify failed: %s", exc)
 
-    # Fallback strategy:
-    #   1. Try classify against BUILTIN_STYLE_GUIDE (hand-curated, covers common cases
-    #      like binary + general-only that AI corpus may miss).
-    #   2. Else first style_guide pattern that has a chart element.
-    #   3. Else first BUILTIN pattern with a chart element.
-    if matched_pattern is None:
+    # If no visible charts remain, skip the classify+render_pattern block entirely
+    # (analyses/subtitles/extras still render below).
+    if _visible_charts:
         try:
-            matched_pattern = classify(
-                _sc_dict, _parsed_db_dict, BUILTIN_STYLE_GUIDE,
-                require_chart=bool(slide_def.charts),
+            _sc_dict = {
+                "charts": [c.model_dump() for c in _visible_charts],
+                "analyses": [a.model_dump() for a in slide_def.analyses],
+            }
+            _parsed_db_dict = state.parsed_db.model_dump() if state.parsed_db else {}
+            matched_pattern = classify(_sc_dict, _parsed_db_dict, style_guide, require_chart=bool(_visible_charts))
+        except Exception as exc:
+            _log.warning("_add_slide_content: classify failed: %s", exc)
+
+        # Fallback strategy:
+        #   1. Try classify against BUILTIN_STYLE_GUIDE (hand-curated, covers common cases
+        #      like binary + general-only that AI corpus may miss).
+        #   2. Else first style_guide pattern that has a chart element.
+        #   3. Else first BUILTIN pattern with a chart element.
+        if matched_pattern is None:
+            try:
+                matched_pattern = classify(
+                    _sc_dict, _parsed_db_dict, BUILTIN_STYLE_GUIDE,
+                    require_chart=bool(_visible_charts),
+                )
+            except Exception as exc:
+                _log.warning("_add_slide_content: BUILTIN classify failed: %s", exc)
+
+        if matched_pattern is None:
+            candidates = list(style_guide.patterns or []) + list(BUILTIN_STYLE_GUIDE.patterns or [])
+            if _visible_charts:
+                matched_pattern = next(
+                    (p for p in candidates
+                     if any(getattr(e, "kind", None) == "chart" for e in (p.implementation.elements or []))),
+                    None,
+                )
+            if matched_pattern is None and candidates:
+                matched_pattern = candidates[0]
+
+        if matched_pattern is None:
+            _log.warning("_add_slide_content: no pattern matched and no fallback — using legacy insertion")
+            _add_slide_content_legacy(slide, slide_def_for_pipeline, state, free_area)
+            # Still render analyses/subtitles/extras after legacy path
+            _add_analyses_textboxes(slide, slide_def, free_area, state.inputs.font_override if state.inputs else None)
+            _add_subtitle_textboxes(slide, slide_def, free_area, state.inputs.font_override if state.inputs else None)
+            if slide_def.layout and slide_def.layout.extras:
+                _add_layout_extras(slide, slide_def.layout.extras)
+            return
+
+        # 4. Build RenderContext
+        chart_colors_override = state.palette or {}
+        ctx = build_render_context(
+            style_guide=style_guide,
+            slide_config=slide_config,
+            chart_colors_override=chart_colors_override,
+            free_area=free_area,
+        )
+
+        # 5. Render
+        try:
+            render_pattern(
+                pattern=matched_pattern,
+                slide=slide,
+                ctx=ctx,
+                style_guide=style_guide,
+                all_patterns=style_guide.patterns,
             )
         except Exception as exc:
-            _log.warning("_add_slide_content: BUILTIN classify failed: %s", exc)
-
-    if matched_pattern is None:
-        candidates = list(style_guide.patterns or []) + list(BUILTIN_STYLE_GUIDE.patterns or [])
-        if slide_def.charts:
-            matched_pattern = next(
-                (p for p in candidates
-                 if any(getattr(e, "kind", None) == "chart" for e in (p.implementation.elements or []))),
-                None,
-            )
-        if matched_pattern is None and candidates:
-            matched_pattern = candidates[0]
-
-    if matched_pattern is None:
-        _log.warning("_add_slide_content: no pattern matched and no fallback — using legacy insertion")
-        _add_slide_content_legacy(slide, slide_def, state, free_area)
-        return
-
-    # 4. Build RenderContext
-    chart_colors_override = state.palette or {}
-    ctx = build_render_context(
-        style_guide=style_guide,
-        slide_config=slide_config,
-        chart_colors_override=chart_colors_override,
-        free_area=free_area,
-    )
-
-    # 5. Render
-    try:
-        render_pattern(
-            pattern=matched_pattern,
-            slide=slide,
-            ctx=ctx,
-            style_guide=style_guide,
-            all_patterns=style_guide.patterns,
-        )
-    except Exception as exc:
-        _log.error("_add_slide_content: render_pattern failed: %s", exc, exc_info=True)
+            _log.error("_add_slide_content: render_pattern failed: %s", exc, exc_info=True)
 
     # 6. Render analyses as textboxes (pattern_renderer doesn't handle analyses).
     _add_analyses_textboxes(slide, slide_def, free_area, state.inputs.font_override if state.inputs else None)
@@ -292,6 +312,39 @@ def _add_layout_extras(slide, extras) -> None:
                     for old in ln.findall(qn("a:prstDash")):
                         ln.remove(old)
                     ln.append(prstDash)
+            elif ex.kind == "textbox":
+                el = {"x": ex.x_emu, "y": ex.y_emu, "cx": ex.cx_emu, "cy": ex.cy_emu}
+                if ex.fill:
+                    shape = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Emu(ex.x_emu), Emu(ex.y_emu), Emu(ex.cx_emu), Emu(ex.cy_emu))
+                    shape.fill.solid()
+                    shape.fill.fore_color.rgb = RGBColor.from_string(ex.fill)
+                    shape.line.fill.background()
+                    tf = shape.text_frame
+                    tf.word_wrap = True
+                    tf.text = ex.text or ""
+                    if ex.color:
+                        for p in tf.paragraphs:
+                            for r in p.runs:
+                                r.font.color.rgb = RGBColor.from_string(ex.color)
+                    if ex.font_pt:
+                        for p in tf.paragraphs:
+                            for r in p.runs:
+                                r.font.size = Pt(ex.font_pt)
+                    if ex.font_name:
+                        for p in tf.paragraphs:
+                            for r in p.runs:
+                                r.font.name = ex.font_name
+                else:
+                    _add_textbox(slide, ex.text or "", el, ex.font_name, font_pt=int(ex.font_pt) if ex.font_pt else None, color=ex.color)
+            elif ex.kind == "rect":
+                shape = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Emu(ex.x_emu), Emu(ex.y_emu), Emu(ex.cx_emu), Emu(ex.cy_emu))
+                if ex.fill:
+                    shape.fill.solid()
+                    shape.fill.fore_color.rgb = RGBColor.from_string(ex.fill)
+                else:
+                    shape.fill.background()
+                if ex.color:
+                    shape.line.color.rgb = RGBColor.from_string(ex.color)
         except Exception as exc:
             _log.warning("_add_layout_extras: failed extra %s: %s", ex.kind, exc)
 
@@ -326,12 +379,18 @@ def _add_analyses_textboxes(slide, slide_def: Slide, free_area: dict, font_overr
         font_pt = None
         callout = False
         box_style = None
+        override_color = None
+        override_font = None
         if a.id in ai_positions:
             box = ai_positions[a.id]
+            if getattr(box, "hidden", False):
+                continue
             el = {"x": box.x_emu, "y": box.y_emu, "cx": box.cx_emu, "cy": box.cy_emu}
             font_pt = box.font_pt
             callout = box.callout
             box_style = getattr(box, "box_style", None)
+            override_color = getattr(box, "color", None)
+            override_font = getattr(box, "font_name", None)
         else:
             el = {"x": band_x, "y": band_y + no_ai_index * per_cy, "cx": band_cx, "cy": per_cy}
             no_ai_index += 1
@@ -341,7 +400,7 @@ def _add_analyses_textboxes(slide, slide_def: Slide, free_area: dict, font_overr
             elif callout:
                 _add_callout(slide, a.text, el, font_override, font_pt=font_pt)
             else:
-                _add_textbox(slide, a.text, el, font_override, font_pt=font_pt)
+                _add_textbox(slide, a.text, el, override_font or font_override, font_pt=font_pt, color=override_color)
         except Exception as exc:
             _log.warning("_add_analyses_textboxes: failed analysis %s: %s", a.id, exc)
 
@@ -368,16 +427,22 @@ def _add_subtitle_textboxes(slide, slide_def: Slide, free_area: dict, font_overr
     per_cy = band_cy // len(no_ai) if no_ai else band_cy
     no_ai_index = 0
     for sub in slide_def.subtitles:
+        override_color = None
+        override_font = None
         if sub.id in ai_positions:
             box = ai_positions[sub.id]
+            if getattr(box, "hidden", False):
+                continue
             el = {"x": box.x_emu, "y": box.y_emu, "cx": box.cx_emu, "cy": box.cy_emu}
             font_pt = box.font_pt
+            override_color = getattr(box, "color", None)
+            override_font = getattr(box, "font_name", None)
         else:
             el = {"x": band_x, "y": fa_y + no_ai_index * per_cy, "cx": band_cx, "cy": per_cy}
             font_pt = None
             no_ai_index += 1
         try:
-            _add_textbox(slide, sub.text, el, font_override, font_pt=font_pt)
+            _add_textbox(slide, sub.text, el, override_font or font_override, font_pt=font_pt, color=override_color)
         except Exception as exc:
             _log.warning("_add_subtitle_textboxes: failed subtitle %s: %s", sub.id, exc)
 
@@ -632,7 +697,7 @@ def _apply_training_style(chart, chart_type: str, specific_style: dict | None = 
         pass
 
 
-def _add_textbox(slide, text: str, el: dict, font_name: str | None = None, font_pt: int | None = None) -> None:
+def _add_textbox(slide, text: str, el: dict, font_name: str | None = None, font_pt: int | None = None, color: str | None = None) -> None:
     tb = slide.shapes.add_textbox(Emu(el["x"]), Emu(el["y"]), Emu(el["cx"]), Emu(el["cy"]))
     tf = tb.text_frame
     tf.word_wrap = True
@@ -654,6 +719,12 @@ def _add_textbox(slide, text: str, el: dict, font_name: str | None = None, font_
         run.font.name = font_name
     if font_pt:
         run.font.size = Pt(font_pt)
+    if color:
+        from pptx.dml.color import RGBColor
+        try:
+            run.font.color.rgb = RGBColor.from_string(color)
+        except Exception:
+            pass
 
 
 def _substitute_placeholders(slide, mapping: dict[str, str]) -> None:

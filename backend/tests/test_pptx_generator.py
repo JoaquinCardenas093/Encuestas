@@ -216,6 +216,66 @@ def test_no_auto_subtitle_from_chart_question(tmp_path, valid_xlsx_path, valid_t
     assert not any("$p1.recordacion" in t for t in texts)
 
 
+def test_add_textbox_applies_color():
+    from pptx import Presentation
+    from pptx.util import Inches
+    from aurum_encuestas.pptx_generator import _add_textbox
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    _add_textbox(slide, "Hola", {"x": 0, "y": 0, "cx": 1000000, "cy": 500000}, None, font_pt=12, color="C00000")
+    tb = [s for s in slide.shapes if s.has_text_frame][-1]
+    run = tb.text_frame.paragraphs[0].runs[0]
+    assert str(run.font.color.rgb) == "C00000"
+
+
+def test_hidden_analysis_not_rendered(tmp_path, valid_xlsx_path, valid_template_path):
+    from aurum_encuestas.models import Analysis, SlideLayout, LayoutBox
+    layout = SlideLayout(positions={"a1": LayoutBox(x_emu=0, y_emu=0, cx_emu=100, cy_emu=100, hidden=True)})
+    slides = [
+        Slide(id="s1", type="separator", title="Sec"),
+        Slide(id="s2", type="shell", title="Sec", charts=[], subtitles=[],
+              analyses=[Analysis(id="a1", scope="slide", text="OCULTO_XYZ")], layout=layout),
+    ]
+    state = _state(slides, valid_xlsx_path, valid_template_path)
+    out = tmp_path / "out.pptx"
+    build_pptx(state, str(out))
+    prs = Presentation(str(out))
+    texts = [sh.text_frame.text for sh in prs.slides[1].shapes if sh.has_text_frame]
+    assert not any("OCULTO_XYZ" in t for t in texts)
+
+
+def test_created_textbox_rendered(tmp_path, valid_xlsx_path, valid_template_path):
+    from aurum_encuestas.models import SlideLayout, LayoutExtra
+    layout = SlideLayout(extras=[LayoutExtra(kind="textbox", id="free_1", x_emu=1000000, y_emu=1000000,
+                                             cx_emu=3000000, cy_emu=800000, text="CREADO_XYZ", color="404040")])
+    slides = [
+        Slide(id="s1", type="separator", title="Sec"),
+        Slide(id="s2", type="shell", title="Sec", charts=[], analyses=[], subtitles=[], layout=layout),
+    ]
+    state = _state(slides, valid_xlsx_path, valid_template_path)
+    out = tmp_path / "out.pptx"
+    build_pptx(state, str(out))
+    prs = Presentation(str(out))
+    texts = [sh.text_frame.text for sh in prs.slides[1].shapes if sh.has_text_frame]
+    assert any("CREADO_XYZ" in t for t in texts)
+
+
+def test_hidden_chart_not_rendered(tmp_path, valid_xlsx_path, valid_template_path):
+    from aurum_encuestas.models import SlideLayout, LayoutBox
+    layout = SlideLayout(positions={"c1": LayoutBox(x_emu=0, y_emu=0, cx_emu=1, cy_emu=1, hidden=True)})
+    slides = [
+        Slide(id="s1", type="separator", title="Sec"),
+        Slide(id="s2", type="shell", title="Sec", subtitles=[], analyses=[],
+              charts=[Chart(id="c1", question_id="q1", breakdown_ids=[], chart_type="PIE")], layout=layout),
+    ]
+    state = _state(slides, valid_xlsx_path, valid_template_path)
+    out = tmp_path / "out.pptx"
+    build_pptx(state, str(out))
+    prs = Presentation(str(out))
+    n_charts = sum(1 for sh in prs.slides[1].shapes if getattr(sh, "has_chart", False))
+    assert n_charts == 0
+
+
 def test_add_chart_handles_empty_breakdown_ids_as_general():
     """Chart with breakdown_ids=[] plots the General row as single series."""
     from pptx import Presentation
