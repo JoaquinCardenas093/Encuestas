@@ -603,6 +603,13 @@ async def suggest_slide_layout_endpoint(req: SuggestSlideLayoutRequest):
             "text_chars": len(a.text or ""),
             "text_preview": (a.text or "")[:100],
         })
+    for sub in slide.subtitles:
+        payload_shapes.append({
+            "id": f"subtitle_{sub.id}",
+            "kind": "subtitle",
+            "text_chars": len(sub.text or ""),
+            "text_preview": (sub.text or "")[:100],
+        })
 
     # Canvas hint + sum natural widths so Sonnet can detect overflow risk.
     total_natural_w = sum(s.get("w_cm", 0) for s in payload_shapes if s.get("kind") == "chart")
@@ -642,10 +649,13 @@ async def suggest_slide_layout_endpoint(req: SuggestSlideLayoutRequest):
         if not eid:
             continue
         is_analysis = eid.startswith("analysis_")
+        is_subtitle = eid.startswith("subtitle_")
         if eid.startswith("chart_"):
             key = eid[len("chart_"):]
         elif is_analysis:
             key = eid[len("analysis_"):]
+        elif is_subtitle:
+            key = eid[len("subtitle_"):]
         else:
             key = eid
         # Default font_pt: analyses=11 (per prompt rule 10.5–11), charts None.

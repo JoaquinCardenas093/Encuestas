@@ -336,6 +336,38 @@ def test_count_cells_endpoint_bad_state():
     assert body["error"]
 
 
+def test_suggest_slide_layout_positions_subtitle(monkeypatch, valid_xlsx_path):
+    # Build a state with one shell slide containing a chart + a subtitle.
+    from aurum_encuestas import api as api_mod
+    state = {
+        "project_name": "T",
+        "inputs": {"db_path": str(valid_xlsx_path), "template_path": "y"},
+        "parsed_db": None,
+        "slides": [
+            {"id": "s2", "type": "shell", "title": "Sec",
+             "charts": [{"id": "c1", "question_id": "q1", "breakdown_ids": [], "chart_type": "PIE"}],
+             "analyses": [],
+             "subtitles": [{"id": "sub1", "text": "P1. Pregunta"}]},
+        ],
+    }
+    # Stub the LLM so no network call happens; it returns a position for the subtitle.
+    def fake_correct(slide_payload, slide_png_bytes=None, user_hint=None):
+        # assert the subtitle shape was included in the payload
+        kinds = [s.get("kind") for s in slide_payload["shapes"]]
+        assert "subtitle" in kinds
+        return {"elements": [{"id": "subtitle_sub1", "x_cm": 2.0, "y_cm": 3.0, "w_cm": 10.0, "h_cm": 1.0}]}
+    monkeypatch.setattr(api_mod, "correct_slide_layout", fake_correct)
+    # Avoid the PNG render path (build_pptx) failing in-test: monkeypatch render to None.
+    monkeypatch.setattr(api_mod, "render_slide_to_png", lambda *a, **k: None)
+    monkeypatch.setattr(api_mod, "build_pptx", lambda *a, **k: None)
+
+    r = client.post("/api/suggest-slide-layout", json={"state": state, "slide_id": "s2", "user_hint": "x"})
+    assert r.status_code == 200
+    body = r.json()
+    assert "sub1" in body["positions"]
+    assert body["positions"]["sub1"]["cx_emu"] > 0
+
+
 def test_suggest_slide_layout_propagates_box_style(monkeypatch, valid_xlsx_path):
     """box_style='dashed' from AI element reaches the response positions dict."""
     import aurum_encuestas.api as api
