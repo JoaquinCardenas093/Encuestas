@@ -296,6 +296,33 @@ function setStateMinimalSlide() {
   } as any)
 }
 
+describe("free layout types", () => {
+  it("store round-trips a layout with free-mode overrides", () => {
+    useProjectStore.setState({ state: null, projectName: null })
+    useProjectStore.getState().setNewProject({ name: "T", db_path: "./x", template_path: "./y" })
+    useProjectStore.getState().addSeparator("Sec")
+    useProjectStore.getState().addShell()
+    const slideId = useProjectStore.getState().state!.slides.find((s) => s.type === "shell")!.id
+    const loaded = {
+      ...useProjectStore.getState().state!,
+      slides: useProjectStore.getState().state!.slides.map((sl) =>
+        sl.id !== slideId ? sl : {
+          ...sl,
+          layout: {
+            positions: { a1: { x_emu: 0, y_emu: 0, cx_emu: 1, cy_emu: 1, color: "C00000", font_name: "Georgia", hidden: true } },
+            extras: [{ kind: "textbox" as const, id: "free_1", x_emu: 1, y_emu: 1, cx_emu: 10, cy_emu: 2, text: "N", color: "404040" }],
+            changes: [],
+          },
+        }),
+    }
+    useProjectStore.getState().loadProjectState(loaded)
+    const sl = useProjectStore.getState().state!.slides.find((s) => s.id === slideId)!
+    expect(sl.layout!.positions.a1.color).toBe("C00000")
+    expect(sl.layout!.positions.a1.hidden).toBe(true)
+    expect(sl.layout!.extras![0].kind).toBe("textbox")
+  })
+})
+
 describe("B8 — addChart opts + updateChartField", () => {
   it("addChart with opts persists new fields", () => {
     setStateMinimalSlide()

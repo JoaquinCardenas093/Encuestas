@@ -61,16 +61,21 @@ export interface LayoutBox {
   font_pt?: number | null
   callout?: boolean
   box_style?: "dashed" | null
+  color?: string
+  font_name?: string
+  hidden?: boolean
 }
 
 export interface LayoutExtra {
-  kind: "line"
+  kind: "line" | "textbox" | "rect"
+  id?: string
   x_emu: number
   y_emu: number
   cx_emu: number
   cy_emu: number
   text?: string | null
   font_pt?: number | null
+  font_name?: string
   bold?: boolean
   style?: string | null
   color?: string | null
