@@ -130,14 +130,9 @@ def build_pptx(state: ProjectState, out_path: str) -> None:
         else:
             new_slide = _duplicate_slide(prs, shell_src)
             notes_text = slide_def.auto_notes or f"Respuesta única. Número de observaciones: {state.parsed_db.sample_size if state.parsed_db else 500}."
-            # @Titulo = section title (slide.title from UI). @Subtitulo = question text.
-            unique_q_ids = {c.question_id for c in slide_def.charts} if slide_def.charts else set()
-            if len(unique_q_ids) == 1 and state.parsed_db:
-                qid = next(iter(unique_q_ids))
-                q = next((q for q in state.parsed_db.questions if q.id == qid), None)
-                subtitle_text = f"{q.code}. {q.text}" if q else ""
-            else:
-                subtitle_text = ""
+            # @Subtitulo is no longer auto-filled; question texts are user-inserted
+            # subtitles rendered as textboxes (see _add_subtitle_textboxes).
+            subtitle_text = ""
             title_text = slide_def.title or ""
             _substitute_placeholders(new_slide, {
                 "@Titulo": title_text,
@@ -259,6 +254,9 @@ def _add_slide_content(slide, slide_def: Slide, state: ProjectState, free_area: 
     # 6. Render analyses as textboxes (pattern_renderer doesn't handle analyses).
     _add_analyses_textboxes(slide, slide_def, free_area, state.inputs.font_override if state.inputs else None)
 
+    # 6b. Render user-inserted question-text subtitles as textboxes.
+    _add_subtitle_textboxes(slide, slide_def, free_area, state.inputs.font_override if state.inputs else None)
+
     # 7. Render AI-created extras (lines, callouts, subtitle text).
     if slide_def.layout and slide_def.layout.extras:
         _add_layout_extras(slide, slide_def.layout.extras)
@@ -346,6 +344,42 @@ def _add_analyses_textboxes(slide, slide_def: Slide, free_area: dict, font_overr
                 _add_textbox(slide, a.text, el, font_override, font_pt=font_pt)
         except Exception as exc:
             _log.warning("_add_analyses_textboxes: failed analysis %s: %s", a.id, exc)
+
+
+def _add_subtitle_textboxes(slide, slide_def: Slide, free_area: dict, font_override: str | None) -> None:
+    """Append user-inserted question-text subtitles as plain textboxes.
+    Uses AI layout positions when present, else stacks in a top band of free_area."""
+    if not slide_def.subtitles:
+        return
+    ai_positions = slide_def.layout.positions if (slide_def.layout and slide_def.layout.positions) else {}
+
+    fa_x = free_area.get("x", 0)
+    fa_y = free_area.get("y", 0)
+    fa_cx = free_area.get("cx", 1)
+    fa_cy = free_area.get("cy", 1)
+
+    # Fallback band along the TOP of free_area (analyses use the bottom band).
+    band_h_frac = 0.15
+    band_x = fa_x + int(fa_cx * 0.04)
+    band_cx = int(fa_cx * 0.92)
+    band_cy = int(fa_cy * band_h_frac)
+
+    no_ai = [s for s in slide_def.subtitles if s.id not in ai_positions]
+    per_cy = band_cy // len(no_ai) if no_ai else band_cy
+    no_ai_index = 0
+    for sub in slide_def.subtitles:
+        if sub.id in ai_positions:
+            box = ai_positions[sub.id]
+            el = {"x": box.x_emu, "y": box.y_emu, "cx": box.cx_emu, "cy": box.cy_emu}
+            font_pt = box.font_pt
+        else:
+            el = {"x": band_x, "y": fa_y + no_ai_index * per_cy, "cx": band_cx, "cy": per_cy}
+            font_pt = None
+            no_ai_index += 1
+        try:
+            _add_textbox(slide, sub.text, el, font_override, font_pt=font_pt)
+        except Exception as exc:
+            _log.warning("_add_subtitle_textboxes: failed subtitle %s: %s", sub.id, exc)
 
 
 def _add_callout(slide, text: str, el: dict, font_name: str | None = None, font_pt: float | None = None) -> None:

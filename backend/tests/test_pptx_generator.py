@@ -9,6 +9,7 @@ from aurum_encuestas.models import (
     ProjectState,
     Question,
     Slide,
+    Subtitle,
 )
 from aurum_encuestas.pptx_generator import build_pptx
 
@@ -182,6 +183,37 @@ def test_analyses_textboxes_uses_dashed_box_when_box_style_dashed(valid_template
     slide_def = Slide(id="s1", type="shell", title="T", charts=[], analyses=[an], layout=layout)
     pptx_generator._add_analyses_textboxes(slide, slide_def, {"x":0,"y":0,"cx":100,"cy":100}, None)
     assert called.get("dashed") and not called.get("callout")
+
+
+def test_subtitle_text_renders_in_pptx(tmp_path, valid_xlsx_path, valid_template_path):
+    slides = [
+        Slide(id="s1", type="separator", title="Sec"),
+        Slide(id="s2", type="shell", title="Sec", charts=[], analyses=[],
+              subtitles=[Subtitle(id="sub1", text="P1. Texto de la pregunta")]),
+    ]
+    state = _state(slides, valid_xlsx_path, valid_template_path)
+    out = tmp_path / "out.pptx"
+    build_pptx(state, str(out))
+    prs = Presentation(str(out))
+    texts = [sh.text_frame.text for sh in prs.slides[1].shapes if sh.has_text_frame]
+    assert any("Texto de la pregunta" in t for t in texts)
+
+
+def test_no_auto_subtitle_from_chart_question(tmp_path, valid_xlsx_path, valid_template_path):
+    # A shell slide with a single-question chart and NO subtitles must NOT auto-insert
+    # the question text (old @Subtitulo behavior is removed).
+    slides = [
+        Slide(id="s1", type="separator", title="Sec"),
+        Slide(id="s2", type="shell", title="Sec",
+              charts=[Chart(id="c1", question_id="q1", breakdown_ids=[], chart_type="PIE")],
+              analyses=[], subtitles=[]),
+    ]
+    state = _state(slides, valid_xlsx_path, valid_template_path)
+    out = tmp_path / "out.pptx"
+    build_pptx(state, str(out))
+    prs = Presentation(str(out))
+    texts = [sh.text_frame.text for sh in prs.slides[1].shapes if sh.has_text_frame]
+    assert not any("$p1.recordacion" in t for t in texts)
 
 
 def test_add_chart_handles_empty_breakdown_ids_as_general():
