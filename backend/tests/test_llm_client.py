@@ -209,6 +209,48 @@ def test_generate_analysis_hint_capped_500(mock_client):
     assert "Z" * 501 not in user_msg
 
 
+def test_correct_slide_layout_uses_free_prompt_with_hint(monkeypatch):
+    from aurum_encuestas import llm_client as lc
+    captured = {}
+
+    class _Msg:
+        content = [type("B", (), {"text": '{"elements":[],"changes":[]}'})()]
+
+    class _Messages:
+        def create(self, **kwargs):
+            captured["system"] = kwargs["system"]
+            return _Msg()
+
+    class _Client:
+        messages = _Messages()
+
+    monkeypatch.setattr(lc, "_client", _Client())
+    lc.correct_slide_layout({"shapes": []}, slide_png_bytes=None, user_hint="poné el título en rojo gigante")
+    sys_text = captured["system"][0]["text"]
+    assert sys_text == lc.LAYOUT_FREE_SYSTEM
+
+
+def test_correct_slide_layout_uses_corrector_prompt_without_hint(monkeypatch):
+    from aurum_encuestas import llm_client as lc
+    captured = {}
+
+    class _Msg:
+        content = [type("B", (), {"text": '{"elements":[],"changes":[]}'})()]
+
+    class _Messages:
+        def create(self, **kwargs):
+            captured["system"] = kwargs["system"]
+            return _Msg()
+
+    class _Client:
+        messages = _Messages()
+
+    monkeypatch.setattr(lc, "_client", _Client())
+    lc.correct_slide_layout({"shapes": []}, slide_png_bytes=None, user_hint=None)
+    sys_text = captured["system"][0]["text"]
+    assert sys_text == lc.LAYOUT_CORRECTOR_SYSTEM
+
+
 def test_layout_system_includes_aurora_few_shot():
     from aurum_encuestas.llm_client import LAYOUT_SYSTEM
     # Must mention three reference cases

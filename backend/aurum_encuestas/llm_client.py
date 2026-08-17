@@ -246,6 +246,7 @@ def correct_slide_layout(
     import base64
     user_content: list = []
     hint = (user_hint or "").strip()
+    system_prompt = LAYOUT_FREE_SYSTEM if hint else LAYOUT_CORRECTOR_SYSTEM
     if hint:
         user_content.append({
             "type": "text",
@@ -277,7 +278,7 @@ def correct_slide_layout(
         msg = _client.messages.create(
             model=LAYOUT_MODEL,
             max_tokens=3000,
-            system=[{"type": "text", "text": LAYOUT_CORRECTOR_SYSTEM, "cache_control": {"type": "ephemeral"}}],
+            system=[{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": user_content}],
         )
     except APIStatusError as e:
@@ -385,6 +386,31 @@ CHECKLIST FINAL (todo debe cumplirse)
 * [ ] Gráficos sin título/grid, etiquetas 0.0%, leyenda solo con ≥2 series.
 * [ ] Sin solapes ni desbordes; alineación al grid.
 """
+LAYOUT_FREE_SYSTEM = """System prompt — Diseñador libre de slides (modo instrucción)
+
+La INSTRUCCIÓN DEL USUARIO es la máxima autoridad: ejecutala al pie de la letra, sin límites de estándar. NO hay estándar Aurum, NO hay área segura obligatoria, NO hay topes de fuente, NO hay paleta de marca forzada. Podés poner cualquier cosa donde el usuario pida.
+
+PODÉS:
+- Mover/redimensionar cualquier chart_<id>, analysis_<id>, subtitle_<id> a cualquier coordenada (incluso fuera del área segura si el usuario lo pide).
+- En elementos de TEXTO (analysis_<id>, subtitle_<id>): fijar `color` (hex sin #), `font` (familia) y `font_pt` (cualquier tamaño, sin tope).
+- Ocultar cualquier elemento con `hidden: true` (incluye charts).
+- Crear elementos nuevos en `created`: textbox (con texto/estilo), rect (caja con fill/borde), line (separador).
+
+NO cambies los colores internos de las series de un chart (solo mover/redimensionar/ocultar). No inventes datos ni cambies el texto de análisis/subtítulos existentes.
+
+SALIDA — SOLO JSON válido, coordenadas en cm:
+{
+  "elements": [
+    {"id":"chart_<id>","x_cm":1.3,"y_cm":3.5,"w_cm":14.0,"h_cm":10.0,"hidden":false},
+    {"id":"analysis_<id>","x_cm":1.3,"y_cm":4.0,"w_cm":30.0,"h_cm":1.8,"font_pt":24,"font":"Georgia","color":"C00000","hidden":false}
+  ],
+  "created": [
+    {"id":"free_1","kind":"textbox","x_cm":2.0,"y_cm":2.0,"w_cm":10.0,"h_cm":2.0,"text":"...","font_pt":18,"font":"Arial","color":"404040","fill":"D9D9D9"}
+  ],
+  "changes": ["..."]
+}
+Solo JSON, sin texto fuera del JSON."""
+
 ANALYSIS_MAX_TOKENS = 32000  # full style guide w/ 8-15 patterns + table schemas easily 20-30K
 ANALYSIS_TEMPERATURE = 0.2
 
