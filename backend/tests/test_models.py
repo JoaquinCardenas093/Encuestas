@@ -220,3 +220,25 @@ def test_chart_grid_cols_accepts_positive():
     c = Chart.model_validate({"id":"c1","question_id":"q1","breakdown_ids":[],
                               "chart_type":"PIE_GROUPED","grid_cols":3})
     assert c.grid_cols == 3
+
+
+# ── Task 1 (2026-08-17): Subtitle model + Slide.subtitles ──────────────────────
+
+def test_slide_subtitles_default_empty():
+    from aurum_encuestas.models import Slide
+    s = Slide(id="s1", type="shell")
+    assert s.subtitles == []
+
+
+def test_slide_accepts_subtitles():
+    from aurum_encuestas.models import Slide, Subtitle
+    s = Slide(id="s1", type="shell", subtitles=[Subtitle(id="sub1", text="P1. ¿Conoce la marca?")])
+    assert len(s.subtitles) == 1
+    assert s.subtitles[0].id == "sub1"
+    assert s.subtitles[0].text == "P1. ¿Conoce la marca?"
+
+
+def test_old_slide_without_subtitles_validates():
+    from aurum_encuestas.models import Slide
+    s = Slide.model_validate({"id": "s1", "type": "shell", "title": "T", "charts": [], "analyses": []})
+    assert s.subtitles == []

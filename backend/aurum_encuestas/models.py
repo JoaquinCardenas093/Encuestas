@@ -122,12 +122,18 @@ class SlideLayout(BaseModel):
     changes: list[str] = []
 
 
+class Subtitle(BaseModel):
+    id: str
+    text: str
+
+
 class Slide(BaseModel):
     id: str
     type: SlideType
     title: str | None = None
     charts: list[Chart] = []
     analyses: list[Analysis] = []
+    subtitles: list[Subtitle] = []
     auto_notes: str | None = None
     layout: SlideLayout | None = None
 
