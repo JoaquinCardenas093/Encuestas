@@ -260,20 +260,52 @@ def test_created_textbox_rendered(tmp_path, valid_xlsx_path, valid_template_path
     assert any("CREADO_XYZ" in t for t in texts)
 
 
-def test_hidden_chart_not_rendered(tmp_path, valid_xlsx_path, valid_template_path):
+def test_visible_charts_hidden_excluded():
+    """visible_charts must exclude charts whose LayoutBox has hidden=True."""
     from aurum_encuestas.models import SlideLayout, LayoutBox
-    layout = SlideLayout(positions={"c1": LayoutBox(x_emu=0, y_emu=0, cx_emu=1, cy_emu=1, hidden=True)})
-    slides = [
-        Slide(id="s1", type="separator", title="Sec"),
-        Slide(id="s2", type="shell", title="Sec", subtitles=[], analyses=[],
-              charts=[Chart(id="c1", question_id="q1", breakdown_ids=[], chart_type="PIE")], layout=layout),
-    ]
-    state = _state(slides, valid_xlsx_path, valid_template_path)
-    out = tmp_path / "out.pptx"
-    build_pptx(state, str(out))
-    prs = Presentation(str(out))
-    n_charts = sum(1 for sh in prs.slides[1].shapes if getattr(sh, "has_chart", False))
-    assert n_charts == 0
+    from aurum_encuestas.pptx_generator import visible_charts
+    c1 = Chart(id="c1", question_id="q1", breakdown_ids=[], chart_type="PIE")
+    c2 = Chart(id="c2", question_id="q1", breakdown_ids=[], chart_type="PIE_GROUPED")
+    layout = SlideLayout(positions={"c1": LayoutBox(x_emu=0, y_emu=0, cx_emu=100, cy_emu=100, hidden=True)})
+    slide_def = Slide(id="s1", type="shell", title="T", charts=[c1, c2], layout=layout)
+    result = visible_charts(slide_def)
+    assert result == [c2]
+
+
+def test_visible_charts_no_layout_keeps_all():
+    """visible_charts with no layout returns all charts unchanged."""
+    from aurum_encuestas.pptx_generator import visible_charts
+    c1 = Chart(id="c1", question_id="q1", breakdown_ids=[], chart_type="PIE")
+    c2 = Chart(id="c2", question_id="q1", breakdown_ids=[], chart_type="PIE_GROUPED")
+    slide_def = Slide(id="s1", type="shell", title="T", charts=[c1, c2])
+    result = visible_charts(slide_def)
+    assert result == [c1, c2]
+
+
+def test_visible_charts_hidden_false_kept():
+    """visible_charts keeps charts with hidden=False explicitly set."""
+    from aurum_encuestas.models import SlideLayout, LayoutBox
+    from aurum_encuestas.pptx_generator import visible_charts
+    c1 = Chart(id="c1", question_id="q1", breakdown_ids=[], chart_type="PIE")
+    layout = SlideLayout(positions={"c1": LayoutBox(x_emu=0, y_emu=0, cx_emu=100, cy_emu=100, hidden=False)})
+    slide_def = Slide(id="s1", type="shell", title="T", charts=[c1], layout=layout)
+    result = visible_charts(slide_def)
+    assert result == [c1]
+
+
+def test_visible_charts_all_hidden_returns_empty():
+    """visible_charts returns [] when every chart is hidden."""
+    from aurum_encuestas.models import SlideLayout, LayoutBox
+    from aurum_encuestas.pptx_generator import visible_charts
+    c1 = Chart(id="c1", question_id="q1", breakdown_ids=[], chart_type="PIE")
+    c2 = Chart(id="c2", question_id="q1", breakdown_ids=[], chart_type="PIE_GROUPED")
+    layout = SlideLayout(positions={
+        "c1": LayoutBox(x_emu=0, y_emu=0, cx_emu=100, cy_emu=100, hidden=True),
+        "c2": LayoutBox(x_emu=0, y_emu=0, cx_emu=100, cy_emu=100, hidden=True),
+    })
+    slide_def = Slide(id="s1", type="shell", title="T", charts=[c1, c2], layout=layout)
+    result = visible_charts(slide_def)
+    assert result == []
 
 
 def test_add_chart_handles_empty_breakdown_ids_as_general():

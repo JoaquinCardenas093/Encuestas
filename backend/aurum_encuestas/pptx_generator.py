@@ -158,6 +158,18 @@ def build_pptx(state: ProjectState, out_path: str) -> None:
 _log = logging.getLogger(__name__)
 
 
+def visible_charts(slide_def: Slide) -> list:
+    """Return the charts from slide_def that are NOT marked hidden in the AI layout.
+
+    A chart is hidden when its id appears in slide_def.layout.positions with hidden=True.
+    If the slide has no layout (or no positions), all charts are considered visible.
+    """
+    if not (slide_def.layout and slide_def.layout.positions):
+        return list(slide_def.charts)
+    pos = slide_def.layout.positions
+    return [c for c in slide_def.charts if not getattr(pos.get(c.id), "hidden", False)]
+
+
 def _add_slide_content(slide, slide_def: Slide, state: ProjectState, free_area: dict) -> None:
     """Add charts + analyses to a shell slide using M6.6 classify→render pipeline.
 
@@ -177,8 +189,7 @@ def _add_slide_content(slide, slide_def: Slide, state: ProjectState, free_area: 
     from .style_guide import BUILTIN_STYLE_GUIDE, load_active
 
     # Filter out charts whose LayoutBox is marked hidden — compute before pipeline.
-    _pos = slide_def.layout.positions if (slide_def.layout and slide_def.layout.positions) else {}
-    _visible_charts = [c for c in slide_def.charts if not (c.id in _pos and getattr(_pos[c.id], "hidden", False))]
+    _visible_charts = visible_charts(slide_def)
 
     # Build a view of slide_def with only visible charts for the classify+render pipeline.
     # When all charts are visible the lengths match and behavior is identical.
@@ -243,8 +254,8 @@ def _add_slide_content(slide, slide_def: Slide, state: ProjectState, free_area: 
         if matched_pattern is None:
             _log.warning("_add_slide_content: no pattern matched and no fallback — using legacy insertion")
             _add_slide_content_legacy(slide, slide_def_for_pipeline, state, free_area)
-            # Still render analyses/subtitles/extras after legacy path
-            _add_analyses_textboxes(slide, slide_def, free_area, state.inputs.font_override if state.inputs else None)
+            # Legacy already rendered analyses internally; only add subtitle textboxes
+            # and layout extras (which legacy never rendered).
             _add_subtitle_textboxes(slide, slide_def, free_area, state.inputs.font_override if state.inputs else None)
             if slide_def.layout and slide_def.layout.extras:
                 _add_layout_extras(slide, slide_def.layout.extras)
