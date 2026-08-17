@@ -97,18 +97,22 @@ class LayoutBox(BaseModel):
     font_pt: float | None = None
     callout: bool = False  # Render analysis as styled callout box (fill + rounded)
     box_style: Literal["dashed"] | None = None  # dashed-border box wrapping analysis (AI-only)
+    color: str | None = None      # hex without # — font color (text elements only)
+    font_name: str | None = None  # font family (text elements only)
+    hidden: bool = False          # true = do not render this element
 
 
 class LayoutExtra(BaseModel):
-    """AI-created extra visual shape: line separator only.
-    Callouts handled via LayoutBox.callout flag on existing analyses."""
-    kind: Literal["line"]
+    """AI-created extra visual shape: line separator, or (free mode) textbox / rect."""
+    kind: Literal["line", "textbox", "rect"]
+    id: str | None = None
     x_emu: int
     y_emu: int
     cx_emu: int = 0
     cy_emu: int = 0
     text: str | None = None
     font_pt: float | None = None
+    font_name: str | None = None
     bold: bool = False
     style: str | None = None  # line: dotted|dashed|solid
     color: str | None = None  # hex no #

@@ -242,3 +242,30 @@ def test_old_slide_without_subtitles_validates():
     from aurum_encuestas.models import Slide
     s = Slide.model_validate({"id": "s1", "type": "shell", "title": "T", "charts": [], "analyses": []})
     assert s.subtitles == []
+
+
+# ── Task 1 (2026-08-17): free-layout-ai — LayoutBox + LayoutExtra new fields ────
+
+def test_layout_box_new_fields_default():
+    from aurum_encuestas.models import LayoutBox
+    b = LayoutBox(x_emu=0, y_emu=0, cx_emu=100, cy_emu=100)
+    assert b.color is None and b.font_name is None and b.hidden is False
+
+
+def test_layout_box_accepts_overrides():
+    from aurum_encuestas.models import LayoutBox
+    b = LayoutBox(x_emu=0, y_emu=0, cx_emu=1, cy_emu=1, color="C00000", font_name="Georgia", hidden=True)
+    assert b.color == "C00000" and b.font_name == "Georgia" and b.hidden is True
+
+
+def test_layout_extra_textbox_kind():
+    from aurum_encuestas.models import LayoutExtra
+    e = LayoutExtra(kind="textbox", id="free_1", x_emu=1, y_emu=1, cx_emu=10, cy_emu=2,
+                    text="Hola", font_name="Arial", color="404040", fill="D9D9D9")
+    assert e.kind == "textbox" and e.id == "free_1" and e.text == "Hola"
+
+
+def test_layout_extra_line_still_valid():
+    from aurum_encuestas.models import LayoutExtra
+    e = LayoutExtra(kind="line", x_emu=0, y_emu=0, cx_emu=100, cy_emu=0, style="dotted", color="D9D9D9")
+    assert e.kind == "line"
