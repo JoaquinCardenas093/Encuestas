@@ -404,3 +404,45 @@ def test_suggest_slide_layout_propagates_box_style(monkeypatch, valid_xlsx_path)
     assert body["positions"]["a1"]["box_style"] == "dashed"
     # Invalid box_style value collapses to None (no arbitrary strings pass through).
     assert body["positions"]["a2"]["box_style"] is None
+
+
+def test_suggest_slide_layout_free_mode_overrides(monkeypatch, valid_xlsx_path):
+    from aurum_encuestas import api as api_mod
+    state = {
+        "project_name": "T",
+        "inputs": {"db_path": str(valid_xlsx_path), "template_path": "y"},
+        "parsed_db": None,
+        "slides": [
+            {"id": "s2", "type": "shell", "title": "Sec",
+             "charts": [{"id": "c1", "question_id": "q1", "breakdown_ids": [], "chart_type": "PIE"}],
+             "analyses": [{"id": "a1", "scope": "slide", "text": "T"}],
+             "subtitles": []},
+        ],
+    }
+
+    def fake_correct(slide_payload, slide_png_bytes=None, user_hint=None):
+        return {
+            "elements": [
+                {"id": "analysis_a1", "x_cm": 1.0, "y_cm": 2.0, "w_cm": 10.0, "h_cm": 2.0,
+                 "font_pt": 30, "font": "Georgia", "color": "C00000", "hidden": True},
+            ],
+            "created": [
+                {"id": "free_1", "kind": "textbox", "x_cm": 2.0, "y_cm": 2.0, "w_cm": 8.0, "h_cm": 1.5,
+                 "text": "NUEVO", "font": "Arial", "font_pt": 18, "color": "404040", "fill": "D9D9D9"},
+            ],
+            "changes": ["x"],
+        }
+    monkeypatch.setattr(api_mod, "correct_slide_layout", fake_correct)
+    monkeypatch.setattr(api_mod, "render_slide_to_png", lambda *a, **k: None)
+    monkeypatch.setattr(api_mod, "build_pptx", lambda *a, **k: None)
+
+    r = client.post("/api/suggest-slide-layout", json={"state": state, "slide_id": "s2", "user_hint": "hacelo rojo gigante"})
+    assert r.status_code == 200
+    body = r.json()
+    pos = body["positions"]["a1"]
+    assert pos["color"] == "C00000"
+    assert pos["font_name"] == "Georgia"
+    assert pos["hidden"] is True
+    assert pos["font_pt"] == 30.0  # no cap
+    created = [e for e in body["extras"] if e.get("kind") == "textbox"]
+    assert len(created) == 1 and created[0]["text"] == "NUEVO"

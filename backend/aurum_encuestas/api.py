@@ -643,6 +643,7 @@ async def suggest_slide_layout_endpoint(req: SuggestSlideLayoutRequest):
 
     # Convert AI cm coords → EMU positions keyed by element id (stripped of prefix).
     EMU = 360000
+    free_mode = bool((req.user_hint or "").strip())
     positions = {}
     for el in raw.get("elements", []) or []:
         eid = str(el.get("id", "")).strip()
@@ -667,7 +668,7 @@ async def suggest_slide_layout_endpoint(req: SuggestSlideLayoutRequest):
                 font_pt = float(font_pt)
             except (TypeError, ValueError):
                 font_pt = 11 if is_analysis else None
-        positions[key] = {
+        entry = {
             "x_emu": int(float(el.get("x_cm", 0)) * EMU),
             "y_emu": int(float(el.get("y_cm", 0)) * EMU),
             "cx_emu": int(float(el.get("w_cm", 0)) * EMU),
@@ -676,12 +677,19 @@ async def suggest_slide_layout_endpoint(req: SuggestSlideLayoutRequest):
             "callout": bool(el.get("callout", False)) if is_analysis else False,
             "box_style": (el.get("box_style") if el.get("box_style") == "dashed" else None) if is_analysis else None,
         }
+        if free_mode:
+            c = el.get("color")
+            f = el.get("font")
+            entry["color"] = str(c) if c else None
+            entry["font_name"] = str(f) if f else None
+            entry["hidden"] = bool(el.get("hidden", False))
+        positions[key] = entry
     # Backend safety net (multi-row pack + analysis band) ONLY when the user did
     # NOT provide a hint. With an explicit hint, trust Sonnet's positions fully —
     # tables scale to Sonnet's cx via target_w_emu, so no forced overflow.
     import logging as _logmod
     _l = _logmod.getLogger("ai_layout")
-    if (req.user_hint or "").strip():
+    if free_mode:
         _l.warning("[ai-layout] user_hint present -> trusting Sonnet positions (skip enforce)")
     else:
         chart_widths = [(s["id"], s.get("w_cm", 0)) for s in payload_shapes if s.get("kind") == "chart"]
@@ -710,6 +718,26 @@ async def suggest_slide_layout_endpoint(req: SuggestSlideLayoutRequest):
             "color": ex.get("color"),
             "fill": ex.get("fill"),
         })
+    if free_mode:
+        for ex in raw.get("created", []) or []:
+            kind = ex.get("kind")
+            if kind not in ("textbox", "rect", "line"):
+                continue
+            extras_emu.append({
+                "kind": kind,
+                "id": (str(ex.get("id")) if ex.get("id") else None),
+                "x_emu": int(float(ex.get("x_cm", 0)) * EMU),
+                "y_emu": int(float(ex.get("y_cm", 0)) * EMU),
+                "cx_emu": int(float(ex.get("w_cm", 0)) * EMU),
+                "cy_emu": int(float(ex.get("h_cm", 0)) * EMU),
+                "text": ex.get("text"),
+                "font_pt": (float(ex["font_pt"]) if ex.get("font_pt") is not None else None),
+                "font_name": (str(ex.get("font")) if ex.get("font") else None),
+                "bold": bool(ex.get("bold", False)),
+                "style": ex.get("style"),
+                "color": ex.get("color"),
+                "fill": ex.get("fill"),
+            })
     return {"positions": positions, "extras": extras_emu, "changes": raw.get("changes", [])}
 
 
