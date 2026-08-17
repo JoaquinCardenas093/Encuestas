@@ -6,7 +6,7 @@ import { useProjectStore } from "../src/store/project"
 import type { ParsedDB } from "../src/types"
 
 const DB: ParsedDB = {
-  questions: [{ id: "q1", code: "P1", text: "?", options: ["a"], confidence: 1.0 }],
+  questions: [{ id: "q1", code: "P1", text: "Marca?", options: ["a"], confidence: 1.0 }],
   breakdowns: [{ id: "general", label: "General", categories: ["Total"] }],
   sample_size: 500,
   data_blocks: { counts_cols: [], pct_row_cols: [], pct_col_cols: [] },
@@ -45,5 +45,24 @@ describe("ConfigPanel", () => {
     render(<ConfigPanel slideId={shellId} />)
     const selects = screen.getAllByRole("combobox")
     expect(selects.some((sel) => (sel as HTMLSelectElement).value === "PIE")).toBe(true)
+  })
+
+  it("insert button disabled without charts; inserts derived question text", async () => {
+    const shellId = useProjectStore.getState().state!.slides[1].id
+    // No charts yet → button is disabled
+    render(<ConfigPanel slideId={shellId} />)
+    const insertBtn = screen.getByRole("button", { name: /insertar texto de pregunta/i })
+    expect(insertBtn).toBeDisabled()
+  })
+
+  it("insert button enabled with chart and inserts derived text", async () => {
+    const shellId = useProjectStore.getState().state!.slides[1].id
+    useProjectStore.getState().addChart(shellId, "q1", ["general"], "PIE")
+    render(<ConfigPanel slideId={shellId} />)
+    const insertBtn = screen.getByRole("button", { name: /insertar texto de pregunta/i })
+    expect(insertBtn).not.toBeDisabled()
+    await userEvent.click(insertBtn)
+    // A textarea with the derived "P1. Marca?" appears and is editable
+    expect(screen.getByDisplayValue(/P1\. Marca\?/i)).toBeInTheDocument()
   })
 })

@@ -69,11 +69,15 @@ export default function ConfigPanel({ slideId }: Props) {
   const removeAnalysis = useProjectStore((s) => s.removeAnalysis)
   const updateAnalysisText = useProjectStore((s) => s.updateAnalysisText)
   const updateChartColors = useProjectStore((s) => s.updateChartColors)
+  const addSubtitle = useProjectStore((s) => s.addSubtitle)
+  const updateSubtitle = useProjectStore((s) => s.updateSubtitle)
+  const removeSubtitle = useProjectStore((s) => s.removeSubtitle)
   const [chartModalOpen, setChartModalOpen] = useState(false)
   const [analysisModalOpen, setAnalysisModalOpen] = useState(false)
   const [layoutHint, setLayoutHint] = useState("")
   const [layoutLoading, setLayoutLoading] = useState(false)
   const [chartColorOpen, setChartColorOpen] = useState<string | null>(null) // key: `${chartId}:${optionIdx}`
+  const [subtitlePickerQid, setSubtitlePickerQid] = useState<string>("")
 
   const slide = state?.slides.find((s) => s.id === slideId)
   if (!slide) {
@@ -306,6 +310,58 @@ export default function ConfigPanel({ slideId }: Props) {
             onClose={() => setAnalysisModalOpen(false)}
             onAdd={(a) => addAnalysis(slide.id, a)}
           />
+
+          {/* Textos de pregunta */}
+          {(() => {
+            const slideQuestions = Array.from(new Set(slide.charts.map((c) => c.question_id)))
+              .map((qid) => parsedDb?.questions.find((q) => q.id === qid))
+              .filter((q): q is NonNullable<typeof q> => !!q)
+            const handleInsert = () => {
+              if (slideQuestions.length === 0) return
+              const qid = subtitlePickerQid || slideQuestions[0].id
+              const q = slideQuestions.find((q) => q.id === qid) ?? slideQuestions[0]
+              addSubtitle(slide.id, `${q.code}. ${q.text}`)
+            }
+            return (
+              <>
+                <h4 className="text-xs uppercase text-neutral-500 mt-4 mb-2">Textos de pregunta</h4>
+                {(slide.subtitles ?? []).map((sub) => (
+                  <div key={sub.id} className="bg-neutral-800 border border-neutral-700 rounded p-2 mb-2 flex items-start gap-2">
+                    <textarea
+                      value={sub.text}
+                      onChange={(e) => updateSubtitle(slide.id, sub.id, e.target.value)}
+                      rows={2}
+                      className="text-xs flex-1 bg-neutral-900 border border-neutral-700 rounded px-2 py-1 resize-y min-h-[40px]"
+                    />
+                    <button onClick={() => removeSubtitle(slide.id, sub.id)} className="text-neutral-500 hover:text-red-400 mt-1">
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
+                <div className="flex gap-1 items-center">
+                  {slideQuestions.length > 1 && (
+                    <select
+                      value={subtitlePickerQid || slideQuestions[0]?.id || ""}
+                      onChange={(e) => setSubtitlePickerQid(e.target.value)}
+                      className="text-xs bg-neutral-900 border border-neutral-700 rounded px-1 py-0.5 flex-1"
+                    >
+                      {slideQuestions.map((q) => (
+                        <option key={q.id} value={q.id}>{q.code}. {q.text}</option>
+                      ))}
+                    </select>
+                  )}
+                  <button
+                    disabled={slideQuestions.length === 0}
+                    onClick={handleInsert}
+                    className="flex-1 text-xs bg-transparent border border-dashed border-neutral-600 rounded py-1.5 flex items-center justify-center gap-1 text-neutral-400 hover:text-neutral-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Plus size={12} /> Insertar texto de pregunta
+                  </button>
+                </div>
+              </>
+            )
+          })()}
+
           {/* Pattern matched indicator */}
           {slide.matched_pattern ? (
             <div className="flex items-center gap-2 text-xs text-green-400 mt-3 mb-1 bg-green-900/20 border border-green-800/40 rounded px-3 py-2">
