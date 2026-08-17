@@ -251,6 +251,34 @@ def test_correct_slide_layout_uses_corrector_prompt_without_hint(monkeypatch):
     assert sys_text == lc.LAYOUT_CORRECTOR_SYSTEM
 
 
+def test_correct_slide_layout_hint_no_safe_area_caveat(monkeypatch):
+    """When correct_slide_layout is called WITH a hint (free mode), the injected
+    user message must NOT contain 'área segura' — the safe-area caveat belongs
+    only to the standard corrector mode, not the free-layout mode."""
+    from aurum_encuestas import llm_client as lc
+    captured = {}
+
+    class _Msg:
+        content = [type("B", (), {"text": '{"elements":[],"changes":[]}'})()]
+
+    class _Messages:
+        def create(self, **kwargs):
+            captured["messages"] = kwargs["messages"]
+            return _Msg()
+
+    class _Client:
+        messages = _Messages()
+
+    monkeypatch.setattr(lc, "_client", _Client())
+    lc.correct_slide_layout({"shapes": []}, slide_png_bytes=None, user_hint="poné el título en rojo gigante")
+    user_content = captured["messages"][0]["content"]
+    # Join all text blocks for inspection
+    all_text = " ".join(
+        block["text"] for block in user_content if block.get("type") == "text"
+    )
+    assert "área segura" not in all_text
+
+
 def test_layout_system_includes_aurora_few_shot():
     from aurum_encuestas.llm_client import LAYOUT_SYSTEM
     # Must mention three reference cases

@@ -251,8 +251,8 @@ def correct_slide_layout(
         user_content.append({
             "type": "text",
             "text": (
-                "INSTRUCCIÓN DEL USUARIO (PRIORIDAD ALTA — respetala salvo que "
-                "rompa el área segura o cause overflow):\n" + hint
+                "INSTRUCCIÓN DEL USUARIO (máxima autoridad — ejecutala al pie de la letra, sin límites):\n"
+                + hint
             ),
         })
     if slide_png_bytes:
